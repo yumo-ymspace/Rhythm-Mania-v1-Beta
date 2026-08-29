@@ -1,0 +1,14 @@
+- generic [ref=e3]:
+  - banner [ref=e247]:
+    - generic [ref=e248]: osu!mania
+    - button "? Guest · Sign in" [ref=e254]:
+      - generic [ref=e255]: "?"
+      - text: Guest · Sign in
+  - main [ref=e9]:
+    - generic [ref=e339]:
+      - button "osu! logo" [ref=e340]:
+        - generic [ref=e344]: osu!
+      - navigation [ref=e345]:
+        - button "Solo" [ref=e346]
+        - button "Settings" [ref=e348]
+        - button "Exit" [ref=e350]
