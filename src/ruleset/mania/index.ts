@@ -14,4 +14,5 @@ export * from './hitWindows';
 export * from './holdNote';
 export * from './judgementTiming';
 export * from './judgements';
+export * from './replaySimulator';
 export * from './scoreProcessor';

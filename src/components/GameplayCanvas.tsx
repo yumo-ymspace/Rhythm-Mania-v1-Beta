@@ -2861,6 +2861,9 @@ export default function GameplayCanvas({
         }
         prevKeys[col] = isCurrentlyPressed;
       }
+      if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
+        advanceHoldTailTicks(notesRef.current, frame.time, prevKeys, note => simApplyJudgement(missJudg, note.column));
+      }
     }
 
     // 3. Sweep up to targetTimeMs
