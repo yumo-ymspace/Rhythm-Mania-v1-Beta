@@ -29,8 +29,13 @@ import {
   countMapJudgements,
   countTotalHits,
   getComboScoreChange,
-  getHpDrainMultiplier,
 } from './scoreProcessor';
+import {
+  createHealthState,
+  applyHealthJudgement,
+  healthToDisplayPercent,
+  type HealthJudgementContext,
+} from './healthProcessor';
 import { getHoldTailJudgement, resolveJudgementForError } from './judgementTiming';
 import { normalizeReplayFrames, upperBoundReplayFrame } from '../../utils/replayCursor';
 import {
@@ -151,8 +156,9 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
   let maxComboPortion = computeMaxComboPortion(totalJudgements);
   let currentComboPortion = 0;
   const hitErrorSamples: number[] = [];
+  const healthState = createHealthState(hpDrainRate, selectedMods);
 
-  const applyJudgement = (judg: JudgementWindow, col: number) => {
+  const applyJudgement = (judg: JudgementWindow, col: number, healthContext: HealthJudgementContext = 'note') => {
     if (col >= 0 && col < columnJudgements.length) {
       incrementColumnJudgement(columnJudgements, col, judg.type);
     }
@@ -172,8 +178,8 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
       else if (judg.type === 'bad') scoreState.badCount++;
     }
 
-    const hpMultiplier = getHpDrainMultiplier(hpDrainRate, selectedMods);
-    scoreState.hp = Math.max(0, Math.min(100, scoreState.hp + judg.hpDelta * hpMultiplier));
+    applyHealthJudgement(healthState, judg.type, hpDrainRate, healthContext);
+    scoreState.hp = healthToDisplayPercent(healthState.health);
 
     const counts = {
       marvelousCount: scoreState.marvelousCount,
@@ -222,7 +228,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
           if (!n.holdState.isHeadJudged && currentTime - n.time > missJudg.windowMs) {
             missHoldHead(n.holdState, n.time + missJudg.windowMs);
             n.isMissed = true;
-            applyJudgement(missJudg, n.column);
+            applyJudgement(missJudg, n.column, 'hold_head');
           }
           if (!n.holdState.isTailJudged && n.holdState.isHeadJudged && n.endTime !== undefined) {
             const maxExpiry = n.endTime + missJudg.windowMs * TAIL_RELEASE_WINDOW_LENIENCE;
@@ -231,7 +237,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
               n.isReleased = true;
               n.isReleaseMissed = true;
               n.isHoldFailed = true;
-              applyJudgement(missJudg, n.column);
+              applyJudgement(missJudg, n.column, 'hold_tail');
             }
           }
           return;
@@ -323,12 +329,12 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
           note.hitTime = frameTime;
           note.isHeadHit = true;
           const resolvedJudg = judgementWindows.find((w) => w.type === action.judgement) || marvelousJudg;
-          applyJudgement(resolvedJudg, colIndex);
+          applyJudgement(resolvedJudg, colIndex, 'hold_head');
           hitErrorSamples.push(action.errorMs);
         } else if (action.kind === 'head_miss') {
           note.isMissed = true;
           note.hitTime = frameTime;
-          applyJudgement(missJudg, colIndex);
+          applyJudgement(missJudg, colIndex, 'hold_head');
         }
         return;
       }
@@ -395,12 +401,12 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
       note.isHit = true;
       note.hitTime = frameTime;
       markHoldStartHit(note);
-      applyJudgement(resolvedJudgement, colIndex);
+      applyJudgement(resolvedJudgement, colIndex, note.type === 'hold' ? 'hold_head' : 'note');
       hitErrorSamples.push(frameTime - note.time);
     } else {
       note.isMissed = true;
       if (note.type === 'hold') {
-        applyJudgement(resolvedJudgement, colIndex);
+        applyJudgement(resolvedJudgement, colIndex, 'hold_head');
         note.isHit = true;
         note.hitTime = frameTime;
         if (note.holdRulesVersion === HOLD_TICK_RULES_VERSION) {
@@ -445,7 +451,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
         holdNote.isReleaseHit = true;
         holdNote.isReleaseMissed = false;
         const tailJudg = judgementWindows.find((w) => w.type === action.judgement) || missJudg;
-        applyJudgement(tailJudg, colIndex);
+        applyJudgement(tailJudg, colIndex, 'hold_tail');
         hitErrorSamples.push(action.effectiveErrorMs);
         return;
       }
@@ -456,7 +462,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
         holdNote.isReleaseHit = false;
         holdNote.isReleaseMissed = true;
         holdNote.isHoldFailed = true;
-        applyJudgement(missJudg, colIndex);
+        applyJudgement(missJudg, colIndex, 'hold_tail');
         return;
       }
       return;
@@ -487,7 +493,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
       holdNote.isReleaseMissed = releaseMissed;
       holdNote.isReleaseHit = !releaseMissed;
       if (releaseMissed) markHoldEarlyRelease(holdNote, frameTime);
-      applyJudgement(releaseJudgement, colIndex);
+      applyJudgement(releaseJudgement, colIndex, 'hold_tail');
       if (!releaseMissed) {
         markHoldReleaseHit(holdNote);
         hitErrorSamples.push(endDiff);
@@ -499,7 +505,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
     holdNote.isReleased = true;
     holdNote.releaseTime = frameTime;
     const tailJudgement = getHoldTailJudgement(endDiff, judgementWindows);
-    applyJudgement(tailJudgement, colIndex);
+    applyJudgement(tailJudgement, colIndex, 'hold_tail');
     if (tailJudgement.type !== 'miss') {
       hitErrorSamples.push(endDiff);
     } else {

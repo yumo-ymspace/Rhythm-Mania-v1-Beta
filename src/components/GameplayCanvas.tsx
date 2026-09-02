@@ -67,9 +67,15 @@ import {
   computeTotalScore,
   countMapJudgements,
   countTotalHits,
-  getHpDrainMultiplier,
   getComboScoreChange,
 } from '../ruleset/mania/scoreProcessor';
+import {
+  createHealthState,
+  applyHealthJudgement,
+  healthToDisplayPercent,
+  type HealthState,
+  type HealthJudgementContext,
+} from '../ruleset/mania/healthProcessor';
 import metadata from '../../metadata.json';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 
@@ -552,6 +558,9 @@ export default function GameplayCanvas({
     hitErrorSampleCount: 0,
     columnJudgements: initializeColumnJudgements(beatmap.keyCount),
   });
+  const healthStateRef = useRef<HealthState>(
+    createHealthState(beatmap.hpDrainRate, settings.selectedMods)
+  );
 
   const hitErrorSamplesRef = useRef<number[]>([]);
   const unstableRateAccumulatorRef = useRef(new UnstableRateAccumulator());
@@ -826,6 +835,7 @@ export default function GameplayCanvas({
       columnJudgements: initializeColumnJudgements(beatmap.keyCount),
       isAutoplay: isAutoplay,
     };
+    healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods);
 
     // osu!lazer mania standardised score: max combo portion for all-Marvelous FC
     const totalJudgements = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
@@ -1536,7 +1546,7 @@ export default function GameplayCanvas({
       note.hitTime = playTime;
       markHoldStartHit(note);
       
-      applyJudgement(resolvedJudgement, colIndex);
+      applyJudgement(resolvedJudgement, colIndex, note.type === 'hold' ? 'hold_head' : 'note');
       mainAudio.playBeatmapHitsound(note.hitSound, note.hitSample?.filename);
 
       // Calculate and store Hit Error details for timing feedback meter
@@ -1570,7 +1580,7 @@ export default function GameplayCanvas({
       // Tap in miss band (bad < |err| <= miss): head miss only; holds stay alive for tail salvage
       note.isMissed = true;
       if (note.type === 'hold') {
-        applyJudgement(resolvedJudgement, colIndex); // Head miss only
+        applyJudgement(resolvedJudgement, colIndex, 'hold_head'); // Head miss only
         note.isHit = true; // Engage body/tail while key is down
         note.hitTime = playTime;
         if (note.holdRulesVersion === HOLD_TICK_RULES_VERSION) {
@@ -1617,7 +1627,7 @@ export default function GameplayCanvas({
         holdNote.isReleaseMissed = false;
 
         const tailJudg = judgementWindows.find(w => w.type === action.judgement) || missJudg;
-        applyJudgement(tailJudg, colIndex);
+        applyJudgement(tailJudg, colIndex, 'hold_tail');
         recordHitErrorSample(action.effectiveErrorMs);
         mainAudio.playBeatmapHitsound(holdNote.hitSound, holdNote.hitSample?.filename);
 
@@ -1647,7 +1657,7 @@ export default function GameplayCanvas({
         holdNote.isReleaseHit = false;
         holdNote.isReleaseMissed = true;
         holdNote.isHoldFailed = true;
-        applyJudgement(missJudg, colIndex);
+        applyJudgement(missJudg, colIndex, 'hold_tail');
         if (!settingsRef.current.disableLaneShake) {
           screenShakeRef.current = 6;
         }
@@ -1681,7 +1691,7 @@ export default function GameplayCanvas({
       holdNote.isReleaseMissed = releaseMissed;
       holdNote.isReleaseHit = !releaseMissed;
        if (releaseMissed) markHoldEarlyRelease(holdNote, playTime);
-      applyJudgement(releaseJudgement, colIndex);
+      applyJudgement(releaseJudgement, colIndex, 'hold_tail');
       if (!releaseMissed) {
         markHoldReleaseHit(holdNote);
         recordHitErrorSample(endDiff);
@@ -1701,7 +1711,7 @@ export default function GameplayCanvas({
     holdNote.isReleased = true;
     holdNote.releaseTime = playTime;
     const tailJudgement = getHoldTailJudgement(endDiff, judgementWindows);
-    applyJudgement(tailJudgement, colIndex);
+    applyJudgement(tailJudgement, colIndex, 'hold_tail');
     if (tailJudgement.type !== 'miss') {
       recordHitErrorSample(endDiff);
       mainAudio.playBeatmapHitsound(holdNote.hitSound, holdNote.hitSample?.filename);
@@ -1714,7 +1724,7 @@ export default function GameplayCanvas({
   };
 
   // Score counter math accumulator
-  const applyJudgement = (judg: JudgementWindow, col: number) => {
+  const applyJudgement = (judg: JudgementWindow, col: number, healthContext: HealthJudgementContext = 'note') => {
     const state = scoreStateRef.current;
     if (!state.columnJudgements || state.columnJudgements.length === 0) {
       state.columnJudgements = initializeColumnJudgements(beatmap.keyCount);
@@ -1751,12 +1761,16 @@ export default function GameplayCanvas({
       else if (judg.type === 'bad') state.badCount++;
     }
 
-    // Direct health modifier (Drain scaling factor)
-    // OD increases/decreases HP recovery
-    const hpMultiplier = getHpDrainMultiplier(beatmap.hpDrainRate, settings.selectedMods);
-    state.hp = Math.max(0, Math.min(100, state.hp + (judg.hpDelta * hpMultiplier)));
+    // osu!(lazer) ManiaHealthProcessor: health 0..1, no passive drain
+    const justFailed = applyHealthJudgement(
+      healthStateRef.current,
+      judg.type,
+      beatmap.hpDrainRate,
+      healthContext,
+    );
+    state.hp = healthToDisplayPercent(healthStateRef.current.health);
 
-    if (state.hp <= 0 && !settings.selectedMods?.includes('NF') && !isReplayMode) {
+    if (justFailed && !isReplayMode) {
       state.failed = true;
       isPlayingRef.current = false;
       setIsFailed(true);
@@ -1894,8 +1908,8 @@ export default function GameplayCanvas({
         missJudg.windowMs,
         (n, isDoubleMiss) => {
           if (isDoubleMiss) {
-            applyJudgement(missJudg, n.column);
-            applyJudgement(missJudg, n.column);
+            applyJudgement(missJudg, n.column, 'hold_head');
+            applyJudgement(missJudg, n.column, 'hold_tail');
           } else {
             applyJudgement(missJudg, n.column);
           }
@@ -2530,6 +2544,7 @@ export default function GameplayCanvas({
       hitErrorSampleCount: 0,
       columnJudgements: initializeColumnJudgements(beatmap.keyCount),
     };
+    healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods);
 
     totalJudgementsRef.current = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
     maxComboPortionRef.current = computeMaxComboPortion(totalJudgementsRef.current);
@@ -2549,7 +2564,7 @@ export default function GameplayCanvas({
     let simCurrentComboPortion = 0;
 
     // Helper functions for chronological simulation
-    const simApplyJudgement = (judg: JudgementWindow, col: number) => {
+    const simApplyJudgement = (judg: JudgementWindow, col: number, healthContext: HealthJudgementContext = 'note') => {
       const state = scoreStateRef.current;
       if (!state.columnJudgements || state.columnJudgements.length === 0) {
         state.columnJudgements = initializeColumnJudgements(beatmap.keyCount);
@@ -2572,8 +2587,13 @@ export default function GameplayCanvas({
         else if (judg.type === 'good') state.goodCount++;
         else if (judg.type === 'bad') state.badCount++;
       }
-      const hpMultiplier = getHpDrainMultiplier(beatmap.hpDrainRate, settings.selectedMods);
-      state.hp = Math.max(0, Math.min(100, state.hp + (judg.hpDelta * hpMultiplier)));
+      applyHealthJudgement(
+        healthStateRef.current,
+        judg.type,
+        beatmap.hpDrainRate,
+        healthContext,
+      );
+      state.hp = healthToDisplayPercent(healthStateRef.current.health);
 
       const counts = {
         marvelousCount: state.marvelousCount,
@@ -2635,12 +2655,12 @@ export default function GameplayCanvas({
             note.hitTime = frameTime;
             note.isHeadHit = true;
             const resolvedJudg = judgementWindows.find(w => w.type === action.judgement) || marvelousJudg;
-            simApplyJudgement(resolvedJudg, colIndex);
+            simApplyJudgement(resolvedJudg, colIndex, 'hold_head');
             recordHitErrorSample(action.errorMs);
           } else if (action.kind === 'head_miss') {
             note.isMissed = true;
             note.hitTime = frameTime;
-            simApplyJudgement(missJudg, colIndex);
+            simApplyJudgement(missJudg, colIndex, 'hold_head');
           }
           return;
         }
@@ -2718,12 +2738,12 @@ export default function GameplayCanvas({
         note.isHit = true;
         note.hitTime = frameTime;
         markHoldStartHit(note);
-        simApplyJudgement(resolvedJudgement, colIndex);
+        simApplyJudgement(resolvedJudgement, colIndex, note.type === 'hold' ? 'hold_head' : 'note');
         recordHitErrorSample(frameTime - note.time);
       } else {
         note.isMissed = true;
         if (note.type === 'hold') {
-          simApplyJudgement(resolvedJudgement, colIndex);
+          simApplyJudgement(resolvedJudgement, colIndex, 'hold_head');
           note.isHit = true;
           note.hitTime = frameTime;
           if (note.holdRulesVersion === HOLD_TICK_RULES_VERSION) {
@@ -2761,7 +2781,7 @@ export default function GameplayCanvas({
           holdNote.isReleaseHit = true;
           holdNote.isReleaseMissed = false;
           const tailJudg = judgementWindows.find(w => w.type === action.judgement) || missJudg;
-          simApplyJudgement(tailJudg, colIndex);
+          simApplyJudgement(tailJudg, colIndex, 'hold_tail');
           recordHitErrorSample(action.effectiveErrorMs);
           return;
         }
@@ -2772,7 +2792,7 @@ export default function GameplayCanvas({
           holdNote.isReleaseHit = false;
           holdNote.isReleaseMissed = true;
           holdNote.isHoldFailed = true;
-          simApplyJudgement(missJudg, colIndex);
+          simApplyJudgement(missJudg, colIndex, 'hold_tail');
           return;
         }
         return;
@@ -2798,7 +2818,7 @@ export default function GameplayCanvas({
         holdNote.isReleaseMissed = releaseMissed;
         holdNote.isReleaseHit = !releaseMissed;
          if (releaseMissed) markHoldEarlyRelease(holdNote, frameTime);
-        simApplyJudgement(releaseJudgement, colIndex);
+        simApplyJudgement(releaseJudgement, colIndex, 'hold_tail');
         if (!releaseMissed) {
           markHoldReleaseHit(holdNote);
           recordHitErrorSample(endDiff);
@@ -2813,7 +2833,7 @@ export default function GameplayCanvas({
       holdNote.isReleased = true;
       holdNote.releaseTime = frameTime;
       const tailJudgement = getHoldTailJudgement(endDiff, judgementWindows);
-      simApplyJudgement(tailJudgement, colIndex);
+      simApplyJudgement(tailJudgement, colIndex, 'hold_tail');
       if (tailJudgement.type !== 'miss') {
         recordHitErrorSample(endDiff);
       } else {
@@ -2831,8 +2851,8 @@ export default function GameplayCanvas({
         missJudg.windowMs,
         (n, isDoubleMiss) => {
           if (isDoubleMiss) {
-            simApplyJudgement(missJudg, n.column);
-            simApplyJudgement(missJudg, n.column);
+            simApplyJudgement(missJudg, n.column, 'hold_head');
+            simApplyJudgement(missJudg, n.column, 'hold_tail');
           } else {
             simApplyJudgement(missJudg, n.column);
           }
