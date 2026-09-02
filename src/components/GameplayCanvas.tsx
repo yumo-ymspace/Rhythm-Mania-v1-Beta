@@ -18,7 +18,13 @@ import { Beatmap, GameSettings, HitObject, JudgementWindow, ScoreState, ReplayFr
 import { initializeColumnJudgements, incrementColumnJudgement } from '../utils/performanceMetrics';
 import { VideoSyncController, computeTargetVideoTimeSec } from '../utils/videoSyncController';
 import { executeTeardown } from '../utils/gameplayTeardown';
-import { getHoldTailJudgement, isHoldGraceActive, resolveHoldGrace, resolveJudgementForError } from '../ruleset/mania/judgementTiming';
+import {
+  getHoldTailJudgement,
+  getJudgementWindows,
+  isHoldGraceActive,
+  resolveHoldGrace,
+  resolveJudgementForError,
+} from '../ruleset/mania';
 import {
   advanceHoldTailTicks,
   HOLD_TICK_RULES_VERSION,
@@ -709,79 +715,6 @@ export default function GameplayCanvas({
       }
     };
   }, [settings.renderEngine, settings.limitDprToOne, beatmap.keyCount, isAudioLoaded]);
-
-  // osu!lazer ManiaHitWindows DifficultyRange. DT/HT do not change windows.
-  const difficultyRange = (od: number, min: number, mid: number, max: number): number => {
-    if (od > 5) return mid + (max - mid) * ((od - 5) / 5);
-    if (od < 5) return mid + (mid - min) * ((od - 5) / 5);
-    return mid;
-  };
-  const lazerWindowMs = (
-    od: number,
-    min: number,
-    mid: number,
-    max: number,
-    difficultyMultiplier = 1,
-  ): number => Math.floor(difficultyRange(od, min, mid, max) / difficultyMultiplier) + 0.5;
-
-  const getJudgementWindows = (od: number, difficultyMultiplier: number): JudgementWindow[] => {
-    return [
-      {
-        type: 'marvelous',
-        name: 'PERFECT',
-        windowMs: lazerWindowMs(od, 22.4, 19.4, 13.9, difficultyMultiplier),
-        baseScore: ACCURACY_BASE_SCORE.marvelous,
-        hpDelta: 3,
-        color: '#22d3ee', // Cyan
-        glowColor: 'rgba(34,211,238,0.5)',
-      },
-      {
-        type: 'perfect',
-        name: 'GREAT',
-        windowMs: lazerWindowMs(od, 64, 49, 34, difficultyMultiplier),
-        baseScore: ACCURACY_BASE_SCORE.perfect,
-        hpDelta: 2,
-        color: '#facc15', // Neon Gold
-        glowColor: 'rgba(250,204,21,0.4)',
-      },
-      {
-        type: 'great',
-        name: 'GOOD',
-        windowMs: lazerWindowMs(od, 97, 82, 67, difficultyMultiplier),
-        baseScore: ACCURACY_BASE_SCORE.great,
-        hpDelta: 1,
-        color: '#4ade80', // Green
-        glowColor: 'rgba(74,222,128,0.3)',
-      },
-      {
-        type: 'good',
-        name: 'OK',
-        windowMs: lazerWindowMs(od, 127, 112, 97, difficultyMultiplier),
-        baseScore: ACCURACY_BASE_SCORE.good,
-        hpDelta: 0.2,
-        color: '#3b82f6', // Indigo
-        glowColor: 'rgba(59,130,246,0.2)',
-      },
-      {
-        type: 'bad',
-        name: 'MEH',
-        windowMs: lazerWindowMs(od, 151, 136, 121, difficultyMultiplier),
-        baseScore: ACCURACY_BASE_SCORE.bad,
-        hpDelta: -3,
-        color: '#ec4899', // Pink
-        glowColor: 'rgba(236,72,153,0.1)',
-      },
-      {
-        type: 'miss',
-        name: 'MISS',
-        windowMs: lazerWindowMs(od, 188, 173, 158, difficultyMultiplier),
-        baseScore: ACCURACY_BASE_SCORE.miss,
-        hpDelta: -10,
-        color: '#ef4444', // Hot Red
-        glowColor: 'rgba(239,68,68,0.3)',
-      }
-    ];
-  };
 
   // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD.
   const windowDifficultyMultiplier = settings.selectedMods?.includes('HR')

@@ -10,6 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
+export * from './hitWindows';
 export * from './judgementTiming';
 export * from './judgements';
 export * from './scoreProcessor';

@@ -713,7 +713,7 @@ Status starts as pending. Dependencies must be completed first.
 | ID | Task | Touches | Verify |
 |---|---|---|---|
 | **TASK-010** | Display names Perfect/Great/Good/Ok/Meh everywhere (HUD, results, history). Keep JSON field names mapped. **(done)** | Gameplay, Results, History | Playwright results + HUD vs Argon judgement labels |
-| **TASK-011** | Vitest fixtures for OD 0/5/8/10 windows matching `floor(range)+0.5` | `tests/` | `npm test` |
+| **TASK-011** | Vitest fixtures for OD 0/5/8/10 windows matching `floor(range)+0.5` **(done)** | `tests/` | `npm test` |
 | **TASK-012** | Apply lazer `SpeedMultiplier` for DT/HT/NC (song-time windows × rate). UR not divided by rate. | `hitWindows.ts`, gameplay, verifier | tests at 1.5× and 0.75×; one DT play |
 
 ### Holds + HP
