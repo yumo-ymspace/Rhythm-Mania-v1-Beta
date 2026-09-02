@@ -371,6 +371,134 @@ describe('ManiaHealthProcessor', () => {
     });
   });
 
+  describe('SD (SuddenDeath) mod', () => {
+    it('sets isSuddenDeath in createHealthState', () => {
+      const state = createHealthState(5, ['SD']);
+      expect(state.isSuddenDeath).toBe(true);
+      expect(state.isPerfect).toBe(false);
+      expect(state.failed).toBe(false);
+    });
+
+    it('fails immediately on regular note miss', () => {
+      const state = createHealthState(5, ['SD']);
+      expect(state.health).toBe(1.0);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'note');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on hold head miss', () => {
+      const state = createHealthState(5, ['SD']);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'hold_head');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on hold tail miss', () => {
+      const state = createHealthState(5, ['SD']);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'hold_tail');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on hold body break (early release)', () => {
+      const state = createHealthState(5, ['SD']);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'body_break');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('does not fail on non-miss judgements (marvelous, perfect, great, good, bad)', () => {
+      for (const j of ['marvelous', 'perfect', 'great', 'good', 'bad'] as const) {
+        const state = createHealthState(5, ['SD']);
+        const justFailed = applyHealthJudgement(state, j, 5, 'note');
+        expect(justFailed).toBe(false);
+        expect(state.failed).toBe(false);
+      }
+    });
+
+    it('NF prevents SD failure on miss', () => {
+      const state = createHealthState(5, ['SD', 'NF']);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'note');
+      expect(justFailed).toBe(false);
+      expect(state.failed).toBe(false);
+    });
+  });
+
+  describe('PF (Perfect) mod', () => {
+    it('sets isPerfect in createHealthState', () => {
+      const state = createHealthState(5, ['PF']);
+      expect(state.isPerfect).toBe(true);
+      expect(state.isSuddenDeath).toBe(false);
+      expect(state.failed).toBe(false);
+    });
+
+    it('does not fail on marvelous (lazer Perfect)', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'marvelous', 5, 'note');
+      expect(justFailed).toBe(false);
+      expect(state.failed).toBe(false);
+    });
+
+    it('does not fail on perfect (lazer Great)', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'perfect', 5, 'note');
+      expect(justFailed).toBe(false);
+      expect(state.failed).toBe(false);
+    });
+
+    it('fails immediately on great (lazer Good / 200)', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'great', 5, 'note');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on good (lazer Ok / 100)', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'good', 5, 'note');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on bad (lazer Meh / 50)', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'bad', 5, 'note');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on miss', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'note');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('fails immediately on hold body break', () => {
+      const state = createHealthState(5, ['PF']);
+      const justFailed = applyHealthJudgement(state, 'miss', 5, 'body_break');
+      expect(justFailed).toBe(true);
+      expect(state.health).toBe(0);
+      expect(state.failed).toBe(true);
+    });
+
+    it('NF prevents PF failure on lower judgements', () => {
+      const state = createHealthState(5, ['PF', 'NF']);
+      const justFailed = applyHealthJudgement(state, 'great', 5, 'note');
+      expect(justFailed).toBe(false);
+      expect(state.failed).toBe(false);
+    });
+  });
+
   describe('computeHpMultiplierNormal', () => {
     it('returns 1.0 for all HP drain rates (mania has no passive drain)', () => {
       for (const hp of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {

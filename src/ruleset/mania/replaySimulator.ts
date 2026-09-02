@@ -180,6 +180,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
 
     applyHealthJudgement(healthState, judg.type, hpDrainRate, healthContext);
     scoreState.hp = healthToDisplayPercent(healthState.health);
+    scoreState.failed = healthState.failed;
 
     const counts = {
       marvelousCount: scoreState.marvelousCount,
@@ -442,6 +443,9 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
         if (scoreState.comboBreakCount !== undefined) {
           scoreState.comboBreakCount++;
         }
+        applyHealthJudgement(healthState, 'miss', hpDrainRate, 'body_break');
+        scoreState.hp = healthToDisplayPercent(healthState.health);
+        scoreState.failed = healthState.failed;
         return;
       }
 

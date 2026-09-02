@@ -1617,6 +1617,22 @@ export default function GameplayCanvas({
         if (!settingsRef.current.disableLaneShake) {
           screenShakeRef.current = 4;
         }
+        const justFailed = applyHealthJudgement(
+          healthStateRef.current,
+          'miss',
+          beatmap.hpDrainRate,
+          'body_break',
+        );
+        scoreStateRef.current.hp = healthToDisplayPercent(healthStateRef.current.health);
+        if (justFailed && !isReplayMode) {
+          scoreStateRef.current.failed = true;
+          isPlayingRef.current = false;
+          setIsFailed(true);
+          mainAudio.pause();
+          if (videoRef.current) {
+            try { videoRef.current.pause(); } catch (e) {}
+          }
+        }
         return;
       }
 
@@ -2776,6 +2792,13 @@ export default function GameplayCanvas({
           if (scoreStateRef.current.comboBreakCount !== undefined) {
             scoreStateRef.current.comboBreakCount++;
           }
+          applyHealthJudgement(
+            healthStateRef.current,
+            'miss',
+            beatmap.hpDrainRate,
+            'body_break',
+          );
+          scoreStateRef.current.hp = healthToDisplayPercent(healthStateRef.current.health);
           return;
         }
 

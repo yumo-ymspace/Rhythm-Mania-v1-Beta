@@ -733,7 +733,7 @@ Status starts as pending. Dependencies must be completed first.
 | **TASK-031** | Hidden + Fade In + Cover (coverage math, breaks retract) **(done)** | playfield, mods | Playwright HD/FI vs Argon HD look |
 | **TASK-032** | Flashlight vignette **(done)** | playfield | Playwright |
 | **TASK-033** | Key 1K–10K bindings + conversion; K-mod exclusivity **(done)** | settings, `keyCounts.ts` | lint + bind 4K/7K/10K |
-| **TASK-034** | SD, PF, NC (pitch already from rate; NC ticks optional stub) | mods, audio | Playwright fail-on-miss; NC rate |
+| **TASK-034** | SD, PF, NC (pitch already from rate; NC ticks optional stub) **(done)** | mods, audio | Playwright fail-on-miss; NC rate |
 | **TASK-035** | Mirror, Constant Speed, Invert, Hold Off, No Release | mods, parser/gameplay | tests per mod |
 | **TASK-036** | Difficulty Adjust + Classic (stable windows, no speed compensation) | mods | tests |
 | **TASK-037** | Random columns, remaining fun/system (Wind Up/Down, Adaptive Speed, Muted, Cinema, AC) | mods | smoke; skip Dual Stages |

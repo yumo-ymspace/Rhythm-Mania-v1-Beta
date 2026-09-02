@@ -18,7 +18,8 @@ import {
   Music,
   ChevronDown, Star, Check, SlidersHorizontal, Shuffle,
   Clock, Heart, Award, X, Infinity as InfinityIcon,
-  SquareSlash, Eye, Layers, Flashlight, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles
+  SquareSlash, Eye, Layers, Flashlight, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles,
+  Skull, Zap
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
@@ -60,7 +61,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: InfinityIcon,
     activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
-    exclusiveWith: undefined
+    exclusiveWith: ['SD', 'PF']
   },
   {
     id: 'EZ',
@@ -69,7 +70,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: Sparkles,
     activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
-    exclusiveWith: 'HR'
+    exclusiveWith: ['HR', 'SD', 'PF']
   },
   {
     id: 'HT',
@@ -78,7 +79,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: Rewind,
     activeClass: 'bg-teal-500/25 text-teal-300 shadow-[0_8px_24px_rgba(20,184,166,0.18)]',
-    exclusiveWith: 'DT'
+    exclusiveWith: ['DT', 'NC']
   },
   {
     id: 'HR',
@@ -88,6 +89,24 @@ const MODIFIER_TILES = [
     icon: ArrowUpToLine,
     activeClass: 'bg-rose-500/25 text-rose-300 shadow-[0_8px_24px_rgba(244,63,94,0.18)]',
     exclusiveWith: 'EZ'
+  },
+  {
+    id: 'SD',
+    name: 'Sudden Death',
+    title: 'Sudden Death (SD)',
+    multiplier: '1.00x',
+    icon: Skull,
+    activeClass: 'bg-rose-500/25 text-rose-300 shadow-[0_8px_24px_rgba(244,63,94,0.18)]',
+    exclusiveWith: ['NF', 'PF', 'EZ']
+  },
+  {
+    id: 'PF',
+    name: 'Perfect',
+    title: 'Perfect (PF)',
+    multiplier: '1.00x',
+    icon: Award,
+    activeClass: 'bg-amber-500/25 text-amber-300 shadow-[0_8px_24px_rgba(245,158,11,0.18)]',
+    exclusiveWith: ['NF', 'SD', 'EZ']
   },
   {
     id: 'HD',
@@ -132,7 +151,16 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: FastForward,
     activeClass: 'bg-pink-500/25 text-pink-300 shadow-[0_8px_24px_rgba(236,72,153,0.18)]',
-    exclusiveWith: 'HT'
+    exclusiveWith: ['HT', 'NC']
+  },
+  {
+    id: 'NC',
+    name: 'Nightcore',
+    title: 'Nightcore (NC)',
+    multiplier: '1.00x',
+    icon: Zap,
+    activeClass: 'bg-pink-500/25 text-pink-300 shadow-[0_8px_24px_rgba(236,72,153,0.18)]',
+    exclusiveWith: ['HT', 'DT']
   },
   {
     id: 'AT',
@@ -2291,21 +2319,22 @@ export default function SongSelect({
                           id: 'NF',
                           title: 'NoFail (NF)',
                           activeBg: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400',
-                          mult: '0.50x'
+                          mult: '0.50x',
+                          exclusiveWith: ['SD', 'PF']
                         },
                         {
                           id: 'EZ',
                           title: 'Easy (EZ)',
                           activeBg: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400',
                           mult: '0.50x',
-                          exclusiveWith: 'HR'
+                          exclusiveWith: ['HR', 'SD', 'PF']
                         },
                         {
                           id: 'HT',
                           title: 'HalfTime (HT)',
                           activeBg: 'bg-teal-500/20 border-teal-500/60 text-teal-400',
                           mult: '0.50x',
-                          exclusiveWith: 'DT'
+                          exclusiveWith: ['DT', 'NC']
                         }
                       ].map((mod) => {
                         const isActive = (settings.selectedMods || []).includes(mod.id);
@@ -2324,7 +2353,10 @@ export default function SongSelect({
                               } else {
                                 // handle exclusivities
                                 if (mod.exclusiveWith) {
-                                  mods = mods.filter(m => m !== mod.exclusiveWith);
+                                  const exclusiveList = Array.isArray(mod.exclusiveWith)
+                                    ? mod.exclusiveWith
+                                    : [mod.exclusiveWith];
+                                  mods = mods.filter(m => !exclusiveList.includes(m));
                                 }
                                 mods.push(mod.id);
                               }
@@ -2359,6 +2391,20 @@ export default function SongSelect({
                           exclusiveWith: 'EZ'
                         },
                         {
+                          id: 'SD',
+                          title: 'SuddenDeath (SD)',
+                          activeBg: 'bg-rose-500/20 border-rose-500/60 text-rose-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['NF', 'PF', 'EZ']
+                        },
+                        {
+                          id: 'PF',
+                          title: 'Perfect (PF)',
+                          activeBg: 'bg-amber-500/20 border-amber-500/60 text-amber-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['NF', 'SD', 'EZ']
+                        },
+                        {
                           id: 'HD',
                           title: 'Hidden (HD)',
                           activeBg: 'bg-purple-500/20 border-purple-500/60 text-purple-400',
@@ -2391,7 +2437,14 @@ export default function SongSelect({
                           title: 'DoubleTime (DT)',
                           activeBg: 'bg-[#ff80a5]/20 border-[#ff80a5]/60 text-[#ff80a5]',
                           mult: '1.00x',
-                          exclusiveWith: 'HT'
+                          exclusiveWith: ['HT', 'NC']
+                        },
+                        {
+                          id: 'NC',
+                          title: 'Nightcore (NC)',
+                          activeBg: 'bg-pink-500/20 border-pink-500/60 text-pink-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['HT', 'DT']
                         }
                       ].map((mod) => {
                         const isActive = (settings.selectedMods || []).includes(mod.id);

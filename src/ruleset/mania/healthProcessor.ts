@@ -185,6 +185,12 @@ export interface HealthState {
 
   /** Whether NoFail is active (prevents failure). */
   isNoFail: boolean;
+
+  /** Whether SuddenDeath is active (fails on any combo break). */
+  isSuddenDeath: boolean;
+
+  /** Whether Perfect is active (fails on anything below Great / <300 or combo break). */
+  isPerfect: boolean;
 }
 
 /**
@@ -199,6 +205,8 @@ export function createHealthState(
 ): HealthState {
   const isEZ = mods.some(m => m.toUpperCase() === 'EZ');
   const isNF = mods.some(m => m.toUpperCase() === 'NF');
+  const isSD = mods.some(m => m.toUpperCase() === 'SD');
+  const isPF = mods.some(m => m.toUpperCase() === 'PF');
 
   return {
     health: 1.0,
@@ -206,6 +214,8 @@ export function createHealthState(
     extraLives: isEZ ? 2 : 0,
     hpMultiplierNormal: computeHpMultiplierNormal(hpDrainRate),
     isNoFail: isNF,
+    isSuddenDeath: isSD,
+    isPerfect: isPF,
   };
 }
 
@@ -216,6 +226,8 @@ export function createHealthState(
  * - Health clamping to [0.0, 1.0]
  * - Extra lives (EZ mod): refills health on death, consumes one life
  * - NoFail: health can reach 0 but does not trigger failure
+ * - SuddenDeath (SD mod): failure on any combo break / miss
+ * - Perfect (PF mod): failure on anything below Great (<300) or combo break / miss
  *
  * @param state - Mutable health state to update.
  * @param judgement - The judgement type.
@@ -230,6 +242,37 @@ export function applyHealthJudgement(
   context: HealthJudgementContext = 'note',
 ): boolean {
   if (state.failed) return false; // Already failed, no further processing
+
+  if (!state.isNoFail) {
+    // Hold body break (early release) causes combo break
+    if (context === 'body_break') {
+      if (state.isSuddenDeath || state.isPerfect) {
+        state.health = 0;
+        state.failed = true;
+        return true;
+      }
+      return false;
+    }
+
+    // SD fails on any miss (note miss, hold head miss, hold tail miss)
+    if (state.isSuddenDeath && judgement === 'miss') {
+      state.health = 0;
+      state.failed = true;
+      return true;
+    }
+
+    // PF fails on any judgement below Great (lazer Great = internal perfect; marvelous = lazer Perfect)
+    // or any miss
+    if (state.isPerfect) {
+      if (judgement !== 'marvelous' && judgement !== 'perfect') {
+        state.health = 0;
+        state.failed = true;
+        return true;
+      }
+    }
+  } else if (context === 'body_break') {
+    return false;
+  }
 
   const delta = getHealthIncreaseFor(
     judgement,
