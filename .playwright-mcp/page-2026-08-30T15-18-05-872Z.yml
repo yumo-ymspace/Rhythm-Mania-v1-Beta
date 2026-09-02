@@ -1,0 +1,29 @@
+- main [ref=f6e18]:
+  - generic [ref=f6e622]:
+    - generic [ref=f6e623]:
+      - generic [ref=f6e624]:
+        - generic [ref=f6e625]:
+          - button "Return to selection" [ref=f6e626] [cursor=pointer]
+          - button "Full" [ref=f6e630] [cursor=pointer]
+        - generic [ref=f6e637]: PRE-PLAY ENGINE STAGE
+      - generic [ref=f6e638]:
+        - generic [ref=f6e639]:
+          - generic [ref=f6e640]: 4K Mode
+          - heading "TASK-004 Smoke" [level=2] [ref=f6e641]
+          - paragraph [ref=f6e642]: by RhythmMania
+        - generic [ref=f6e643]:
+          - button "Adjust settings" [ref=f6e644] [cursor=pointer]
+          - button "Start" [ref=f6e648] [cursor=pointer]
+          - button "View map details" [ref=f6e652] [cursor=pointer]
+        - generic [ref=f6e655]: CLICK 'START' TO BEGIN PERFORMANCE
+      - generic [ref=f6e656]:
+        - generic: v0.9.8
+        - generic [ref=f6e657]: "BPM: 120"
+        - generic [ref=f6e658]: "DIFFICULTY: 4K"
+    - generic [ref=f6e659]:
+      - generic [ref=f6e660]:
+        - heading "⚠️ PIPELINE DIAGNOSTICS" [level=4] [ref=f6e661]:
+          - generic [ref=f6e662]: ⚠️
+          - text: PIPELINE DIAGNOSTICS
+        - paragraph [ref=f6e664]: ⚠️ Audio failed to decode. PLEASE RELOAD THE BROWSER TO RESOLVE.
+      - generic [ref=f6e665]: Break

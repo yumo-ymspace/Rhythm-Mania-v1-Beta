@@ -1,0 +1,25 @@
+- main [ref=f6e18]:
+  - generic [ref=f6e276]:
+    - generic [ref=f6e277]:
+      - heading "⚠️ PIPELINE DIAGNOSTICS" [level=4] [ref=f6e278]:
+        - generic [ref=f6e279]: ⚠️
+        - text: PIPELINE DIAGNOSTICS
+      - paragraph [ref=f6e281]: ⚠️ Audio failed to decode. PLEASE RELOAD THE BROWSER TO RESOLVE.
+    - generic [ref=f6e288]:
+      - button "Quit Performance" [ref=f6e289] [cursor=pointer]
+      - button "Toggle Fullscreen" [ref=f6e293] [cursor=pointer]
+      - button "Pause" [ref=f6e299] [cursor=pointer]
+    - generic:
+      - generic: ACCURACY
+      - generic: 0.00%
+      - generic: SCORE
+      - generic: "0000000"
+    - generic: "-00:04"
+    - generic [ref=f6e282]:
+      - generic [ref=f6e284]: Break
+      - generic [ref=f6e303]:
+        - heading "TRACK FAILED" [level=2] [ref=f6e307]
+        - paragraph [ref=f6e308]: Your HP fell to 0. Set scroll speed lower or calibrate timing offset in settings.
+        - generic [ref=f6e309]:
+          - button "Retry Song" [ref=f6e310] [cursor=pointer]
+          - button "Back to Select" [ref=f6e314] [cursor=pointer]

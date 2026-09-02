@@ -1,0 +1,159 @@
+- generic [ref=f6e3]:
+  - banner [ref=f6e315]:
+    - generic [ref=f6e316]:
+      - button "RhythmMania logo RhythmMania" [ref=f6e317]:
+        - img "RhythmMania logo" [ref=f6e318]
+        - generic [ref=f6e319]: RhythmMania
+      - navigation "Primary navigation" [ref=f6e320]:
+        - button "Song Select" [ref=f6e321]
+        - button "Map Maker" [disabled] [ref=f6e326]
+        - button "Party" [disabled] [ref=f6e332]
+        - button "Beatmap Listing" [ref=f6e343]
+        - button "Skins" [ref=f6e348]
+        - button "Settings" [ref=f6e354]
+        - button "History" [ref=f6e359]
+      - generic [ref=f6e364]:
+        - button "Log in" [ref=f6e366] [cursor=pointer]
+        - button "Enter fullscreen" [ref=f6e371]
+        - button "Mute audio" [ref=f6e377]
+  - main [ref=f6e18]:
+    - generic [ref=f6e383]:
+      - generic: v0.9.8
+      - generic [ref=f6e384]:
+        - generic [ref=f6e386]:
+          - generic [ref=f6e387]:
+            - generic [ref=f6e388]: SELECTED TRACK
+            - heading "TASK-004 Smoke" [level=1] [ref=f6e389]
+            - paragraph [ref=f6e390]: RhythmMania
+          - generic [ref=f6e391]:
+            - generic [ref=f6e392]: "DIFFICULTY PRESET:"
+            - combobox [ref=f6e393] [cursor=pointer]:
+              - option "4K (★ 1.28)" [selected]
+          - button "Play beatmap" [ref=f6e394] [cursor=pointer]
+          - button "Delete Beatmap Set" [ref=f6e398]
+          - generic [ref=f6e399]:
+            - button "Local Scores" [ref=f6e401] [cursor=pointer]
+            - paragraph [ref=f6e412]: No local score history for this difficulty
+          - button "Import beatmap package" [ref=f6e413] [cursor=pointer]:
+            - generic [ref=f6e417]: DRAG & DROP BEATMAP TO IMPORT
+        - generic [ref=f6e418]:
+          - generic [ref=f6e419]:
+            - textbox "Search..." [ref=f6e423]
+            - generic [ref=f6e424]: 1 matches
+          - generic [ref=f6e425]:
+            - generic [ref=f6e426]:
+              - button "Downloaded" [ref=f6e427]
+              - button "Favorites" [ref=f6e428]
+            - 'button "Sort: Title" [ref=f6e430]':
+              - text: "Sort:"
+              - generic [ref=f6e431]: Title
+            - button "0.0–10.0" [ref=f6e435]
+          - button "RhythmMania TASK-004 Smoke mapped by local 4K" [pressed] [ref=f6e440] [cursor=pointer]:
+            - generic [ref=f6e441]:
+              - generic [ref=f6e442]:
+                - generic [ref=f6e443]: RhythmMania
+                - heading "TASK-004 Smoke" [level=4] [ref=f6e444]
+                - generic [ref=f6e445]: mapped by local
+              - generic [ref=f6e446]:
+                - button "Add to favorites" [ref=f6e447]
+                - generic [ref=f6e450]: 4K
+                - button "Delete downloaded beatmap set" [ref=f6e451]
+      - generic [ref=f6e455]:
+        - button "Mods" [active] [ref=f6e456] [cursor=pointer]
+        - button "Random" [ref=f6e467] [cursor=pointer]
+      - generic [ref=f6e477] [cursor=pointer]
+      - generic [ref=f6e478]:
+        - generic [ref=f6e479]:
+          - generic [ref=f6e480]:
+            - heading "Gameplay Modifiers" [level=1] [ref=f6e481]
+            - paragraph [ref=f6e482]: Tune the chart to match the way you play.
+          - generic [ref=f6e483]:
+            - button "Play" [pressed] [ref=f6e484]
+            - button "AP Autoplay" [ref=f6e487]:
+              - generic [ref=f6e488]: AP
+              - text: Autoplay
+            - button "-- Practice - Coming soon" [disabled] [ref=f6e489]:
+              - generic [ref=f6e490]: "--"
+              - text: Practice - Coming soon
+            - button "Close modifiers" [ref=f6e491] [cursor=pointer]
+        - generic [ref=f6e495]:
+          - generic [ref=f6e496]:
+            - generic [ref=f6e497]:
+              - generic [ref=f6e498]: Selected
+              - generic [ref=f6e499]: None
+            - generic [ref=f6e500]: Multiplier 1.00x
+          - generic [ref=f6e501]:
+            - generic [ref=f6e502]:
+              - generic [ref=f6e503]: Difficulty reduction mods
+              - generic [ref=f6e504]:
+                - button "0.50x No Fail" [ref=f6e505] [cursor=pointer]:
+                  - generic [ref=f6e506]: 0.50x
+                  - generic [ref=f6e510]: No Fail
+                - button "0.80x Easy" [ref=f6e511] [cursor=pointer]:
+                  - generic [ref=f6e512]: 0.80x
+                  - generic [ref=f6e517]: Easy
+                - button "0.50x Half Time" [ref=f6e518] [cursor=pointer]:
+                  - generic [ref=f6e519]: 0.50x
+                  - generic [ref=f6e524]: Half Time
+            - generic [ref=f6e525]:
+              - generic [ref=f6e526]: Difficulty increase mods
+              - generic [ref=f6e527]:
+                - button "1.10x Hard Rock" [ref=f6e528] [cursor=pointer]:
+                  - generic [ref=f6e529]: 1.10x
+                  - generic [ref=f6e533]: Hard Rock
+                - button "1.15x Hidden" [ref=f6e534] [cursor=pointer]:
+                  - generic [ref=f6e535]: 1.15x
+                  - generic [ref=f6e540]: Hidden
+                - button "1.25x Double Time" [ref=f6e541] [cursor=pointer]:
+                  - generic [ref=f6e542]: 1.25x
+                  - generic [ref=f6e547]: Double Time
+            - generic [ref=f6e548]:
+              - generic [ref=f6e549]: Key conversion
+              - button "0.90x K2 2K Mode" [ref=f6e550] [cursor=pointer]:
+                - generic [ref=f6e551]:
+                  - generic [ref=f6e552]: 0.90x
+                  - generic [ref=f6e555]: K2
+                - generic [ref=f6e556]: 2K Mode
+              - button "0.90x K3 3K Mode" [ref=f6e557] [cursor=pointer]:
+                - generic [ref=f6e558]:
+                  - generic [ref=f6e559]: 0.90x
+                  - generic [ref=f6e562]: K3
+                - generic [ref=f6e563]: 3K Mode
+              - button "0.90x K4 4K Mode" [disabled] [ref=f6e564]:
+                - generic [ref=f6e565]:
+                  - generic [ref=f6e566]: 0.90x
+                  - generic [ref=f6e569]: K4
+                - generic [ref=f6e570]: 4K Mode
+              - button "0.90x K5 5K Mode" [ref=f6e571] [cursor=pointer]:
+                - generic [ref=f6e572]:
+                  - generic [ref=f6e573]: 0.90x
+                  - generic [ref=f6e576]: K5
+                - generic [ref=f6e577]: 5K Mode
+              - button "0.90x K6 6K Mode" [ref=f6e578] [cursor=pointer]:
+                - generic [ref=f6e579]:
+                  - generic [ref=f6e580]: 0.90x
+                  - generic [ref=f6e583]: K6
+                - generic [ref=f6e584]: 6K Mode
+              - button "0.90x K7 7K Mode" [ref=f6e585] [cursor=pointer]:
+                - generic [ref=f6e586]:
+                  - generic [ref=f6e587]: 0.90x
+                  - generic [ref=f6e590]: K7
+                - generic [ref=f6e591]: 7K Mode
+              - button "0.90x K8 8K Mode" [ref=f6e592] [cursor=pointer]:
+                - generic [ref=f6e593]:
+                  - generic [ref=f6e594]: 0.90x
+                  - generic [ref=f6e597]: K8
+                - generic [ref=f6e598]: 8K Mode
+              - button "0.90x K9 9K Mode" [ref=f6e599] [cursor=pointer]:
+                - generic [ref=f6e600]:
+                  - generic [ref=f6e601]: 0.90x
+                  - generic [ref=f6e604]: K9
+                - generic [ref=f6e605]: 9K Mode
+            - generic [ref=f6e606]:
+              - generic [ref=f6e607]: Autoplay
+              - button "UNRANKED Autoplay" [ref=f6e608] [cursor=pointer]:
+                - generic [ref=f6e609]: UNRANKED
+                - generic [ref=f6e614]: Autoplay
+        - generic [ref=f6e615]:
+          - button "RESET ALL MODS" [ref=f6e616] [cursor=pointer]
+          - button "Apply Selection" [ref=f6e617] [cursor=pointer]

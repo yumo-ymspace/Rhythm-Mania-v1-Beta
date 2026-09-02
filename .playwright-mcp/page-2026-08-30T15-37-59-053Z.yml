@@ -1,0 +1,64 @@
+- generic [ref=f11e3]:
+  - banner [ref=f11e4]:
+    - generic [ref=f11e5]:
+      - button "RhythmMania logo RhythmMania" [ref=f11e6]:
+        - img "RhythmMania logo" [ref=f11e7]
+        - generic [ref=f11e8]: RhythmMania
+      - navigation "Primary navigation" [ref=f11e9]:
+        - button "Song Select" [ref=f11e10]
+        - button "Map Maker" [disabled] [ref=f11e15]
+        - button "Party" [disabled] [ref=f11e21]
+        - button "Beatmap Listing" [ref=f11e32]
+        - button "Skins" [ref=f11e37]
+        - button "Settings" [ref=f11e43]
+        - button "History" [ref=f11e48]
+      - generic [ref=f11e53]:
+        - button "Enter fullscreen" [ref=f11e54]
+        - button "Mute audio" [ref=f11e60]
+  - main [ref=f11e65]:
+    - generic [ref=f11e169]:
+      - generic: v0.9.8
+      - generic [ref=f11e170]:
+        - generic [ref=f11e172]:
+          - generic [ref=f11e249]:
+            - generic [ref=f11e250]: SELECTED TRACK
+            - heading "TASK-004 Smoke" [level=1] [ref=f11e251]
+            - paragraph [ref=f11e252]: RhythmMania
+          - generic [ref=f11e178]:
+            - generic [ref=f11e253]: "DIFFICULTY PRESET:"
+            - combobox [ref=f11e254] [cursor=pointer]:
+              - option "4K (★ 1.28)" [selected]
+          - button "Play beatmap" [ref=f11e255] [cursor=pointer]
+          - button "Delete Beatmap Set" [ref=f11e259]
+          - generic [ref=f11e260]:
+            - button "Local Scores" [ref=f11e262] [cursor=pointer]
+            - paragraph [ref=f11e273]: No local score history for this difficulty
+          - button "Import beatmap package" [ref=f11e274] [cursor=pointer]:
+            - generic [ref=f11e278]: DRAG & DROP BEATMAP TO IMPORT
+        - generic [ref=f11e189]:
+          - generic [ref=f11e190]:
+            - textbox "Search..." [ref=f11e194]
+            - generic [ref=f11e195]: 1 matches
+          - generic [ref=f11e196]:
+            - generic [ref=f11e197]:
+              - button "Downloaded" [ref=f11e198]
+              - button "Favorites" [ref=f11e199]
+            - 'button "Sort: Title" [ref=f11e201]':
+              - text: "Sort:"
+              - generic [ref=f11e202]: Title
+            - button "0.0–10.0" [ref=f11e206]
+          - button "RhythmMania TASK-004 Smoke mapped by local 4K" [active] [pressed] [ref=f11e211] [cursor=pointer]:
+            - generic [ref=f11e212]:
+              - generic [ref=f11e213]:
+                - generic [ref=f11e214]: RhythmMania
+                - heading "TASK-004 Smoke" [level=4] [ref=f11e215]
+                - generic [ref=f11e216]: mapped by local
+              - generic [ref=f11e217]:
+                - button "Add to favorites" [ref=f11e218]
+                - generic [ref=f11e221]: 4K
+                - button "Delete downloaded beatmap set" [ref=f11e222]
+      - generic [ref=f11e226]:
+        - button "Mods 1" [ref=f11e227] [cursor=pointer]:
+          - generic [ref=f11e228]: Mods
+          - generic [ref=f11e237]: "1"
+        - button "Random" [ref=f11e239] [cursor=pointer]

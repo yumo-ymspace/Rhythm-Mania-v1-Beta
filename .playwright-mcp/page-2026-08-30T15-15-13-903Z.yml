@@ -1,0 +1,43 @@
+- generic [ref=f6e3]:
+  - banner [ref=f6e4]:
+    - generic [ref=f6e5]:
+      - button "RhythmMania logo RhythmMania" [ref=f6e6]:
+        - img "RhythmMania logo" [ref=f6e7]
+        - generic [ref=f6e8]: RhythmMania
+      - navigation "Primary navigation" [ref=f6e45]:
+        - button "Song Select" [active] [ref=f6e46]
+        - button "Map Maker" [disabled] [ref=f6e51]
+        - button "Party" [disabled] [ref=f6e57]
+        - button "Beatmap Listing" [ref=f6e68]
+        - button "Skins" [ref=f6e73]
+        - button "Settings" [ref=f6e79]
+        - button "History" [ref=f6e84]
+      - generic [ref=f6e9]:
+        - button "Log in" [ref=f6e90] [cursor=pointer]
+        - button "Enter fullscreen" [ref=f6e10]
+        - button "Mute audio" [ref=f6e95]
+  - main [ref=f6e18]:
+    - generic [ref=f6e20]:
+      - generic:
+        - generic [ref=f6e100] [cursor=pointer]:
+          - heading "Rhythm Mania" [level=1] [ref=f6e101]: RhythmMania
+          - paragraph [ref=f6e102]: v0.9.8
+        - generic [ref=f6e103]:
+          - generic [ref=f6e104]: v0.9.8
+          - navigation "Community and support links" [ref=f6e105]:
+            - link "Discord" [ref=f6e106] [cursor=pointer]:
+              - /url: https://discord.rhythm-mania.com
+            - link "Github" [ref=f6e109] [cursor=pointer]:
+              - /url: https://github.com/yumo-ymspace/RhythmMania
+            - link "Wiki" [ref=f6e113] [cursor=pointer]:
+              - /url: https://wiki.rhythm-mania.com
+            - link "Bug Report" [ref=f6e116] [cursor=pointer]:
+              - /url: https://bug-report.rhythm-mania.com
+        - generic [ref=f6e119]:
+          - text: By using RhythmMania, you acknowledge and agree to the
+          - link "Terms of Service" [ref=f6e120] [cursor=pointer]:
+            - /url: https://terms-of-service.rhythm-mania.com
+          - text: and
+          - link "Privacy Policy" [ref=f6e121] [cursor=pointer]:
+            - /url: https://privacy-policy.rhythm-mania.com
+          - text: .

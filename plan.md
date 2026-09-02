@@ -1,33 +1,180 @@
-# osu!(lazer) Mania Web Port — Implementation Plan
+# RhythmMania → osu!(lazer) mania alignment
 
-## Goal
+**Status:** research + design plan (revised)
+**Target client:** osu!(lazer) mania + **Argon** default skin, as in `ppy/osu` master (2026-08)
+**Current app:** RhythmMania 0.9.3
+**Execution rule:** one numbered task at a time; do not start the next task until the current one is implemented, tested, and (if visual) Playwright-checked against Argon references.
 
-Build a playable TypeScript + Vite web client that reproduces **osu!(lazer) mania** as closely as possible: Argon UI (from `DESIGN.md`), real-time playfield, **lazer standardised scoring**, 2K–9K, full mania mod set, osu! OAuth profile, osu! API v2 search, catboy.best `.osz` download, and local `.osz` import.
+**Product shape:** an **offline osu!(lazer)-style mania client** in the browser. No Google login, no RhythmMania accounts, no PostgreSQL, no global/RM leaderboards. Scores live on this device (IndexedDB / local history), shown like lazer’s **Local** ranking. The only network features are **osu! API v2 search** and **archive download from catboy.best** (existing 404 fallback to osudl.org).
 
-`DESIGN.md` is the UI/visual brief. This document is the product + architecture + mechanics spec. Several formulas in the original architecture brief (hit windows, scoring split, hold ticks, SV reset, health drain, leaderboards) **do not match live lazer**. This plan overrides them with ppy source and wiki. Implement against ppy/osu, not against those superseded numbers.
+This document is (1) what lazer mania/Argon actually does, (2) what RhythmMania does, (3) every current divergence that **must be converted to lazer behaviour**, (4) the offline-client cut, (5) PENAR hooks, (6) renderer latency, (7) a strict serial task queue.
 
-## Confirmed product decisions
-
-| Topic | Decision |
-| --- | --- |
-| Hosting | **Vite SPA + Vercel Serverless Functions** (same shape as [RhythmMania](https://github.com/yumo-ymspace/RhythmMania)). Not a static-only host. Not a long-running Node process. |
-| osu! API | Authorization Code OAuth via a Vercel Function. `GET /api/v2/me?mode=mania` for real avatar, username, rank, pp. Secret stays in Vercel env. |
-| Beatmaps | Official **osu API v2 search** proxied by a Vercel Function. **`.osz` download in the browser** from catboy.best (`Access-Control-Allow-Origin: *`). Also local `.osz` upload. |
-| Database | Your **PostgreSQL**, reached from Vercel Functions (`DATABASE_URL`). Identity/tokens only. **No leaderboards.** |
-| Scope | **Solo only.** MULTI/EDIT hidden. Native **2K–9K**. All lazer mania mods. Default lazer scoring. |
+Mechanics claims are grounded in `ppy/osu` source and osu-wiki.
 
 ---
 
-## Corrections vs the superseded architecture brief / `DESIGN.md`
+## 0. Product and legal constraints
 
-Verified against ppy/osu (`ManiaHitWindows.cs`, `ManiaScoreProcessor.cs`, `ManiaHealthProcessor.cs`, `IBeatmapDifficultyInfo.cs`) and [osu! wiki judgement](https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu!mania) + [lazer gameplay differences](https://osu.ppy.sh/wiki/en/Client/Release_stream/Lazer/Gameplay_differences_in_osu%21%28lazer%29).
+osu!(lazer) is a trademarked product. `ppy/osu` is MIT-licensed. **Official artwork, the osu! logo, the pink-circle mark, “ppy”, Torus as a branded drop-in, and osu! beatmaps are not ours to ship.**
 
-### Hit windows (lazer default, not Classic)
+Stance:
 
-Perfect is **not** a constant ±16 ms. Windows use `DifficultyRange(OD, min@0, mid@5, max@10)`, then `floor(value * speedMultiplier / difficultyMultiplier) + 0.5`.
+- **Gameplay, scoring, mods, HUD layout, song select IA, results, pause/fail:** match lazer mania. No “intentional stable-mania” leftovers.
+- **Visuals:** recreate Argon **very closely** (note shape, column colours, HUD wedges, health bar, hit-error bars, combo placement). Draw original geometry/CSS/canvas; do not copy `osu-resources` bitmaps or the osu! wordmark.
+- **Brand text:** RhythmMania name stays. The live performance rating is **PENAR** (never labelled “pp”).
+- **Fonts:** geometric sans with similar optical size to Torus (Outfit / Nunito Sans) unless Torus is separately licensed.
+- **Beatmaps:** keep `.osu`/`.osz` import.
+
+Out of scope:
+
+- other rulesets, editor, multiplayer, storyboards, chat, wiki, medals, skin JSON editor
+- **computing** a full osu! pp value (PENAR UI + data slots stubbed)
+- Google OAuth, RhythmMania user accounts, profiles-as-a-service
+- PostgreSQL and any score/user tables
+- Global, country, or RM-hosted leaderboards
+- Replay upload, server verification-for-ranking, catalog register/activate
+- `/profile` as an online identity surface
+
+In scope:
+
+- All solo mania ruleset behaviour
+- All solo session surfaces, Argon-close, **lazer-offline information architecture**
+- Local ranking panel (this browser’s scores for the selected chart)
+- osu! API v2 mania search + catboy.best (and 404→osudl.org) download
+- Optional osu! token (authorization-code or BYO) in localStorage so search works
+- PENAR HUD slot
+- Playwright vs Argon stills
+
+---
+
+## Execution protocol (mandatory for implementing agents)
+
+1. Work **only** the next `TASK-NNN` whose status is `pending`. Never batch two tasks in one session unless the user explicitly says to.
+2. Read the task’s files, implement only that task, run its verification.
+3. Mark it done in this plan (or the live todo list) only after verification evidence exists.
+4. Stop and report. Do not “while I’m here” extra polish.
+5. Visual tasks must use Playwright MCP: `browser_navigate` to the local app, exercise the flow, `browser_take_screenshot`, then compare against the Argon reference board in `docs/visual-refs/argon/` (see TASK-003).
+
+---
+
+## 0b. Former “intentional not lazer” items — now **must match lazer**
+
+These were listed as keep-as-RM. They are **bugs relative to the new target**. Each has a task.
+
+| Divergence today | Lazer behaviour | Task |
+|---|---|---|
+| Judgement names Marvelous/Perfect/Great/Good/Bad | Perfect/Great/Good/Ok/Meh | TASK-010 |
+| Hold v2 50ms ticks + miss-run + repress | Head + ComboBreak body + 1.5× tail + Meh cap | TASK-020–022 |
+| Mod multipliers HD 1.15 / DT 1.25 / HR 1.10 / EZ 0.80 / K 0.90 | Lazer mania multipliers (EZ/NF 0.50; most increase mods 1.00; read `ManiaMod*` at implement time) | TASK-030 |
+| Missing FI, Cover, FL, SD, PF, NC, Mirror, CS, Invert, Hold Off, NR, DA, Classic, … | Full mania mod catalog | TASK-031+ |
+| HP ±3/2/1/0.2/−3/−10 | `ManiaHealthProcessor` (no passive drain) | TASK-023 |
+| DT/HT do **not** scale windows | Lazer mania **does** apply `SpeedMultiplier` so real-time windows stay constant (`IManiaRateAdjustmentMod`; UR issue #30828) | TASK-012 |
+| Countdown “Get Ready” | Lazer lead-in + skip intro, no piper countdown | TASK-041 |
+| Scroll speed changeable mid-map | Lock scroll during play | TASK-042 |
+| HUD: corner toasts, cyan tech chrome | Argon wedges, top-left HP, top-right acc+PENAR, bottom combo, dual hit-error | TASK-050–054 |
+| Playfield: glowing full-lane slabs | Argon note/hold/key/hit-target pieces | TASK-050 |
+| Song select dashboard cards | Lazer carousel + wedge + Mods/Random/Options | TASK-060 |
+| Results custom two-column | Argon-like grade hero | TASK-070 |
+| Main menu dashboard | Lazer-like logo pulse + stacked actions | TASK-080 |
+| 2K–9K only | 1K–10K | TASK-033 |
+| Babylon as equal default | Canvas2D Argon is the reference; Babylon is optional extra skin | TASK-001 |
+| No performance counter | Argon has a PP counter top-right; we ship the same slot as **PENAR** | TASK-054 |
+| Google login, RM accounts, Postgres, global/RM leaderboards, replay upload | Lazer **offline**: local ranking only; search/download still online | TASK-005–009 |
+
+---
+
+## 0c. Offline client architecture (lazer-offline, not a social app)
+
+osu!(lazer) without a login still lets you play imported maps and see **your** scores on song select. Online ranking, friends, and profiles are absent. That is the target.
+
+### Keep (local)
+
+- IndexedDB beatmaps/packages (`storageManager.ts`)
+- `rhythm_mania_v1_play_history` as the only score store
+- Local replays (watch/export/import). Imported replays stay local-only, as today
+- Settings, skins, bindings, last-selected map, favorites
+- Song-select **Local** list: history rows for the selected `beatmapHash` / chart id, sorted by score (then accuracy), like lazer’s local board. No “Global” / “Country” / “RM” tabs
+- Results: this run vs that local list only
+
+### Keep (network, no database)
+
+osu! API v2 is not CORS-open to arbitrary browser origins. A **stateless proxy** may remain; it must not read or write Postgres.
+
+| Endpoint | Role after cut |
+|---|---|
+| `GET /api/catalog/search` | Forward Bearer token to osu! API v2 mania search (ranked/loved/graveyard, 2K–10K). **No** `catalog_search_rate_limits` table |
+| `GET /api/auth/osu/url` + callback / refresh / byo-token | Mint or refresh an osu! token. Tokens go to the opener/localStorage only. **No** `users`/`sessions` rows |
+| `GET /api/config` | Version + `supportedMode: [3]` + flags (`accounts: false`, `leaderboards: local`) |
+| `GET /api/health` | Process liveness; **do not** probe the database |
+
+Browser download path stays: `https://catboy.best/d/<setId>`, retry `https://osudl.org/s/<setId>` only on HTTP 404. Unpack into IndexedDB. **Do not** call register-download / activate-download (those existed to put canonical charts in Postgres for ranked replays).
+
+### Delete or stop calling
+
+- Google sign-in (`LoginModal`, `App` session bootstrap, `/api/auth/google/*`, `/api/auth/me`, `/api/auth/logout`)
+- All `/api/profile/*` and `/profile` routes
+- All `/api/replays/upload|list|get`
+- `/api/catalog/set`, `/chart`, `/register-download`, `/activate-download`
+- `database/schema.sql` as a runtime dependency; `DATABASE_URL` / `POSTGRES_*` / `SESSION_SECRET` / `GOOGLE_CLIENT_*`
+- CSRF cookie pair used for account mutations (nothing left to mutate on a session)
+- Remote leaderboard fetch in `SongSelect.tsx` (`fetchLeaderboardReplays`)
+- Server replay verification as a ranking gate (`api/_lib/replayVerification.ts` is unused once upload is gone; do not keep a dead ranked path)
+
+### Player identity
+
+No Google username. Optional **local display name** in settings (localStorage), default “Player”, for local ranking rows and results. osu! token is only a **catalog credential**, not an RM account.
+
+### Why a tiny API can still exist
+
+Search needs a server-side or CORS-free hop to `osu.ppy.sh/api/v2`. OAuth client-secret exchange cannot live in the browser. That is not a “database.” If even those functions are later removed, the only remaining path is BYO token plus a user-side CORS workaround — do not plan on that; keep the stateless proxy.
+
+---
+
+## 1. Research sources
+
+Primary:
+
+- [osu!mania judgement wiki](https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu!mania) and [raw wiki](https://raw.githubusercontent.com/ppy/osu-wiki/master/wiki/Gameplay/Judgement/osu!mania/en.md)
+- [Lazer vs stable gameplay differences](https://osu.ppy.sh/wiki/en/Help_centre/Upgrading_to_lazer) (mania section: hold heads/tails judged separately, hold ticks removed, OD-scaled Perfect)
+- [`ManiaHitWindows.cs`](https://raw.githubusercontent.com/ppy/osu/master/osu.Game.Rulesets.Mania/Scoring/ManiaHitWindows.cs)
+- [`ManiaScoreProcessor.cs`](https://raw.githubusercontent.com/ppy/osu/master/osu.Game.Rulesets.Mania/Scoring/ManiaScoreProcessor.cs)
+- [`ScoreProcessor.cs`](https://raw.githubusercontent.com/ppy/osu/master/osu.Game/Rulesets/Scoring/ScoreProcessor.cs)
+- [`ManiaHealthProcessor.cs`](https://raw.githubusercontent.com/ppy/osu/master/osu.Game.Rulesets.Mania/Scoring/ManiaHealthProcessor.cs)
+- Hold objects: `HoldNote.cs`, `DrawableHoldNote.cs`, `DrawableHoldNoteTail.cs`, `DrawableHoldNoteBody.cs`, `TailNote.RELEASE_WINDOW_LENIENCE = 1.5`
+- Mods: `ManiaRuleset.GetModsFor`, `ManiaModEasy` / `ManiaModHardRock` / `ManiaModHidden`, `IManiaRateAdjustmentMod`, [lazer mod list wiki](https://raw.githubusercontent.com/ppy/osu-wiki/master/wiki/Gameplay/Game_modifier_(lazer)/en.md)
+- Argon: [`ArgonSkin.cs`](https://raw.githubusercontent.com/ppy/osu/master/osu.Game/Skinning/ArgonSkin.cs), `ManiaArgonSkinTransformer.cs` (`ArgonNotePiece`, `ArgonHoldBodyPiece`, column colours)
+
+Secondary: wiki mania screenshots, official changelog videos, Playwright-captured Argon stills stored locally as comparison boards (TASK-003).
+
+---
+
+## 2. What lazer mania actually is
+
+### 2.1 Judgement names and accuracy weights
+
+Lazer names (and the values that feed **accuracy**):
+
+| Lazer name | Common nickname | Accuracy base | RM name today |
+|---|---|---|---|
+| Perfect | MAX / rainbow 300 | **305** | Marvelous |
+| Great | 300 | 300 | Perfect |
+| Good | 200 | 200 | Great |
+| Ok | 100 | 100 | Good |
+| Meh | 50 | 50 | Bad |
+| Miss | 0 | 0 | Miss |
+
+Default `ScoreProcessor.GetBaseScoreForResult` gives Perfect **300** (same as Great). **Mania overrides Perfect to 305.** That is why a full-Great run is ~98.36% and cannot be SS.
+
+**Rename in UI** to Perfect / Great / Good / Ok / Meh. Keep internal enum aliases during migration if needed, but displayed names, colors, and results counts must match lazer.
+
+### 2.2 Hit windows (lazer default, not Classic)
+
+`ManiaHitWindows` interpolates OD with `DifficultyRange(min@OD0, mid@OD5, max@OD10)`, then `floor(value * totalMultiplier) + 0.5`.
+
+Default (non-Classic) ranges:
 
 | Result | OD 0 | OD 5 | OD 10 |
-| --- | --- | --- | --- |
+|---|---|---|---|
 | Perfect | 22.4 | 19.4 | 13.9 |
 | Great | 64 | 49 | 34 |
 | Good | 97 | 82 | 67 |
@@ -35,960 +182,616 @@ Perfect is **not** a constant ±16 ms. Windows use `DifficultyRange(OD, min@0, m
 | Meh | 151 | 136 | 121 |
 | Miss | 188 | 173 | 158 |
 
-DT/HT **do not shrink the gameplay window** in mania: `SpeedMultiplier` keeps windows independent of clock rate. EZ/HR scale via `DifficultyMultiplier`. Rate mods still speed audio and visual scroll.
+`totalMultiplier = speedMultiplier / difficultyMultiplier`.
 
-Classic is available as a **mod** (CL) because you asked for all mania mods; default play without CL uses the lazer windows above.
+- EZ sets `DifficultyMultiplier = 1/1.4` → windows ~40% more lenient.
+- HR sets `DifficultyMultiplier = 1.4` → windows tighter. **Mania HR is unranked in lazer** (`ManiaModHardRock.Ranked => false`).
+- Classic + not ScoreV2 uses stable formulas (`16` Perfect, `64-3×OD` Great, convert tables, `floor(x)+0.5`).
+- A hit is inside a window if `abs(error) ≤ window` (inclusive after the +0.5 snap).
+- **Late Meh is impossible:** once past the late Ok window, the object misses. Early hits before the Miss window are ignored (notelock/too-early).
+- Rate mods: **match lazer mania, not stable.** `IManiaRateAdjustmentMod` sets `ManiaHitWindows.SpeedMultiplier` to the clock rate so **song-time windows grow with DT / shrink with HT** and **real-time window duration stays the same**. Unstable Rate in lazer mania is therefore **not** rate-converted (osu#30828). RhythmMania currently leaves windows unscaled; TASK-012 fixes this. Classic mod later restores stable-style windows without speed compensation.
 
-### Scoring (lazer standardised)
+### 2.3 Notes vs hold notes (this is the biggest mechanical gap)
 
-The 700k/300k split is **wrong**. Official:
+**Rice (normal notes):** one judgement from timing error.
+
+**Holds in lazer (current, not Classic/ScoreV1):**
+
+A `HoldNote` is a parent with `IgnoreJudgement`. Nested objects:
+
+1. **HeadNote** — judged like a rice note on press.
+2. **TailNote** — judged like a rice note on **release**, with `timeOffset /= 1.5` (`RELEASE_WINDOW_LENIENCE`).
+3. **HoldNoteBody** — invisible. Max result `IgnoreHit`, min result `ComboBreak`. Early release (key up before the tail is hittable) applies ComboBreak: **combo resets, accuracy unchanged**.
+
+Additional rules from `DrawableHoldNote` / `DrawableHoldNoteTail`:
+
+- Head/tail each increment combo on hit, break combo on miss.
+- If the head was missed **or** the body recorded a hold-break, the tail is **capped at Meh** even if the release is Perfect/Great.
+- You cannot start a hold in the tail’s late-lenience window.
+- Re-press after dropping the hold is allowed for the tail, but the body is already ComboBreak and the tail is Meh-capped.
+- No periodic hold ticks. Wiki: *“hold notes only give combo for the start and the end”*; ticks were removed (PR #25062). Missing the body still combo-breaks immediately on let-go.
+- Hold parent result is max if tail hit, miss if tail missed.
+- Optional sliding sample while held (`PlaySlidingSamples`).
+
+**Classic / stable ScoreV1 holds** (not the default lazer target): one combined judgement from head error + tail error with 1.2/2.4 style tables. Only needed if we ship a Classic mod.
+
+### 2.4 Scoring
+
+`ManiaScoreProcessor.ComputeTotalScore`:
 
 ```
-total = 150000 * comboProgress
-      + 850000 * Accuracy^(2 + 2*Accuracy) * accuracyProgress
-      + bonusPortion
+150000 * comboProgress
++ 850000 * Accuracy^(2 + 2 * Accuracy) * accuracyProgress
++ bonusPortion
 ```
 
-- Perfect base accuracy weight = **305** (combo weight still 300).
-- Great=300, Good=200, Ok=100, Meh=50, Miss=0.
-- Accuracy = sum(base scores) / (305 * judged objects).
-- **SS (X)**: every judgement is Perfect or Great (mania override of `RankFromScore`). S ≥95%, A ≥90%, B ≥80%, C ≥70%, else D. Hidden/FI/FL make S/SS **silver**. Misses do **not** demote mania S the way they do in standard.
+then `round(total * modMultiplier)`.
 
-### Hold notes (lazer)
+- Accuracy = sum(base scores) / sum(max bases), max base 305 per accuracy-affecting object.
+- Combo portion: each hit adds `comboBase(result) * min(max(0.5, log4(comboAfter)), log4(400))`. Perfect’s **combo** base is 300, not 305.
+- ComboBreak (hold body drop) is scorable for combo only: it resets combo and therefore future combo-portion, but does not change accuracy numerator/denominator.
+- Bonus portion is normally 0 for mania rice/LN.
+- Two display modes exist in lazer (standardised 1,000,000 cap vs classic quadratic). Default target: **standardised**.
 
-- Head and tail are **two separate judgements** (ScoreV2-like).
-- Tail release windows are **1.5×**.
-- Early body release → `ComboBreak` (combo reset, no extra score object). **No 100 ms hold ticks.**
-- Late Meh on head/tail is impossible → Miss.
+### 2.5 Grades
 
-“Body ticks every 100 ms” is stable, not lazer.
+Mania override: if the generic rank would be S **and** there are no Good/Ok/Meh/Miss, promote to SS (X), because a Great-only run is not 100% acc.
 
-### Health
+Cutoffs: SS = all Perfect/Great; S ≥ 95%; A ≥ 90%; B ≥ 80%; C ≥ 70%; else D; F on fail.
 
-`ManiaHealthProcessor.ComputeDrainRate()` returns **0** — no continuous drain. HP only changes on results (HP Drain Rate in the miss/meh/good/great/perfect formulas from ppy source at implement time). Fail at 0 unless No Fail.
+Hidden/Flashlight do **not** produce silver SH/XH in mania the way standard does (mania HD multiplier is 1.00x).
 
-### Slider velocity
+### 2.6 HP / fail
 
-Inherited (green) points set SV = `-100 / beatLength`. **Uninherited (red) BPM points do not reset SV to 1.0.** Any `ScrollPositionCalculator` that sets `currentMultiplier = 1.0` on uninherited points is incorrect and must not be used.
+Lazer mania **does not passively drain**. `ManiaHealthProcessor.ComputeDrainRate()` returns 0 after computing recovery multipliers (legacy quirk).
 
-### UI brief that we *do* keep
+Health is 0..1. Increases from `ManiaHealthProcessor.GetHealthIncreaseFor` (stable-like numbers):
 
-`DESIGN.md` Argon tokens, −12° skew + counter-skew, screen map (menu / song select / mods / play / pause / fail / results / settings), HUD placement. Column colors for **every** key count follow osu’s default note-type map (1 / 2 / S), not only 4K/7K:
+| Result | Increase |
+|---|---|
+| Miss (head/tail) | `-(HP+1)*0.00375` |
+| Miss (other) | `-(HP+1)*0.0075` |
+| Meh | `-(HP+1)*0.0016` |
+| Ok | `0` |
+| Good | `(0.004 - HP*0.0004) * HpMultiplierNormal` |
+| Great | `(0.005 - HP*0.0005) * HpMultiplierNormal` |
+| Perfect | `(0.0055 - HP*0.0005) * HpMultiplierNormal` |
 
-| Keys | Pattern (1=cyan, 2=blue, S=yellow) |
-| --- | --- |
-| 2K | 1 1 |
-| 3K | 1 S 1 |
-| 4K | 1 2 2 1 |
-| 5K | 1 2 S 2 1 |
-| 6K | 1 2 1 1 2 1 |
-| 7K | 1 2 1 S 1 2 1 |
-| 8K | 1 2 1 2 2 1 2 1 |
-| 9K | 1 2 1 2 S 2 1 2 1 |
+Fail when health hits 0. EZ: extra lives (lazer Easy = 2 extra lives, instant refill, HP drain halved via difficulty). NF: never fail. SD: fail on combo break. PF: fail on anything below Great (mania “Perfect” mod has a setting for requiring rainbow Perfects).
 
-Visual QA uses Playwright screenshots against Argon references, not invented palettes.
+RhythmMania today uses crude `hpDelta` of +3/+2/+1/+0.2/−3/−10 times a drain multiplier. That is **not** lazer.
+
+### 2.7 Mods (mania-capable in lazer)
+
+Categories from `ManiaRuleset` + wiki:
+
+**Difficulty reduction:** Easy (0.50x, windows ×1.4, HP easier, extra lives), No Fail (0.50x), Half Time (rate 0.75, customisable), Daycore (HT + pitch down).
+
+**Difficulty increase:** Hard Rock (windows ×1/1.4, **unranked**), Sudden Death, Perfect, Double Time (1.5x, customisable rate), Nightcore (DT + pitch + ticks), Fade In, Hidden (coverage grows with combo 160→400px on 768 reference, against scroll), Cover (player-set cover), Flashlight (near judgement line), Accuracy Challenge.
+
+**Automation:** Autoplay, Cinema.
+
+**Conversion:** Difficulty Adjust, Classic, Random (shuffle columns), Dual Stages (split playfield / co-op layout), Mirror, Invert (rice↔LN), Constant Speed (ignore SV), Hold Off (LN→rice), Key 1K–10K.
+
+**Fun (mania):** Wind Up/Down, Muted, Adaptive Speed.
+
+**System:** Score V2 (lazer scoring *is* this system).
+
+**No Release:** mania-only reduction — tails auto-complete without a timed release.
+
+Lazer mania **score multipliers for DT/HR/HD are 1.00x** on stable’s old table; difficulty-increase mods generally do not inflate mania score. RhythmMania currently uses HD 1.15, DT 1.25, HR 1.10, EZ 0.80, K-mods 0.90. That must change for lazer parity.
+
+### 2.8 Playfield and HUD (Argon / default lazer)
+
+Not a pixel spec from wiki; this is the information architecture every lazer mania screenshot shares:
+
+**Playfield**
+
+- Centered stage, equal-width columns, thin separators.
+- Notes are short colored bodies (Argon: slightly tapered / stadium), not full-lane glowing slabs.
+- 4K color convention: outer columns one hue, inner columns another (special column for odd key modes).
+- Holds: head, tiled/stretched body, distinct tail cap; body is **consumed** (masked) as it passes the receptor while held.
+- Receptor: hit target line/bar at the near edge; pressed columns light up.
+- Scroll down by default; upscroll is a setting (lazer supports both). Extreme SV is clamped.
+- Optional key overlay (which keys are down).
+- Stage left or right: **vertical HP bar**.
+- Breaks: playfield can dim; HD cover retracts during breaks.
+
+**HUD (default, skinnable in lazer)**
+
+- Score, large, top-right
+- Accuracy + percent, under score
+- Combo, large, **center of stage** (not a corner toast)
+- Judgement sprite at receptor (Perfect/Great/… with combo-colored pops)
+- Hit error bar, bottom center (early left / late right, colored by window)
+- Song progress bar (top or bottom)
+- Unstable rate / pp counters exist as optional HUD pieces — not required for v1
+- Pause: overlay with Continue / Retry / Exit, beatmap title, mods
+- Fail: similar overlay, Retry / Exit
+- Skip intro: button when lead-in > ~5s (lazer uses skippable intro before first object)
+- Countdown “Are you ready?” / piper-style is **not** lazer; lazer uses a short lead-in with skip
+
+**Song select**
+
+- Full-bleed beatmap background (light blur, not a dark dashboard)
+- Carousel of **sets**, expanding to difficulties
+- Filter/search, group (title/artist/creator/difficulty), sort
+- Info wedge: title, artist, mapper, length/drain, BPM, stars, OD, HP, key count, CS unused
+- Leaderboard panel (local / global)
+- Bottom bar: **Mods / Random / Options** (and back)
+- Mod overlay: category columns, hexagonal (or rounded hex) mod buttons, multiplier, incompatibility, per-mod settings (DT rate, FL size, DA sliders, Cover height)
+- Preview audio with dim; scroll-speed adjustable from select (lazer recently **forbids changing scroll speed mid-map**)
+
+**Results**
+
+- Huge grade (SS/S/A/…)
+- Score, accuracy to 2 decimals, max combo
+- Judgement column (Perfect → Miss) with counts
+- Hit error histogram + UR
+- Mods
+- Beatmap card
+- Retry / Replay / Back
+- Leaderboard context
+
+**Main menu**
+
+- Beat-synced logo
+- Play / Edit / Browse / Settings / Exit style radial or stacked buttons
+- Triangle/particle ambience
+- Now-playing + user chip
+- We keep RhythmMania destinations (Play, History, Skins, Profile, Settings) but restyle into this language
+
+**Settings**
+
+- Left category rail, search, immediate apply
+- Sections map onto lazer: Gameplay (scroll, background dim, HUD), Audio (offset, volumes), Input (bindings per key mode), Graphics, Skin, Debug
+
+### 2.9 Input and feel
+
+- Per-column bindings, 1K–10K (RM is 2K–9K today).
+- Empty-lane presses do **not** miss or break combo.
+- Column notelock: you cannot hit a later object in the same column before the earlier one is judged.
+- Scroll speed: user setting, BPM-scaled **or** fixed (Constant Speed is a mod; a setting “scale scroll with BPM” exists on stable and as CS mod on lazer).
+- Visual offset vs audio offset: visual moves notes, judgement stays on audio clock (RM already does this).
+- Replay: timestamped lane bitfields are enough for mania; seeking must not combo-break (lazer fixed this).
 
 ---
 
-## Stack
+## 3. What RhythmMania already has (do not rewrite blindly)
 
-| Layer | Choice | Why |
-| --- | --- | --- |
-| App | Vite 6 + TypeScript 5.7 strict + React 19 | HMR for UI; native ES modules |
-| Meta UI | React + Tailwind + CSS variables from `DESIGN.md` | Song select, settings, results |
-| Playfield | Pixi.js v8 WebGL, **not** DOM notes | 240 FPS target, pooling |
-| Audio | `AudioContext` master clock + `performance.now()` interpolation | Sample-accurate timeline |
-| Local store | Dexie / IndexedDB + JSZip | Imported/downloaded sets, settings, private local play history |
-| Hosting | Vercel: Vite static assets + Serverless Functions in `api/` | Same pattern as RhythmMania |
-| Database | Postgres from Functions only | OAuth users/sessions/tokens |
-| Tests | Vitest + Playwright MCP | Ruleset parity + Argon screenshots |
+Already close to lazer:
 
-**Never** put `OSU_CLIENT_SECRET` in a `VITE_*` variable. Vite inlines those into the browser bundle. Vercel env (and local `.env` for `vercel dev`) is the only place for secrets.
+| Area | Current behaviour | Verdict |
+|---|---|---|
+| Window interpolation | `DifficultyRange` 22.4/19.4/13.9 … 188/173/158, `floor+0.5` | Keep |
+| EZ/HR window scale | 1/1.4 and 1.4 | Keep |
+| Accuracy weights | 305/300/200/100/50 | Keep |
+| Score formula | 150k combo + 850k acc^(2+2acc) | Keep |
+| Combo log | log4, cap 400, Perfect combo base 300 | Keep |
+| Grade SS on Great+Perfect only | `computeGrade` | Keep, rename SS display to match lazer X/SS |
+| Holds as 2 judgements | `countMapJudgements` hold = 2 | Keep the *count*, change the *body* |
+| Replay frames | boolean lanes | Keep |
+| Catalog search + catboy download | existing client + search proxy | Keep search/download; drop Google, register/activate, DB |
+| Canvas2D + Babylon | both | Keep Canvas as default; Babylon is extra, not lazer |
+| DT/HT audio rates | 1.5 / 0.75 | Keep; add Nightcore pitch later |
 
-Layout (created on execute):
-
-```
-src/
-  ui/                   React Argon screens
-  engine/
-    clock/              AudioMasterClock
-    input/              key queue (code, not key)
-    beatmap/            .osu parser, SV integrator, column map
-    ruleset/            windows, notes/holds, score, health, UR
-    audio/              decode, hitsounds, DT/NC/HT rate+pitch
-    render/             Pixi playfield, Argon notes, HUD canvas bits
-  storage/              Dexie schema
-api/                    Vercel Functions: OAuth, osu search proxy, /me
-database/schema.sql     Postgres tables (users, tokens, sessions only)
-```
+Everything else in the old “intentionally not lazer” table is **in scope to fix**. See **§0b**. Do not preserve those behaviours for new plays.
 
 ---
 
-## Executive architecture
+## 4. Design principles for the rebuild
 
-Rhythm action games fail if frame pacing jitter exceeds ~4 ms or the audio clock desyncs. The C# engine paradigm of [ppy/osu](https://github.com/ppy/osu) maps onto this web split:
-
-```
-+---------------------------------------------------------------------------------------+
-|                                    User Interface Layer                               |
-|       (React / Tailwind / Lucide / −12° Argon components from DESIGN.md)              |
-|  +---------------------+  +----------------------+  +-------------------------------+ |
-|  |     Main Menu       |  |     Song Select      |  |   Results (local stats only)  | |
-|  |  SOLO / SETTINGS    |  |  search / import     |  |   no Global/Friends/Local LB  | |
-|  +---------------------+  +----------------------+  +-------------------------------+ |
-+-------------------------------------------+-------------------------------------------+
-                                            | State & Events
-+-------------------------------------------v-------------------------------------------+
-|                                   Core Game Engine                                    |
-|  +---------------------------------------------------------------------------------+  |
-|  |                          High-Precision Synchronizer                            |  |
-|  |       (Audio Master Clock + performance.now() interpolation + offsets)          |  |
-|  +---------------------------------------------------------------------------------+  |
-|  +----------------------------+  +-------------------------+  +--------------------+  |
-|  |     Mania Ruleset Engine   |  |     Scoring Processor   |  |   Health Processor |  |
-|  | (lazer windows, LN head/   |  | (150k combo + 850k acc  |  | (no continuous     |  |
-|  |  tail, ComboBreak)         |  |  curve, UR)             |  |  drain)            |  |
-|  +----------------------------+  +-------------------------+  +--------------------+  |
-+-------------------------------------------+-------------------------------------------+
-         | Render State Updates             | Audio Events             | Input Events
-+--------v----------------------+  +--------v----------------+  +------v----------------+
-|       Rendering Engine        |  |      Audio Engine       |  |     Input Engine      |
-| (Pixi.js v8 WebGL, pooled     |  | (Web Audio API,         |  | (keydown/keyup        |
-|  notes, hold bodies, HUD)     |  |  rate+pitch for DT/HT)  |  |  capture, no repeat)  |
-+-------------------------------+  +-------------------------+  +-----------------------+
-                                            |
-+-------------------------------------------v-------------------------------------------+
-|                         Data, persistence, and serverless                             |
-|  +----------------------+  +----------------------+  +-----------------------------+  |
-|  | .osu decoder + SV    |  | IndexedDB (Dexie)    |  | Vercel Functions            |  |
-|  | JSZip .osz ingest    |  | maps, audio, local   |  | OAuth, /me, catalog search  |  |
-|  |                      |  | play history         |  | Postgres identity only      |  |
-|  +----------------------+  +----------------------+  +-----------------------------+  |
-+---------------------------------------------------------------------------------------+
-```
-
-### Performance budgets
-
-| Subsystem | Target | Hard upper limit | Mitigation |
-| --- | --- | --- | --- |
-| Rendering loop | 240+ FPS (~4.16 ms/frame) | 60 FPS | Pixi v8 batching, sprite pooling, instanced hold bodies |
-| Input latency | ≤ 2.0 ms stamp | ≤ 8.0 ms | Direct `KeyboardEvent` + `performance.now()`, drain before judgement |
-| Audio-visual drift | ± 0.5 ms | ± 2.0 ms | `AudioContext.currentTime` master + linear interpolation |
-| GC jitter | 0 allocs in game loop | < 0.5 ms pause | Pre-allocated note/particle/input pools |
-| Beatmap parse | < 50 ms per map | < 200 ms | Linear scan, typed arrays after parse |
-
-Gameplay loop never allocates. React is **off** the playfield. Pixi for combo/judgement (240 Hz). React for pause/results/song select.
+1. **One ruleset module.** Extract judgement, score, HP, and hold state out of `GameplayCanvas.tsx` into `src/ruleset/mania/` so Canvas, replay sim, and `api/_lib/replayVerification.ts` call the same functions.
+2. **Lazer is the spec; tests are the contract.** Port numeric tables from `ppy/osu` into Vitest fixtures.
+3. **Argon is the visual spec.** Recreate layout, colour, and motion from `ArgonSkin` + `ManiaArgonSkinTransformer`. Playwright against reference stills is the acceptance test for UI tasks.
+4. **One task at a time.** See Execution protocol.
+5. **Compatibility flag for old replays.** `rulesetVersion: 3` for new plays. Verifier still understands hold-tick v2 rows.
+6. **Canvas2D Argon is the reference renderer.** Babylon is an extra skin, not the design source of truth.
+7. **PENAR is a first-class HUD field with a stub calculator.** Never call it pp in UI, API copy, or settings.
+8. **Settings still sanitize.** New mods, 1K–10K, scroll lock, PENAR toggle go through `GameSettings` + `sanitizeSettings` + registry + consumers together.
 
 ---
 
-## What “Vercel site” means
+## 4b. PENAR (Performance Evaluation & Numerical Achievement Rating)
 
-It is **not** a static site. The name is a **Vite SPA with Vercel Serverless Functions** (Jamstack / serverless full-stack).
+Lazer’s Argon HUD has `ArgonPerformancePointsCounter` under accuracy (top-right, ~0.8 scale). RhythmMania ships the **same slot** with a different name.
 
-| Piece | Who runs it | Why |
-| --- | --- | --- |
-| React/Pixi UI, parser, playfield | Browser | Game loop, JSZip, IndexedDB |
-| `POST osu.ppy.sh/oauth/token`, `GET /api/v2/me`, `GET /api/v2/beatmapsets/search` | **Vercel Function** | osu.ppy.sh sends **no CORS** — a browser `fetch` is blocked. Secret must not ship in JS. |
-| `GET https://catboy.best/d/{setId}n` | **Browser** | Verified `Access-Control-Allow-Origin: *` on the download. Same as RhythmMania. |
-| Postgres | Vercel Function via `DATABASE_URL` | No SQL from the browser. |
+**Do in the HUD/types work (TASK-054), not as a secret later patch:**
 
-### How [RhythmMania](https://github.com/yumo-ymspace/RhythmMania) already does this
-
-- `api/auth/osu/url` + `callback` + `refresh` — Function exchanges the code with `OSU_CLIENT_SECRET`.
-- `GET /api/catalog/search` — Function calls official osu search with the user’s token.
-- Client then downloads the `.osz` from **catboy.best** (Mino), osudl.org fallback.
-- `DATABASE_URL` / `PG*` for Postgres. Env names in their `.env.example`: `OSU_CLIENT_ID`, `OSU_CLIENT_SECRET`, `DATABASE_URL`, `SESSION_SECRET`.
-
-This port copies that split. Difference: **no** Google login, **no** replay upload, **no** catalog leaderboard tables.
-
----
-
-## `.env` names
-
-Create `.env` at the repo root (gitignored). Copy from `.env.example`. Register the OAuth app at https://osu.ppy.sh/home/account/edit#oauth with callback **exactly** matching `OSU_REDIRECT_URI`.
-
-```
-# --- osu! API v2 OAuth (Authorization Code). SERVER ONLY. ---
-OSU_CLIENT_ID=
-OSU_CLIENT_SECRET=
-OSU_REDIRECT_URI=http://localhost:5173/api/auth/osu/callback
-# Production example: https://YOUR-DEPLOY.vercel.app/api/auth/osu/callback
-
-# --- Postgres (your existing database) ---
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DBNAME
-
-# --- Beatmap mirror ---
-CATBOY_BASE_URL=https://catboy.best
-
-# --- Session cookie signing ---
-SESSION_SECRET=
-```
-
-| Name | Goes in browser? | Purpose |
-| --- | --- | --- |
-| `OSU_CLIENT_ID` | No (server reads it; id is not secret but we still keep one source) | OAuth application id |
-| `OSU_CLIENT_SECRET` | **Never** | OAuth client secret |
-| `OSU_REDIRECT_URI` | No | Must match the callback URL on the osu! OAuth app |
-| `DATABASE_URL` | **Never** | Postgres connection string |
-| `CATBOY_BASE_URL` | No | Mirror origin, default `https://catboy.best` |
-| `SESSION_SECRET` | **Never** | Signs the login cookie |
-
-There is **no** `VITE_OSU_CLIENT_SECRET`. Login is `GET /api/auth/osu/url` (Vercel Function), which redirects to `https://osu.ppy.sh/oauth/authorize`.
-
-Same names as RhythmMania so you can reuse the OAuth app if the callback URL is added for this project.
-
-Fill these in before we run the backend. You do not need to paste the secret into chat.
-
----
-
-## OAuth + Postgres (no leaderboards)
-
-Flow:
-
-1. Profile chip → `GET /api/auth/osu/url` (Function) → osu authorize `identify public` + CSRF `state`.
-2. `GET /api/auth/osu/callback` (Function) → `POST https://osu.ppy.sh/oauth/token`.
-3. Function `GET https://osu.ppy.sh/api/v2/me?mode=mania`.
-4. Upsert Postgres, set httpOnly session cookie, redirect to `/`.
-5. Toolbar `GET /api/auth/me` → username, avatar, mania rank, pp, level.
-
-Tables (and **only** these):
-
-```
-osu_users (
-  osu_id        bigint primary key,
-  username      text not null,
-  avatar_url    text,
-  cover_url     text,
-  country_code  text,
-  pp            double precision,
-  global_rank   integer,
-  level         double precision,
-  updated_at    timestamptz not null
-)
-
-osu_oauth_tokens (
-  osu_id        bigint primary key references osu_users(osu_id),
-  access_token  text not null,
-  refresh_token text not null,
-  expires_at    timestamptz not null,
-  scopes        text not null
-)
-
-sessions (
-  id            uuid primary key,
-  osu_id        bigint not null references osu_users(osu_id),
-  expires_at    timestamptz not null
-)
-```
-
-Refresh tokens on the server when `expires_at` is near. **No `scores` table. No ranks table. No friends board.**
-
-Song select **omits Global / Friends / Local leaderboard tabs**. No score lists. Personal last-play stats can appear on results only, in IndexedDB, never in Postgres.
-
----
-
-## Beatmap search and download
-
-- **Search (Function):** `GET /api/catalog/search` proxies `https://osu.ppy.sh/api/v2/beatmapsets/search` with `m=3`, using the logged-in user’s token (refresh if needed). This is the only way to use official API v2 search; the browser cannot call osu.ppy.sh.
-- **Download (browser):** `fetch('https://catboy.best/d/' + setId + 'n')` → Blob → JSZip → IndexedDB. No video. Fallback `https://osu.direct/d/{id}` if catboy fails (RhythmMania uses osudl.org). Catboy CORS is `*`; no Function needed for the file bytes (avoids Vercel 4.5 MB body limits on large `.osz`).
-- **Upload (browser):** drag-and-drop / file picker, same IndexedDB path. Works logged out.
-- Search UI requires osu login. Import and play do not.
-
-Drag-and-drop / file picker `.osz` still works with no login. Search and catboy download require the OAuth session.
-
-Ship **one bundled original/CC sample chart** so the app is playable offline. Do **not** ship copyrighted ranked osu! sets in the repo.
-
-### Rate limits and ToS (locked)
-
-- osu API: ≤60 req/min, cache search, backoff. Docs: https://osu.ppy.sh/docs
-- Official `.osz` download endpoint is lazer-only — we **do not** call it.
-- catboy.best (Mino) is a community mirror you approved. Browser download (CORS `*`). Vercel is not used as a file proxy so large maps are not truncated.
-- We never harvest mass score data into Postgres.
-
----
-
-## Mods (all lazer mania)
-
-From `ManiaRuleset.GetModsFor`:
-
-- Reduction: EZ, NF, HT, DC
-- Increase: HR, SD, PF, DT, NC, HD, FI, FL, Cover, Accuracy Challenge
-- Automation: AT, CN
-- Conversion: 1K–10K (playable even if native charts are 2–9), RD, DS, MR, DA, CL, IN, CS, HO
-
-Score multipliers come from each mod class in ppy/osu at implement time, not from a `DESIGN.md` table if they disagree.
-
----
-
-## Beatmap specification and ingestion
-
-The parser follows the [osu! Beatmap File Format Specification](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29). Gameplay uses Mode `3` (Mania). Do not convert Mode 0 charts in v1.
-
-### `.osu` sections required
-
-- `[General]`: `AudioFilename`, `AudioLeadIn`, `PreviewTime`, `Mode` (must be 3).
-- `[Metadata]`: Title / TitleUnicode, Artist / ArtistUnicode, Creator, Version, Source, Tags, BeatmapID, BeatmapSetID.
-- `[Difficulty]`: `CircleSize` = key count, `OverallDifficulty`, `HPDrainRate`, `SliderMultiplier`.
-- `[Events]`: background image (`0,0,"bg.jpg",0,0`). Skip video.
-- `[TimingPoints]`: tempo, meter, sample banks, inherited SV.
-- `[HitObjects]`: taps and holds.
-
-### Column mapping
-
-Hit object `X ∈ [0, 512]`. `Y` is ignored for layout.
-
-```
-C = clamp(floor(X * K / 512), 0, K - 1)
-```
-
-Native **K = 2..9**. Key mods can force 1K–10K.
-
-### Hit object encoding
-
-1. **Single note**: `type & 1 != 0`. Line: `x,y,time,type,hitSound,hitSample`.
-2. **Hold**: `type & 128 != 0`. Line: `x,y,time,type,hitSound,endTime:hitSample`. `endTime` is the first colon-delimited token of the sixth field.
-
-```typescript
-export interface RawHitObject {
-  column: number;
-  startTime: number;
-  endTime: number;
-  isHold: boolean;
-  hitSound: number;
-  hitSample: string;
-}
-
-export interface TimingPoint {
-  time: number;
-  beatLength: number; // uninherited: BPM = 60000 / beatLength; inherited: SV = -100 / beatLength
-  meter: number;
-  sampleSet: number;
-  sampleIndex: number;
-  volume: number;
-  uninherited: boolean;
-  effects: number;
-}
-
-export interface ParsedManiaBeatmap {
-  general: {
-    audioFilename: string;
-    audioLeadIn: number;
-    previewTime: number;
-  };
-  metadata: {
-    title: string;
-    titleUnicode: string;
-    artist: string;
-    artistUnicode: string;
-    creator: string;
-    version: string;
-    beatmapId: number;
-    beatmapSetId: number;
-  };
-  difficulty: {
-    keyCount: number; // CircleSize
-    overallDifficulty: number;
-    hpDrainRate: number;
-    sliderMultiplier: number;
-    sliderTickRate: number;
-  };
-  backgroundFilename: string | null;
-  timingPoints: TimingPoint[];
-  hitObjects: RawHitObject[];
-}
-```
-
-### Slider velocity and scroll position
-
-Inherited (green) timing points: `SV = -100 / beatLength`. Example: `beatLength = -50` → SV `2.0×`; `-200` → `0.5×`.
-
-**Red (uninherited) BPM points change tempo only. They do not reset SV to 1.0.** SV persists until the next inherited point.
-
-Precompute cumulative track distance so note Y is frame-rate independent:
-
-```
-D(t) = ∫ V(u) du  from 0 to t
-```
-
-Piecewise: for each segment `[t_i, t_{i+1})` with multiplier `V_i`, add `V_i * Δt`.
-
-```typescript
-export interface ScrollSegment {
-  startTime: number;
-  endTime: number;
-  multiplier: number;
-  cumulativeDistanceStart: number;
-}
-
-export class ScrollPositionCalculator {
-  private segments: ScrollSegment[] = [];
-
-  constructor(timingPoints: TimingPoint[], mapDuration: number) {
-    this.buildSegments(timingPoints, mapDuration);
-  }
-
-  private buildSegments(timingPoints: TimingPoint[], mapDuration: number): void {
-    const sorted = [...timingPoints].sort((a, b) => a.time - b.time);
-    let currentMultiplier = 1.0;
-    let lastTime = 0;
-    let runningDistance = 0;
-
-    for (let i = 0; i < sorted.length; i++) {
-      const tp = sorted[i];
-      const time = Math.max(0, tp.time);
-
-      if (time > lastTime) {
-        this.segments.push({
-          startTime: lastTime,
-          endTime: time,
-          multiplier: currentMultiplier,
-          cumulativeDistanceStart: runningDistance,
-        });
-        runningDistance += (time - lastTime) * currentMultiplier;
-        lastTime = time;
-      }
-
-      if (!tp.uninherited) {
-        currentMultiplier = -100 / tp.beatLength;
-      }
-      // else: BPM change only — do not reset currentMultiplier
-    }
-
-    this.segments.push({
-      startTime: lastTime,
-      endTime: mapDuration + 10000,
-      multiplier: currentMultiplier,
-      cumulativeDistanceStart: runningDistance,
-    });
-  }
-
-  public getVisualPosition(time: number): number {
-    let low = 0;
-    let high = this.segments.length - 1;
-    while (low <= high) {
-      const mid = (low + high) >> 1;
-      const seg = this.segments[mid];
-      if (time >= seg.startTime && time < seg.endTime) {
-        return seg.cumulativeDistanceStart + (time - seg.startTime) * seg.multiplier;
-      }
-      if (time < seg.startTime) high = mid - 1;
-      else low = mid + 1;
-    }
-    return time;
-  }
-}
-```
-
-Visual Y (downscroll): `noteY = hitPosition - ((D(noteTime) - D(now)) / scrollDurationMs) * hitPosition`. Default scroll duration 500 ms.
-
----
-
-## Precision timing, audio, and input
-
-Do not use `setTimeout` / `setInterval` as the game clock. Master time is `AudioContext.currentTime`. Because that value steps with the audio buffer (typically 2.6–10.6 ms), interpolate with `performance.now()` for visuals.
-
-Clock:
-
-```
-rawMs = startOffset + (ctx.currentTime - startCtx) * rate * 1000 + userOffset + mapOffset
-```
-
-```typescript
-export class AudioMasterClock {
-  private audioCtx: AudioContext;
-  private audioBufferSource: AudioBufferSourceNode | null = null;
-  private startTimeAudioCtx = 0;
-  private startOffsetMs = 0;
-  private userOffsetMs = 0;
-  private mapOffsetMs = 0;
-  private isPlaying = false;
-  private playbackRate = 1.0;
-  private anchorAudioTime = 0;
-  private anchorPerf = 0;
-
-  constructor(audioCtx: AudioContext) {
-    this.audioCtx = audioCtx;
-  }
-
-  public start(buffer: AudioBuffer, startPositionMs = 0, rate = 1.0): void {
-    this.audioBufferSource = this.audioCtx.createBufferSource();
-    this.audioBufferSource.buffer = buffer;
-    this.playbackRate = rate;
-    this.audioBufferSource.playbackRate.setValueAtTime(rate, this.audioCtx.currentTime);
-    this.audioBufferSource.connect(this.audioCtx.destination);
-
-    this.startTimeAudioCtx = this.audioCtx.currentTime;
-    this.startOffsetMs = startPositionMs;
-    this.anchorAudioTime = this.startTimeAudioCtx;
-    this.anchorPerf = performance.now();
-    this.audioBufferSource.start(0, startPositionMs / 1000);
-    this.isPlaying = true;
-  }
-
-  public getCurrentTime(): number {
-    if (!this.isPlaying) return this.startOffsetMs;
-    const audioNow = this.audioCtx.currentTime;
-    if (audioNow !== this.anchorAudioTime) {
-      this.anchorAudioTime = audioNow;
-      this.anchorPerf = performance.now();
-    }
-    const interpolatedSec =
-      (audioNow - this.startTimeAudioCtx) +
-      ((performance.now() - this.anchorPerf) / 1000);
-    return this.startOffsetMs + interpolatedSec * this.playbackRate * 1000
-      + this.userOffsetMs + this.mapOffsetMs;
-  }
-
-  public setOffsets(userOffset: number, mapOffset: number): void {
-    this.userOffsetMs = userOffset;
-    this.mapOffsetMs = mapOffset;
-  }
-
-  public stop(): void {
-    if (this.audioBufferSource) {
-      try {
-        this.audioBufferSource.stop();
-        this.audioBufferSource.disconnect();
-      } catch {
-        /* already stopped */
-      }
-      this.audioBufferSource = null;
-    }
-    this.isPlaying = false;
-  }
-}
-```
-
-Rate mods: DT/NC/HT change `playbackRate` (and pitch for NC vs DT per lazer). Hitsounds scheduled on the same graph.
-
-### Input
-
-Capture `keydown`/`keyup` with `{ capture: true, passive: false }`. Ignore `repeat`. Stamp `performance.now()`. Drain the queue **before** judgement each frame. Bind by `e.code`, not `e.key`.
-
-Default binds: 4K `KeyD KeyF KeyJ KeyK`; 7K `KeyS KeyD KeyF Space KeyJ KeyK KeyL`. Settings cover 2K–9K (and 1K/10K via key mods).
-
-```typescript
-export interface QueuedInputEvent {
-  column: number;
-  type: 'down' | 'up';
-  timestamp: number;
-}
-
-export class LowLatencyInputManager {
-  private keyMap = new Map<string, number>();
-  private inputQueue: QueuedInputEvent[] = [];
-  private keyState: boolean[] = [];
-
-  constructor(keyCount: number, customBinds?: string[]) {
-    this.keyState = new Array(keyCount).fill(false);
-    this.setupBindings(keyCount, customBinds);
-    this.attachListeners();
-  }
-
-  private setupBindings(keyCount: number, customBinds?: string[]): void {
-    const default4K = ['KeyD', 'KeyF', 'KeyJ', 'KeyK'];
-    const default7K = ['KeyS', 'KeyD', 'KeyF', 'Space', 'KeyJ', 'KeyK', 'KeyL'];
-    const bindings = customBinds ?? (keyCount === 7 ? default7K : default4K);
-    bindings.forEach((code, idx) => this.keyMap.set(code, idx));
-  }
-
-  private attachListeners(): void {
-    window.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.repeat) return;
-      const col = this.keyMap.get(e.code);
-      if (col === undefined) return;
-      e.preventDefault();
-      this.keyState[col] = true;
-      this.inputQueue.push({ column: col, type: 'down', timestamp: performance.now() });
-    }, { passive: false, capture: true });
-
-    window.addEventListener('keyup', (e: KeyboardEvent) => {
-      const col = this.keyMap.get(e.code);
-      if (col === undefined) return;
-      e.preventDefault();
-      this.keyState[col] = false;
-      this.inputQueue.push({ column: col, type: 'up', timestamp: performance.now() });
-    }, { passive: false, capture: true });
-  }
-
-  public drainEvents(): QueuedInputEvent[] {
-    const events = this.inputQueue;
-    this.inputQueue = [];
-    return events;
-  }
-
-  public isColumnPressed(column: number): boolean {
-    return this.keyState[column] === true;
-  }
-}
-```
-
-Map input timestamps onto clock time by subtracting the same `performance.now()` ↔ audio-clock offset used by the interpolator.
-
----
-
-## Gameplay spec (implement exactly)
-
-1. Parse `.osu` Mode 3. Column `floor(x * K / 512)` clamped `[0, K-1]`. Native **K = 2..9**. Key mods can force 1K–10K.
-2. Per-column FIFO: ghost tap if input is earlier than miss window; consume earliest unjudged object in window; auto-miss after late miss window.
-3. Holds: judge head on down; require hold through body; `ComboBreak` on early release; judge tail on up with 1.5× windows. **No 100 ms body ticks.**
-4. Clock and visual Y as above.
-5. Input as above.
-6. Mods: full lazer mania set. Source multipliers win over `DESIGN.md`.
-7. Results: grade, standardised score, judgement matrix, UR. Scores stay in IndexedDB for that browser only — not uploaded, not ranked.
-
-### Hit windows
-
-```typescript
-export enum HitResult {
-  None = 0,
-  Miss = 1,
-  Meh = 2,
-  Ok = 3,
-  Good = 4,
-  Great = 5,
-  Perfect = 6,
-}
-
-/** DifficultyRange(od, min@0, mid@5, max@10) from IBeatmapDifficultyInfo. */
-export function difficultyRange(od: number, min: number, mid: number, max: number): number {
-  if (od > 5) return mid + ((max - mid) * (od - 5)) / 5;
-  if (od < 5) return mid + ((mid - min) * (od - 5)) / 5;
-  return mid;
-}
-
-export class ManiaHitWindows {
-  public perfect: number;
-  public great: number;
-  public good: number;
-  public ok: number;
-  public meh: number;
-  public miss: number;
-
-  constructor(od: number, speedMultiplier = 1, difficultyMultiplier = 1) {
-    const clampedOd = Math.max(0, Math.min(10, od));
-    const scale = (min: number, mid: number, max: number) =>
-      Math.floor((difficultyRange(clampedOd, min, mid, max) * speedMultiplier) / difficultyMultiplier) + 0.5;
-
-    this.perfect = scale(22.4, 19.4, 13.9);
-    this.great = scale(64, 49, 34);
-    this.good = scale(97, 82, 67);
-    this.ok = scale(127, 112, 97);
-    this.meh = scale(151, 136, 121);
-    this.miss = scale(188, 173, 158);
-  }
-
-  public judge(deltaMs: number): HitResult {
-    const absDelta = Math.abs(deltaMs);
-    if (absDelta <= this.perfect) return HitResult.Perfect;
-    if (absDelta <= this.great) return HitResult.Great;
-    if (absDelta <= this.good) return HitResult.Good;
-    if (absDelta <= this.ok) return HitResult.Ok;
-    if (absDelta <= this.meh) return HitResult.Meh;
-    if (absDelta <= this.miss) return HitResult.Miss;
-    return HitResult.None;
-  }
-}
-```
-
-Exact min/mid/max constants must be copied from `ManiaHitWindows.cs` at implement time. The OD 0/5/10 table above is the acceptance fixture. CL mod uses Classic windows instead.
-
-Mania: DT/HT `SpeedMultiplier` keeps windows independent of clock rate (do not shrink the window because audio is faster). EZ/HR use `DifficultyMultiplier`.
-
-### Per-column FIFO
-
-When the user presses at `t_input`, search the earliest unjudged object in that column:
-
-1. `Δt = t_input - t_note`.
-2. If `Δt < -missWindow` → ghost tap (do not consume, do not penalize).
-3. If `|Δt| ≤ missWindow` → `judge(Δt)`, consume, update score/health/combo.
-4. Each frame: unjudged notes with `t_now - t_note > missWindow` auto-miss.
-
-Late Meh on head/tail is impossible → Miss (lazer). Port that rule from source, do not invent a Meh-after-timeout path.
-
-### Holds
-
-```
-t_head                                              t_tail
-[ Head judgement ]======== body (held) =========[ Tail judgement ]
-     keydown              early release = ComboBreak      keyup
-```
-
-- Head: `keydown` vs standard windows. Separate score object.
-- Body: must stay held. Early release → `ComboBreak` (combo reset, **no extra score object**). No 100 ms ticks.
-- Tail: `keyup` vs **1.5×** windows. Separate score object.
-- Holding past the late window: follow lazer tail miss / auto-complete rules from `HoldNoteTail` source, not a “always Perfect if held too long” shortcut unless source does that.
-
-### Health
-
-No continuous drain (`ComputeDrainRate` = 0). HP starts at 1.0, clamped `[0, 1]`, mutates only on judgement results. Exact `ΔHP(result, HPDrainRate)` from `ManiaHealthProcessor.cs` at implement time — do not use invented +0.020 / −0.080 tables.
-
-Fail at 0 unless NF. SD/PF fail according to those mods.
-
-### Scoring
-
-```
-total = 150000 * comboProgress
-      + 850000 * Accuracy^(2 + 2*Accuracy) * accuracyProgress
-      + bonusPortion
-```
-
-Accuracy weights: Perfect **305**, Great 300, Good 200, Ok 100, Meh 50, Miss 0. Combo contribution for Perfect is still 300.
-
-```
-Accuracy = sum(baseScores) / (305 * judgedObjects)
-```
-
-All-Perfect → 1_000_000 (plus bonus portion as in source). Port `bonusPortion` from `ManiaScoreProcessor` / shared standardised processor; do not invent a 300k combo bar.
-
-### Grades
-
-- **SS (X)**: every judgement is Perfect or Great (mania override of `RankFromScore`). Not “must be 100.00% Perfect-only”.
-- S ≥ 95%, A ≥ 90%, B ≥ 80%, C ≥ 70%, else D.
-- HD / FI / FL → silver S/SS.
-- Misses do **not** demote mania S the way they do in standard.
-
-### Unstable Rate
-
-```
-UR = 10 * sampleStdDev(hitErrorsMs)
-```
-
-Sample standard deviation (`N-1`). Include judged hits that produced an error sample per lazer (typically exclude misses with no hit). Port the exact inclusion set from source.
-
----
-
-## UI spec (from DESIGN.md + live Argon)
-
-Tokens: `--bg-base #08090D`, cyan `#00F0FF`, pink `#FF007F`, yellow `#FFCC00`, emerald `#00FF66`. Full token table lives in `DESIGN.md`.
-
-Typography: Torus Pro with Inter fallback; Exo 2 tabular for score/acc/combo.
-
-Geometry: outer cards `skewX(-12deg)`, inner content `skewX(+12deg)`. Motion: OutQuint panels, OutElastic combo, BPM-synced logo pulse.
-
-Screens:
-
-1. **Title** — BPM-pulsed logo; **SOLO / SETTINGS / EXIT**. MULTI and EDIT hidden. Top-right profile chip: Guest until OAuth, then real osu mania stats.
-2. **Song select** — left carousel of −12° cards; top search + key-count pills; right difficulty panel (BPM, length, OD, HP, keys, objects). **No Global / Friends / Local leaderboard tabs.** Bottom: Back, Mods, Random, Play. API search + catboy download + local import.
-3. **Mods overlay** — full lazer mania set listed above.
-4. **Playfield** — centered columns, receptors, stage lighting, hit bursts. HUD: health left, progress top, score/acc right, combo + judgement at receptor, hit-error bar at bottom.
-5. **Pause / fail** — Retry / Quit. Fail overlay if HP hits 0 without NF.
-6. **Results** — rank badge, standardised score, max combo, accuracy, judgement matrix, hit-error histogram, UR. Retry / Continue. Local IndexedDB only.
-7. **Settings** — Audio (volumes, universal offset), Graphics (FPS cap, dim, blur, UI scale), Keybinds 2K–9K, Gameplay (scroll speed, up/down).
-
-4K note colors C Y Y C; 7K C B C Y C B C; other key counts from the 1/2/S table.
-
-Song select wireframe (no leaderboard panel):
-
-```
-+----------------------------------------------------------------------------------------------------+
-| [User Avatar]  Guest | or real osu user                             [ SEARCH ]  [ NOW PLAYING ]   |
-+----------------------------------------------------------------------------------------------------+
-|  CAROUSEL (−12° Argon cards)                |  DIFFICULTY DETAILS                                  |
-|  set cards + difficulties                   |  title, SR, BPM, length, keys, OD, HP, objects       |
-|                                             |  (no score list)                                     |
-+----------------------------------------------------------------------------------------------------+
-| [ BACK ]   [ MODS ]   [ RANDOM ]   [ IMPORT .osz ]                          [ PLAY >>> ]           |
-+----------------------------------------------------------------------------------------------------+
-```
-
-Playfield renderer sketch (pool sprites; do not allocate in `update`):
-
-```typescript
-export class ManiaPlayfieldRenderer {
-  public container: Container;
-  private keyCount: number;
-  private columnWidth = 64;
-  private hitPosition = 680;
-  private trackHeight = 720;
-  private scrollDurationMs = 500;
-
-  public update(currentTime: number, activeNotes: RawHitObject[], scrollCalc: ScrollPositionCalculator): void {
-    const currentDist = scrollCalc.getVisualPosition(currentTime);
-    for (let i = 0; i < activeNotes.length; i++) {
-      const note = activeNotes[i];
-      const deltaDist = scrollCalc.getVisualPosition(note.startTime) - currentDist;
-      const noteY = this.hitPosition - (deltaDist / this.scrollDurationMs) * this.hitPosition;
-      if (noteY >= -50 && noteY <= this.trackHeight + 50) {
-        // position from pre-allocated pool
-      }
-    }
-  }
-}
-```
-
-Visual QA: Playwright screenshot of each screen vs [ppy/osu Argon mania skinning](https://github.com/ppy/osu/tree/master/osu.Game.Rulesets.Mania/Skinning/Argon) and official lazer screenshots. Iterate CSS/canvas until layout, skew, and judgment colors match.
-
----
-
-## Client storage (IndexedDB)
-
-Local only. Never a substitute for Postgres identity, and never a public leaderboard.
-
-```typescript
-export interface StoredBeatmapSet {
-  id: string;
-  title: string;
-  artist: string;
-  creator: string;
-  coverImageBlob?: Blob;
-  audioBlob: Blob;
-  beatmaps: StoredBeatmap[];
-  dateAdded: number;
-}
-
-export interface StoredBeatmap {
-  id: string; // MD5 of .osu
-  setId: string;
-  version: string;
-  keyCount: number;
-  overallDifficulty: number;
-  hpDrainRate: number;
-  starRating: number;
-  rawOsuContent: string;
-}
-
-export interface StoredLocalPlay {
-  id?: number;
-  beatmapId: string;
-  score: number;
+```ts
+export interface PenarBreakdown {
+  total: number | null;       // null = not yet computed
+  version: string;            // e.g. 'penar-stub-0'
+  starRating: number | null;
   accuracy: number;
   maxCombo: number;
-  rank: string;
-  unstableRate: number;
-  judgments: {
-    perfect: number;
-    great: number;
-    good: number;
-    ok: number;
-    meh: number;
-    miss: number;
-  };
+  missCount: number;
   mods: string[];
-  timestamp: number;
 }
 
-export class OsuManiaDatabase extends Dexie {
-  public beatmapSets!: Table<StoredBeatmapSet, string>;
-  public beatmaps!: Table<StoredBeatmap, string>;
-  public localPlays!: Table<StoredLocalPlay, number>;
-
-  constructor() {
-    super('OsuManiaWebDB');
-    this.version(1).stores({
-      beatmapSets: 'id, title, artist, creator, dateAdded',
-      beatmaps: 'id, setId, keyCount, starRating',
-      localPlays: '++id, beatmapId, timestamp',
-    });
-  }
+export interface ScoreState {
+  // existing fields...
+  penar: PenarBreakdown | null;
 }
 ```
 
-`.osz` import: JSZip in memory → Mode 3 `.osu` texts + primary audio Blob + first image as cover → Dexie. Missing audio or zero mania difficulties → error. Videos ignored.
+- HUD: Argon-style counter, label **PENAR** (or a short “PENAR” with tooltip “Performance Evaluation & Numerical Achievement Rating”).
+- Results + history + replay detail: same field, `—` while stubbed.
+- Settings: “Show PENAR during play” toggle (default on, matching Argon PP visibility).
+- `src/utils/penar.ts`: `computePenar(input): PenarBreakdown` returns `{ total: null, version: 'penar-stub-0', ... }` until a later dedicated task ports a mania difficulty formula. **Do not invent osu pp numbers.**
+- API/replay JSON: optional `penar` object; server may ignore until computed.
+- Leave call sites in the score apply path (`applyJudgement` / result finalize) so filling the formula is a single-file change.
 
 ---
 
-## Visual / research loop during implementation
+## 4c. Low-latency rendering (thought, then a concrete default)
 
-1. Port formulas from ppy source, not wiki-only.
-2. Screenshot Argon references (GitHub raw SVGs/PNGs + wiki judgement images).
-3. After each UI PR: Vite preview → Playwright `browser_navigate` + `browser_take_screenshot` at 1920×1080 and 390×844; compare tokens, skew, HUD.
-4. Vitest fixtures: OD 0/5/10 windows, column edges, score of all-Perfect = 1_000_000, SS with mixed Perfect/Great, ComboBreak on LN release, red timing points do not reset SV.
+Rhythm games lose to input-to-audio and input-to-photon delay, not to “prettier 3D.”
 
-```typescript
-describe('ManiaHitWindows OD Scaling Tests', () => {
-  it('computes lazer windows at OD = 5 (not Classic ±16 Perfect)', () => {
-    const hw = new ManiaHitWindows(5.0);
-    expect(hw.perfect).toBe(19.4);
-    expect(hw.great).toBe(49);
-    expect(hw.good).toBe(82);
-    expect(hw.ok).toBe(112);
-    expect(hw.meh).toBe(136);
-    expect(hw.miss).toBe(173);
-  });
-});
+**Keep, and tighten, the current architecture:**
 
-describe('Column Coordinate Mapping Tests', () => {
-  it('maps 512-space into 4K and 7K', () => {
-    const mapToCol = (x: number, k: number) =>
-      Math.max(0, Math.min(k - 1, Math.floor((x * k) / 512)));
-    expect(mapToCol(0, 4)).toBe(0);
-    expect(mapToCol(127, 4)).toBe(0);
-    expect(mapToCol(128, 4)).toBe(1);
-    expect(mapToCol(256, 4)).toBe(2);
-    expect(mapToCol(384, 4)).toBe(3);
-    expect(mapToCol(512, 4)).toBe(3);
-    expect(mapToCol(256, 7)).toBe(3);
-    expect(mapToCol(512, 7)).toBe(6);
-  });
-});
+| Layer | Choice | Why |
+|---|---|---|
+| Clock | Web Audio `AudioContext.currentTime` (already `AudioEngine`) | Judgement must not use `performance.now()` alone |
+| Loop | `requestAnimationFrame` | vsync; do not use `setInterval` |
+| Playfield | **Canvas2D** with `{ alpha: false, desynchronized: true }` | Chromium can skip compositor; lowest-effort latency win |
+| HUD | DOM overlay, `pointer-events: none` | Argon typography is easier in CSS; do not redraw score every frame on the playfield canvas if it causes layout |
+| Input | `keydown`/`keyup` on window, no React synthetic for play keys | Already mostly true; keep bindings off the React render path |
+| Audio | `latencyHint: 'interactive'`; expose `baseLatency+outputLatency` into offset wizard | Matches felt sync |
+| DPR | cap or `limitDprToOne` path remains; do not fill 4K×DPR 3 if it tanks frame time | |
+
+**Do not add PixiJS / Three.js / a second scene graph for 2D Argon.** Extra frameworks fight Babylon, increase bundle, and do not fix Web Audio output latency.
+
+**Optional later (own tasks, after Argon Canvas is correct):**
+
+- WebGL2 instanced quads for notes if Canvas2D profiling shows >8ms paint on 20k-note maps (the import cap).
+- `OffscreenCanvas` worker for raster only if main-thread hit-testing stays on the audio clock (workers cannot see key events without a copy).
+
+Babylon stays a **skin**, dynamically imported, not the low-latency path.
+
+---
+
+## 5. Argon visual system (recreate closely)
+
+Source of truth for layout: `ArgonSkin.GetDrawableComponent` (`MainHUDComponents`) and `ManiaArgonSkinTransformer`.
+
+### 5.1 HUD layout (Argon)
+
+From `ArgonSkin.cs` (global HUD):
+
+- **Health:** top-left, `ArgonHealthDisplay`, width ~300, bar height 30, position ~(50, 20). Short horizontal accent line beside it.
+- **Wedges:** two stacked `ArgonWedgePiece` (~380×72) behind score (slight 4,5 offset on the second).
+- **Score:** `ArgonScoreCounter`, no “Score” label, sitting on the wedges (origin top-right relative to wedge).
+- **Accuracy:** top-right ~(−20, 20).
+- **PENAR:** directly under accuracy (`accuracy.Y + accuracy.DrawHeight + 10`), scale ~0.8. Lazer uses PP here.
+- **Song progress:** bottom, scale X 0.9.
+- **Key counter:** bottom-right, above progress.
+- **Ruleset extras:** combo bottom-left (scale 1.3); **two** `BarHitErrorMeter`s, centre-left and centre-right (right one X-flipped).
+
+Mania judgement piece: ~25px type, ~180px above receptor (`DefaultManiaJudgementPiece`).
+
+Remove the current top-left Home/Fullscreen/Pause cluster from the playfield; pause is Esc + overlay.
+
+### 5.2 Playfield (Argon mania)
+
+Column colours from `ManiaArgonSkinTransformer` (recreate, do not copy sprites):
+
+- Special column: `rgb(169, 106, 255)`
+- Yellow `255,197,40` · Orange `252,109,1` · Pink `213,35,90` · Purple `203,60,236` · Cyan `72,198,255` · Green `100,192,92`
+
+4K mapping follows lazer’s 1/2/2/1 note-type plus Argon’s colour table (implement by reading the transformer’s `getColourFor` / column index at TASK-050). Special column on odd key counts.
+
+Notes: Argon note piece (short rounded body with a bright top edge / slight 3D lip — **not** full-lane neon slabs). Holds: distinct head, body, **darkened tail** (PR #22402). Body masks as it passes the receptor while held. Hit target: Argon receptor bar. Key area: press lighting under notes.
+
+HD coverage: `min(400, 160 + 0.5*combo) / 768` of the 768-reference stage, against scroll; retract on breaks.
+
+Default `skinId`: `argon`. Keep `rhythmmania`, `rhythmplus`, `circle`, `rhythmmania-3d` as legacy.
+
+### 5.3 Tokens
+
+- Surface near-black; stage dimmed cover.
+- Product accent for **menu chrome only** (RhythmMania identity). Playfield uses Argon column/judgement colours.
+- Tabular nums for score/acc/PENAR.
+- Motion: judgement scale-in, combo bump, overlay 200ms. `prefers-reduced-motion` respected.
+
+### 5.4 Playwright vs Argon photos
+
+Store **fair-use reference stills** (screenshots of public wiki/changelog/Argon gameplay) in `docs/visual-refs/argon/` with a README: source URL, date, what to compare (HUD corners, note shape, 4K colours, results grade). Do not ship those files in the production bundle.
+
+Each visual task:
+
+1. `npm run dev`
+2. Playwright `browser_navigate` `http://localhost:3000/...`
+3. Exercise the user path
+4. `browser_take_screenshot` desktop 1280×720 and mobile 390×844
+5. Side-by-side vs the matching ref: positions, hierarchy, colour family, spacing. Pixel-perfect vs osu.exe is not required; **wrong HUD corner or slab-notes fail the task**.
+
+### 5.5 Song select / results / menu / settings
+
+Match lazer Argon **structure** (Playwright vs refs):
+
+- **Song select:** full-bleed cover (light blur), carousel of sets → difficulty pills, info wedge (OD/HP/SR/BPM/length/keys), **Local ranking only** (this device’s scores), bottom **Mods / Random / Options / Play**, hexagonal category mod overlay. No Global/RM board.
+- **Results:** grade hero, score, acc, combo, mods, Perfect→Miss column, hit-error, PENAR, Retry / Replay / Back.
+- **Menu:** beat-pulse RhythmMania wordmark, Play primary, History/Skins/Profile secondary, settings gear, quiet resource links.
+- **Settings:** keep `settingsRegistry.tsx`; left rail; add scroll lock, HUD/PENAR toggles, 1K–10K binds.
+
+---
+
+## 6. Mechanical change list (executable)
+
+### 6.1 New module layout
+
+```
+src/ruleset/mania/
+  hitWindows.ts          // port ManiaHitWindows
+  scoreProcessor.ts      // port ManiaScoreProcessor (move from scoreCalculator.ts)
+  healthProcessor.ts     // port ManiaHealthProcessor
+  holdNote.ts            // head / body ComboBreak / tail 1.5× / Meh cap
+  judgements.ts          // names, colors, mapping
+  mods/
+    catalog.ts           // ids, incompat, multipliers, apply()
+    hidden.ts fadeIn.ts cover.ts flashlight.ts ...
+  grades.ts
 ```
 
-Also: memory profile (zero alloc in the play loop), frame pacing at high density, and do not treat `Date.now()` as the master clock.
+`GameplayCanvas` becomes a session runner: clock, input, renderer frame, calls ruleset.
+
+There is **no ranked upload path**. Hold/score tests live in Vitest against the same `src/ruleset/mania/` module. Delete or leave unreferenced `api/_lib/replayVerification.ts` after TASK-008 (do not keep a second scoring engine “for later leaderboards”).
+
+### 6.2 Hold rewrite (replace v2 ticks for new plays)
+
+State machine per hold:
+
+```
+idle → holding (head judged)
+     → broken (early release → ComboBreak, combo=0)
+     → tailJudged (release in 1.5× windows, cap Meh if broken or head miss)
+     → complete
+```
+
+- Head uses normal windows.
+- Tail uses `error / 1.5` against the same windows.
+- Late tail after Ok window → Miss.
+- Body does not emit Marvelous…Miss. It emits ComboBreak or IgnoreHit.
+- ComboBreak must not increment `missCount` used for accuracy. Add `comboBreakCount` if we want stats; do not show it as a Miss in the results column unless we add a separate line.
+- Remove `initializeHoldTailTicks` from the live path for `rulesetVersion >= 3`.
+- Old **local** history rows may still carry v2 tick metadata; local replay watch can keep a v2 simulator. There is no server verifier.
+
+This is the highest-risk change: live play, local replay sim, tests, and history records.
+
+### 6.3 HP rewrite
+
+Port `GetHealthIncreaseFor` with HP 0–10 and health 0–1 (display as bar). EZ extra lives: 2 refills. Fail overlay instead of instantly dumping to results (optional short delay like lazer).
+
+### 6.4 Mod system rewrite
+
+Replace tile list in `SongSelect.tsx` with a real catalog:
+
+- Incompatibility matrix (EZ×HR, HT×DT×NC×DC, HD×FI×Cover, SD×NF, etc.).
+- Per-mod settings: DT rate 1.01–2.0, HT 0.5–0.99, Cover height, DA OD/HP, FL combo scaling.
+- Multipliers: EZ 0.5, NF 0.5, others 1.0 unless lazer source says otherwise; K-mods only when converting key count (lazer added convert key-mod penalties — follow current `ManiaModKey*` source at implement time).
+- Apply functions: rate, windows, column remap, SV ignore, invert, hold-off, hidden coverage.
+
+Priority is the serial TASK-030…037 list — one cluster per session, not a parallel dump. Dual Stages is TASK-092.
+
+### 6.5 Naming migration
+
+| Internal (can keep) | Display |
+|---|---|
+| marvelous | Perfect |
+| perfect | Great |
+| great | Good |
+| good | Ok |
+| bad | Meh |
+| miss | Miss |
+
+Update results, HUD, settings copy, replay export labels. Do not rename stored JSON fields in one step; map at read/write.
+
+### 6.6 Scroll speed
+
+- Lock changes while `isPlaying`.
+- Song select: F3/F4 or Ctrl+/− style control plus slider.
+- Document mapping from RM’s 5–80 to a displayed “time to receptor” ms so players from lazer can match feel. Implementation: compute `travelMs` from stage height and speed constant; expose both.
+- DT/HT **do** apply `SpeedMultiplier` (TASK-012); do not leave windows unscaled.
+
+### 6.7 Backend cut (no database)
+
+- Strip `pg`, `DATABASE_URL`, Google env, session cookies.
+- `vercel.json` rewrites: only config, health, osu auth, catalog **search**.
+- Local history `rulesetVersion` is a **client** field on play records, not a SQL column.
+- Do not migrate or rescore a remote leaderboard — it will not exist.
 
 ---
 
-## PR plan
+## 7. Gap-driven UI change list
 
-| PR | Title | Depends | Deliverable |
-| --- | --- | --- | --- |
-| 1 | Vite React-TS scaffold, Argon tokens, `vercel.json`, `api/` stub, `.env.example` | — | `vercel dev` / `npm run dev` |
-| 2 | Postgres identity tables + osu OAuth Functions + `/api/auth/me` | 1 | Profile chip shows real osu mania user |
-| 3 | `.osu` parser + SV integrator + Dexie + `.osz` import | 1 | Local import lists in song select |
-| 4 | AudioMasterClock + input queue + 2K–9K binds | 1 | Clock tests |
-| 5 | Mania ruleset: windows, LN, score, health, UR, full mod set | 4 | Vitest vs lazer formulas |
-| 6 | Pixi playfield + Argon notes/receptors/HUD | 3,5 | Play an imported map |
-| 7 | `/api/catalog/search` (osu v2) + in-browser catboy download into Dexie | 2,3 | Search → download → play |
-| 8 | Song select, mods overlay, settings, pause/fail, results | 6,7 | Full solo loop |
-| 9 | Playwright visual pass + one original sample chart | 8 | Screenshot suite |
+| Screen | File(s) | Change |
+|---|---|---|
+| Playfield | `Canvas2DRenderer.ts`, `playfieldLayout.ts`, `noteVisibility.ts`, `skinTheme.ts` | Argon-like notes, hold masking, HD/FI/Cover/FL |
+| HUD | `GameplayCanvas.tsx` (extract) | Score/acc/combo/HP/progress/hit-error layout |
+| Pause/fail | new overlay components | Lazer-style dim + actions |
+| Song select | `SongSelect.tsx` | Carousel, wedge, bottom bar, overlay mods, **local ranking panel** |
+| Catalog | `OnlineBeatmapCatalog.tsx` | Search + catboy download only; Argon tokens |
+| Results | `ResultsScreen.tsx` | Grade-hero; local score list, no remote |
+| Menu | `MainMenu.tsx` | Logo pulse; **no Google sign-in** |
+| Settings | `settings/*` | Visual pass; local display name; osu! token / BYO |
+| Skins | `SkinScreen.tsx` | Argon default + legacy |
+| History | `PersonalHistoryScreen.tsx` | Local only |
+| Profile | `ProfileScreen.tsx` etc. | **Remove routes** (TASK-007) |
 
-Phase mapping (same work, grouped):
-
-| Phase | Covers PRs | Notes |
-| --- | --- | --- |
-| Scaffold + audio context | 1 | Vite, Tailwind tokens, Pixi viewport, `vercel.json` |
-| Decode + IndexedDB | 3 | Parser, correct SV, JSZip, Dexie |
-| Clock + input | 4 | Dual-clock, binds, offset |
-| Ruleset | 5 | Windows, LN, score, health, UR, mods |
-| Playfield | 6 | Pooled Pixi Argon stage |
-| Argon UI suite | 8 | Screens; **no leaderboards**; MULTI/EDIT hidden |
-| OAuth + catalog | 2, 7 | Functions + browser catboy |
-| Polish / QA | 9 | Playwright, sample chart, 240 FPS check |
-
-Out of v1: MULTI, EDIT, our leaderboard, score submit to osu, mass beatmap harvest.
+Mobile: lazer is tablet-friendly; we keep full-width touch lanes (already equal width) and a simplified carousel (vertical list is OK below `md`).
 
 ---
 
-## Key decisions (locked)
+## 8. Testing and verification
 
-1. Lazer mechanics override any leftover brief numbers when they conflict.
-2. Pixi playfield / React chrome split; AudioContext master clock.
-3. Vercel SPA + Functions (RhythmMania-style). OAuth secret only in Function env.
-4. Postgres for identity/tokens only — **no leaderboards**.
-5. Maps: official search via Function; catboy `.osz` in the browser; local upload.
-6. Solo, 2K–9K, all lazer mania mods, default lazer scoring.
-7. Playwright visual QA on every UI surface.
+### 8.1 Vitest (must expand)
+
+- Windows at OD 0, 5, 8, 10, EZ, HR — match `floor(range)+0.5`
+- DT 1.5 / HT 0.75 `SpeedMultiplier` (song-time window × rate)
+- PENAR stub returns `total: null` and never emits a `"pp"` label
+- Accuracy of mixed judgements
+- Score of N Perfects (FC) = 1_000_000 * modMult
+- Great-only FC grade = SS, accuracy ≈ 300/305
+- Hold: head Perfect + tail Perfect = 2 Perfects, combo +2
+- Hold: early release → ComboBreak, combo 0, tail later Perfect → stored as Meh, accuracy uses Meh
+- Tail window 1.5×: a 20ms late release at OD5 Perfect window
+- HP: no passive drain over 60s of idle objects; Miss drops by formula
+- Local replay sim: v2 tick records still watchable; v3 ComboBreak records watchable
+- No API replay-upload tests (that surface is removed)
+
+### 8.2 Browser + Argon stills (required for every UI task)
+
+1. Start `npm run dev` (port 3000 unless Vite prints another).
+2. Playwright MCP: `browser_navigate`, then **click/type** the path a player would use. A single render screenshot is not enough.
+3. `browser_resize` 1280×720 and 390×844; screenshot both.
+4. Open the matching file under `docs/visual-refs/argon/` and compare HUD corners, note silhouettes, judgement names, mod overlay columns, results grade.
+5. If layout is wrong, fix in the **same task**, then re-screenshot.
+
+### 8.3 Commands after TypeScript changes
+
+`npm run lint` and `npm test`; `npm run build` when Vite/CSS/chunks change.
 
 ---
 
-## What you need to provide when implementation starts
+## 9. Key decisions (revised)
 
-1. Fill `.env` (and Vercel project env) with `OSU_CLIENT_ID`, `OSU_CLIENT_SECRET`, `OSU_REDIRECT_URI`, `DATABASE_URL`, `SESSION_SECRET`. Do not paste secrets into chat.
-2. OAuth callback: local `http://localhost:5173/api/auth/osu/callback`; add the Vercel production URL on the same osu app.
-3. Postgres user can `CREATE TABLE` for the three identity tables. No score tables.
+1. Mechanical target = **current lazer mania**, not stable ScoreV1. Classic is a later mod.
+2. New holds = head + ComboBreak body + 1.5× tail. v2 ticks only for old replays.
+3. Recreate Argon **closely**; no osu! trademarks or resource bitmaps.
+4. Shared ruleset module for client, tests, verifier.
+5. Mod multipliers follow lazer mania.
+6. Canvas2D + `desynchronized` is the low-latency reference; Babylon is extra.
+7. **PENAR** occupies the Argon PP slot; formula stubbed (`total: null`) until a later PENAR-formula task.
+8. Judgement names = Perfect/Great/Good/Ok/Meh.
+9. **DT/HT scale song-time windows via SpeedMultiplier** (lazer mania). UR is not rate-converted.
+10. **Offline client:** no Google, no Postgres, no RM/global leaderboards. Song select shows **local** scores only.
+11. Catalog = osu! API v2 search (stateless proxy) + catboy.best download. No catalog activation/canonical DB.
+12. Agents execute **one TASK-NNN at a time**.
 
 ---
 
-## References
+## 10. Risks
 
-- [ppy/osu](https://github.com/ppy/osu)
-- [ManiaHitWindows.cs](https://github.com/ppy/osu/blob/master/osu.Game.Rulesets.Mania/Scoring/ManiaHitWindows.cs)
-- [ManiaScoreProcessor.cs](https://github.com/ppy/osu/blob/master/osu.Game.Rulesets.Mania/Scoring/ManiaScoreProcessor.cs)
-- [ManiaHealthProcessor.cs](https://github.com/ppy/osu/blob/master/osu.Game.Rulesets.Mania/Scoring/ManiaHealthProcessor.cs)
-- [osu! beatmap file format](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29)
-- [osu!mania judgement](https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu!mania)
-- [Gameplay differences in osu!(lazer)](https://osu.ppy.sh/wiki/en/Client/Release_stream/Lazer/Gameplay_differences_in_osu%21%28lazer%29)
-- [osu! API docs](https://osu.ppy.sh/docs)
-- [Web Audio API](https://www.w3.org/TR/webaudio/)
-- [Pixi.js v8](https://pixijs.com/)
-- This repo: `DESIGN.md` (Argon tokens and screen map)
+- Scope is months; the serial task list is how we stay mergeable.
+- Canvas vs osu!framework clocks will not be bit-identical.
+- LN “repair via ticks” goes away for new plays.
+- Hidden coverage is specified in 768px space.
+- Dual Stages needs two input maps; skip until 2P exists.
+- PENAR stub must look intentional (`—`), not like a broken pp port.
+- osu! API v2 from the browser needs the remaining search proxy; removing **all** `/api` would break listing unless CORS changes.
+
+---
+
+## 11. Serial task queue
+
+**Implementing agents: do exactly one task, then stop.**
+
+Status starts as pending. Dependencies must be completed first.
+
+### Foundation
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-001** | Declare Canvas2D Argon as reference renderer; Babylon remains optional skin; add `skinId: 'argon'` to types/defaults without drawing Argon yet | `types.ts`, `defaultSettings.ts`, `SkinScreen.tsx` (list entry only) | `npm run lint`; settings still load |
+| **TASK-002** | Extract `src/ruleset/mania/` and move existing window/score helpers unchanged **(done)** | `scoreCalculator.ts` → `scoreProcessor.ts`, `judgementTiming.ts`, new folder | tests still pass (behaviour freeze) |
+| **TASK-003** | Create `docs/visual-refs/argon/README.md` + slot files (hud, playfield-4k, song-select, results, pause). Download/save public Argon screenshots with source URLs. **Do not import into `public/`.** **(done)** | `docs/visual-refs/argon/*` | README lists each ref and comparison checklist |
+| **TASK-004** | Canvas2D context: `{ alpha: false, desynchronized: true }` with feature-detect fallback; `AudioContext({ latencyHint: 'interactive' })` if not already **(done)** | `Canvas2DRenderer.ts`, `AudioEngine.ts` | play one map; no visual regression; lint |
+
+### Offline cut (do before restyling song select)
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-005** | Remove Google sign-in UI and client session (`LoginModal`, `App` auth bootstrap, `/profile` nav). Optional local display name in settings. **(done)** | `App.tsx`, `MainMenu.tsx`, `LoginModal.tsx`, settings | Playwright: menu has no Sign in; play still works offline |
+| **TASK-006** | Song select: delete `fetchLeaderboardReplays` / remote board. Render **Local** scores from `playHistory` for the selected chart only (score desc). No Global/RM tabs. **(done)** | `SongSelect.tsx` | Playwright: local rows only; empty state when no plays |
+| **TASK-007** | Remove profile screens and routes (`/profile`, edit, search). History stays as local plays. **(done)** | `App.tsx`, `ProfileScreen.tsx`, `EditProfileScreen.tsx` | unknown `/profile/...` falls back to menu; lint |
+| **TASK-008** | Stop calling replay upload/list/get. Remove upload eligibility chrome. Keep local export/import. Delete or unhook `api/replays*`, `replayClient.ts` network, `replayVerification.ts`. **(done)** | replay client, Results, History, `api/replays*` | Playwright: results has no Upload; export still works |
+| **TASK-009** | Catalog: search proxy + catboy/osudl download only. Remove register-download, activate-download, set/chart APIs, Google-gated download. Gut Postgres from health/config. Drop unused routers. **(done)** | `OnlineBeatmapCatalog.tsx`, `api/catalog*`, `api/auth/google*`, `api/profile*`, `health.ts`, `config.ts` | search still lists mania sets with osu token; download unpacks locally; health does not mention database |
+
+### Windows, names, rate
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-010** | Display names Perfect/Great/Good/Ok/Meh everywhere (HUD, results, history). Keep JSON field names mapped. | Gameplay, Results, History | Playwright results + HUD vs Argon judgement labels |
+| **TASK-011** | Vitest fixtures for OD 0/5/8/10 windows matching `floor(range)+0.5` | `tests/` | `npm test` |
+| **TASK-012** | Apply lazer `SpeedMultiplier` for DT/HT/NC (song-time windows × rate). UR not divided by rate. | `hitWindows.ts`, gameplay, verifier | tests at 1.5× and 0.75×; one DT play |
+
+### Holds + HP
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-020** | Implement hold head + 1.5× tail + Meh cap in ruleset module with tests only (not wired to canvas yet) | `holdNote.ts`, tests | `npm test` |
+| **TASK-021** | Wire live `GameplayCanvas` to TASK-020; disable ticks on `rulesetVersion` 3 | `GameplayCanvas.tsx` | browser: LN drop combo-breaks, no tick misses; Playwright play |
+| **TASK-022** | Local replay simulation: v2 tick records still watch; v3 ComboBreak watches | replay sim, tests | watch one old and one new local replay |
+| **TASK-023** | Port `ManiaHealthProcessor`; fail at 0; EZ extra lives; NF | `healthProcessor.ts`, gameplay | tests + fail/NF Playwright |
+
+### Mods (one cluster per task)
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-030** | Fix multipliers (EZ/NF 0.50, others per current `ManiaMod*` source); overlay shows live product | `modifiers.ts`, SongSelect tiles | unit tests; select UI |
+| **TASK-031** | Hidden + Fade In + Cover (coverage math, breaks retract) | playfield, mods | Playwright HD/FI vs Argon HD look |
+| **TASK-032** | Flashlight vignette | playfield | Playwright |
+| **TASK-033** | Key 1K–10K bindings + conversion; K-mod exclusivity | settings, `keyCounts.ts` | lint + bind 4K/7K/10K |
+| **TASK-034** | SD, PF, NC (pitch already from rate; NC ticks optional stub) | mods, audio | Playwright fail-on-miss; NC rate |
+| **TASK-035** | Mirror, Constant Speed, Invert, Hold Off, No Release | mods, parser/gameplay | tests per mod |
+| **TASK-036** | Difficulty Adjust + Classic (stable windows, no speed compensation) | mods | tests |
+| **TASK-037** | Random columns, remaining fun/system (Wind Up/Down, Adaptive Speed, Muted, Cinema, AC) | mods | smoke; skip Dual Stages |
+
+### Session chrome
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-041** | Remove “Get Ready” countdown; lazer-style lead-in + skip intro | `GameplayCanvas.tsx`, `introSkip.ts` | Playwright skip button |
+| **TASK-042** | Lock scroll speed during play; F3/F4 or Ctrl± on song select | settings, SongSelect, GameplayCanvas | cannot change mid-map |
+| **TASK-043** | Pause overlay (Continue / Retry / Exit) Argon-like | new overlay | Playwright pause vs ref |
+| **TASK-044** | Fail overlay | new overlay | Playwright |
+
+### Argon playfield + HUD (do in this order)
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-050** | Argon notes/holds/receptors/column colours on Canvas2D; default `skinId: 'argon'` | `Canvas2DRenderer.ts`, `skinTheme.ts`, `laneLayout.ts` | Playwright vs `playfield-4k` ref |
+| **TASK-051** | Hold body masking while held | renderer + note state | Playwright LN hold |
+| **TASK-052** | Argon HUD: wedges, health top-left, score on wedges | `ManiaHud` | Playwright vs `hud` ref |
+| **TASK-053** | Accuracy top-right, dual hit-error bars, combo bottom-left, progress, key counter | `ManiaHud` | Playwright vs `hud` ref |
+| **TASK-054** | PENAR slot under accuracy; stub `computePenar`; settings toggle; results/history `—` | `penar.ts`, HUD, Results, types | Playwright: label is PENAR not PP |
+
+### Menus
+
+| ID | Task | Touches | Verify |
+|---|---|---|---|
+| **TASK-060** | Song select carousel + wedge + bottom Mods/Random/Options + **local ranking panel** (no global) | `SongSelect.tsx` | Playwright vs `song-select` ref |
+| **TASK-061** | Mod overlay visual (categories, hex-ish buttons, incompat) | SongSelect | Playwright |
+| **TASK-062** | Catalog overlay Argon tokens; search + catboy download only (TASK-009 already removed DB activation) | `OnlineBeatmapCatalog.tsx` | Playwright search → download |
+| **TASK-070** | Results grade-hero + judgement names + PENAR + local score list only | `ResultsScreen.tsx` | Playwright vs `results` ref |
+| **TASK-071** | History restyle | `PersonalHistoryScreen.tsx` | Playwright |
+| **TASK-080** | Main menu logo pulse + stacked actions; no account chip | `MainMenu.tsx` | Playwright |
+| **TASK-081** | Settings rail restyle + PENAR/scroll-lock rows | `settings/*` | Playwright |
+| **TASK-082** | Skin screen: Argon default, legacy listed | `SkinScreen.tsx` | Playwright |
+
+### Later (own sessions)
+
+| ID | Task |
+|---|---|
+| **TASK-090** | Implement `computePenar` formula (mania-like difficulty × acc × miss × mods). Still **never** labelled pp. |
+| **TASK-091** | WebGL2 note instancing only if Canvas2D profiling proves a frame-time problem. |
+| **TASK-092** | Dual Stages / 2P input. |
+
+After **every** mechanical task: `npm run lint` && `npm test`. After **every** visual task: Playwright vs Argon refs.
+
+---
+
+## 12. Open questions (defaults)
+
+1. **Brand vs Argon playfield?** Default: Argon-close in play; RhythmMania wordmark on menu only.
+2. **Local ranking sort?** Default: total score desc, then accuracy, like lazer local.
+3. **Keep osu! OAuth or BYO-only?** Default: keep both; token is catalog-only.
+4. **Classic LN?** Default: Classic mod in TASK-036, not tick-LN.
+5. **PENAR formula now?** Default: stub until TASK-090.
+
+---
+
+## 13. First session after approval
+
+Start **TASK-001 only**. After the foundation slice, do **TASK-005–009 (offline cut)** before TASK-060 so song select is never restyled around a remote board.

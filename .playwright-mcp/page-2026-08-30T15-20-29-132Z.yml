@@ -1,0 +1,34 @@
+- generic [ref=f8e3]:
+  - banner [ref=f8e4]:
+    - generic [ref=f8e5]:
+      - button "RhythmMania logo RhythmMania" [ref=f8e6]:
+        - img "RhythmMania logo" [ref=f8e7]
+        - generic [ref=f8e8]: RhythmMania
+      - generic [ref=f8e9]:
+        - button "Enter fullscreen" [ref=f8e10]
+        - button "Open navigation menu" [ref=f8e16]
+  - main [ref=f8e18]:
+    - generic [ref=f8e20]:
+      - generic [ref=f8e21]:
+        - paragraph [ref=f8e22]: No song selected
+        - button "Beatmap Listing" [ref=f8e23]
+        - button "Import Songs" [ref=f8e27]
+      - generic [ref=f8e31]:
+        - textbox "Search tracks..." [ref=f8e36]
+        - button "ONLINE MAPS" [ref=f8e37] [cursor=pointer]
+      - generic [ref=f8e42]:
+        - generic [ref=f8e43]: AVAILABLE TRACKS
+        - generic [ref=f8e44]: 1 groups
+      - button "TASK-004 Smoke RhythmMania ★ 1.3" [ref=f8e46] [cursor=pointer]:
+        - generic [ref=f8e53]:
+          - heading "TASK-004 Smoke" [level=4] [ref=f8e54]
+          - paragraph [ref=f8e55]: RhythmMania
+        - generic [ref=f8e56]:
+          - generic [ref=f8e57]: ★ 1.3
+          - button "Delete downloaded beatmap set" [ref=f8e58]
+      - generic [ref=f8e62]:
+        - button "Back" [ref=f8e63] [cursor=pointer]
+        - button "Mods 1" [ref=f8e67] [cursor=pointer]:
+          - generic [ref=f8e69]: Mods
+          - generic [ref=f8e70]: "1"
+        - button "Random" [ref=f8e71] [cursor=pointer]

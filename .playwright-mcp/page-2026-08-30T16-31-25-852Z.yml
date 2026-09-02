@@ -1,0 +1,42 @@
+- generic [ref=f34e3]:
+  - banner [ref=f34e4]:
+    - generic [ref=f34e5]:
+      - button "RhythmMania logo RhythmMania" [ref=f34e6]:
+        - img "RhythmMania logo" [ref=f34e7]
+        - generic [ref=f34e8]: RhythmMania
+      - navigation "Primary navigation" [ref=f34e9]:
+        - button "Song Select" [ref=f34e10]
+        - button "Map Maker" [disabled] [ref=f34e15]
+        - button "Party" [disabled] [ref=f34e21]
+        - button "Beatmap Listing" [ref=f34e32]
+        - button "Skins" [ref=f34e37]
+        - button "Settings" [ref=f34e43]
+        - button "History" [ref=f34e48]
+      - generic [ref=f34e53]:
+        - button "Enter fullscreen" [ref=f34e54]
+        - button "Mute audio" [ref=f34e60]
+  - main [ref=f34e65]:
+    - generic [ref=f34e67]:
+      - generic:
+        - generic [ref=f34e68] [cursor=pointer]:
+          - heading "Rhythm Mania" [level=1] [ref=f34e69]: RhythmMania
+          - paragraph [ref=f34e70]: v0.9.8
+        - generic [ref=f34e71]:
+          - generic [ref=f34e72]: v0.9.8
+          - navigation "Community and support links" [ref=f34e73]:
+            - link "Discord" [ref=f34e74] [cursor=pointer]:
+              - /url: https://discord.rhythm-mania.com
+            - link "Github" [ref=f34e77] [cursor=pointer]:
+              - /url: https://github.com/yumo-ymspace/RhythmMania
+            - link "Wiki" [ref=f34e81] [cursor=pointer]:
+              - /url: https://wiki.rhythm-mania.com
+            - link "Bug Report" [ref=f34e84] [cursor=pointer]:
+              - /url: https://bug-report.rhythm-mania.com
+        - generic [ref=f34e87]:
+          - text: By using RhythmMania, you acknowledge and agree to the
+          - link "Terms of Service" [ref=f34e88] [cursor=pointer]:
+            - /url: https://terms-of-service.rhythm-mania.com
+          - text: and
+          - link "Privacy Policy" [ref=f34e89] [cursor=pointer]:
+            - /url: https://privacy-policy.rhythm-mania.com
+          - text: .

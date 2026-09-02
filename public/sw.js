@@ -1,0 +1,183 @@
+/*
+ * RhythmMania - High-Performance Rhythm Game Platform
+ * Copyright (C) 2026 Yumo (yumo-ymspace). All rights reserved.
+ *
+ * This source code is licensed under the PolyForm Perimeter License 1.0.1.
+ * You may modify and use this file for non-competing purposes, provided 
+ * that open and explicit attribution is maintained.
+ *
+ * For the full license terms, see the LICENSE file in the root directory
+ * from: https://github.com/yumo-ymspace/RhythmMania
+ */
+
+// Service Worker for RhythmMania PWA Offline Support
+const CACHE_NAME = 'rhythm-mania-cache-v2';
+const BEATMAP_CACHE_NAME = 'rhythm-mania-beatmaps-v2';
+
+// Core assets to pre-cache immediately on install
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/backgrounds/- Y u m i J i-.webp',
+  '/backgrounds/Arushii.webp',
+  '/backgrounds/Ferineon.webp',
+  '/backgrounds/MPDisplay.webp',
+  '/backgrounds/PEALEERD_TAK.webp',
+  '/backgrounds/Porukana.webp',
+  '/backgrounds/RedcXca.webp',
+  '/backgrounds/Sm0llBanana.webp',
+  '/backgrounds/THICC Jeff.webp',
+  '/backgrounds/Triantafyllia.webp',
+  '/backgrounds/YellowX21.webp',
+  '/backgrounds/mimile1606.webp',
+  '/backgrounds/nikio.webp',
+  '/backgrounds/serr.webp',
+  '/backgrounds/soncak.webp',
+  '/backgrounds/wxyz.webp'
+];
+
+self.addEventListener('install', (event) => {
+  // force active immediately of the new service worker
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[Service Worker] Pre-caching core app shell assets');
+      // Fail installation when the shell is incomplete instead of activating
+      // an offline worker that cannot actually serve the application.
+      return cache.addAll(STATIC_ASSETS);
+    })
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  // Claim clients immediately to let sw control the pages
+  event.waitUntil(self.clients.claim());
+  
+  // Clean up any stale caches from previous versions
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME && cacheName !== BEATMAP_CACHE_NAME) {
+            console.log('[Service Worker] Evicting stale cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // 1. API responses carry session and replay state and must never enter an offline cache.
+  if (
+    event.request.method !== 'GET' ||
+    url.pathname.startsWith('/api/') ||
+    url.protocol === 'chrome-extension:' ||
+    url.protocol === 'chrome:' ||
+    url.pathname.includes('/@vite/') ||
+    url.pathname.includes('/@react-refresh') ||
+    url.hash.includes('vite') ||
+    (url.hostname === 'localhost' && url.port !== '3000')
+  ) {
+    return;
+  }
+
+  // 2. Specialized Cache-First policy for beatmaps / .osz files / .txt files
+  const isBeatmapAsset = 
+    url.pathname.endsWith('.osz') || 
+    url.pathname.endsWith('.zip') || 
+    url.pathname.includes('/beatmaps/') ||
+    url.pathname.endsWith('.txt') ||
+    url.pathname.endsWith('.mp3') ||
+    url.pathname.endsWith('.ogg') ||
+    url.pathname.endsWith('.wav');
+
+  if (isBeatmapAsset) {
+    event.respondWith(
+      caches.open(BEATMAP_CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            console.log('[Service Worker] Serving cached beatmap file:', url.pathname);
+            return cachedResponse;
+          }
+          
+          // Fetch from network, cache, and return
+          console.log('[Service Worker] Downloading and caching beatmap file:', url.pathname);
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          }).catch((err) => {
+            console.error('[Service Worker] Failed to fetch beatmap offline:', err);
+            // Fallback to offline search
+            return new Response('Beatmap asset is offline and not pre-cached.', { status: 503, statusText: 'Offline' });
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // 3. Specialized Cache-First policy for backgrounds
+  const isBackgroundAsset = url.pathname.includes('/backgrounds/');
+  if (isBackgroundAsset) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            console.log('[Service Worker] Serving cached background image:', url.pathname);
+            return cachedResponse;
+          }
+          console.log('[Service Worker] Fetching background image from network:', url.pathname);
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse.status === 200 || networkResponse.status === 304 || networkResponse.type === 'opaque') {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // 4. Network-First, Falling Back to Cache for core web application shell (HTML, JS, CSS, and metadata)
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (
+          event.request.url.startsWith('http') &&
+          !url.pathname.startsWith('/api/') &&
+          (networkResponse.status === 200 || networkResponse.status === 304)
+        ) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone).catch(() => {});
+          });
+        }
+        return networkResponse;
+      })
+      .catch((err) => {
+        console.warn('[Service Worker] Network request failed, falling back to cache:', err);
+        return caches.open(CACHE_NAME).then((cache) => {
+          return cache.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            // If navigating and completely offline, fall back to index.html
+            if (event.request.mode === 'navigate') {
+              return cache.match('/index.html') || cache.match('/');
+            }
+            throw err;
+          });
+        });
+      })
+  );
+});

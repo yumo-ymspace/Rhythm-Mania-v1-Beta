@@ -4,11 +4,11 @@
 
 **Licensor:** Yumo (yumo-ymspace)
 
-**Software:** RhythmMania v1
+**Software:** RhythmMania
 
-**Product Website:** https://v1.rhythm-mania.com
+**Product Website:** https://rhythm-mania.com
 
-**Source Repository:** PLACEHOLDER
+**Source Repository:** https://github.com/yumo-ymspace/RhythmMania
 
 
 ---
@@ -28,7 +28,7 @@ For the purpose of this license, a **competing product or service** is explicitl
 You are free to modify and share this code for educational, personal, or non-competing collaborative projects, provided you satisfy the following attribution requirements:
 
 1. **Source Credit:** You must keep all original copyright notices, authorship credits, and this license text intact in all copies or substantial portions of the Software.
-2. **Public-Facing Credit:** Any public deployment, fork, or derivative version of this Software must prominently display a visible "Developed with RhythmMania" credit line in the main user interface (such as the main menu, loading screen, or application footer). This credit must include a functional, clickable hyperlink pointing back to the original repository: `PLACEHOLDER`.
+2. **Public-Facing Credit:** Any public deployment, fork, or derivative version of this Software must prominently display a visible "Developed with RhythmMania" credit line in the main user interface (such as the main menu, loading screen, or application footer). This credit must include a functional, clickable hyperlink pointing back to the original repository: `https://github.com/yumo-ymspace/RhythmMania`.
 
 ### 4. Defense
 If you sue the Licensor or anyone else claiming that the Software infringes any patent, your license to the Software ends immediately.

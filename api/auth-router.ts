@@ -1,0 +1,61 @@
+/*
+ * RhythmMania - High-Performance Rhythm Game Platform
+ * Copyright (C) 2026 Yumo (yumo-ymspace). All rights reserved.
+ *
+ * This source code is licensed under the PolyForm Perimeter License 1.0.1.
+ * You may modify and use this file for non-competing purposes, provided
+ * that open and explicit attribution is maintained.
+ *
+ * For the full license terms, see the LICENSE file in the root directory
+ * from: https://github.com/yumo-ymspace/RhythmMania
+ */
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { sendJson } from './_lib/response.js';
+import handleOsuUrl from './auth/osu/_url.js';
+import handleOsuCallback from './auth/osu/_callback.js';
+import handleOsuRefresh from './auth/osu/_refresh.js';
+import handleOsuByoToken from './auth/osu/_byo-token.js';
+
+// Single function for all /api/auth/* routes. Vercel's @vercel/node runtime
+// does not support [...path] catch-all files for non-Next.js projects, so
+// vercel.json rewrites /api/auth/:path* to this function and passes the
+// sub-route via the _route query parameter.
+function getRoute(req: VercelRequest): string {
+  const routeParam = req.query._route;
+  const routeStr = Array.isArray(routeParam)
+    ? typeof routeParam[0] === 'string' ? routeParam[0] : ''
+    : typeof routeParam === 'string' ? routeParam : '';
+  if (routeStr) return routeStr.replace(/\/+$/, '');
+
+  const rawUrl = req.url || '';
+  let pathname = rawUrl.split('?')[0];
+  if (pathname.startsWith('/api/auth/')) {
+    pathname = pathname.slice('/api/auth/'.length);
+  } else {
+    pathname = pathname.replace(/^\/+/, '');
+  }
+  return pathname.replace(/\/+$/, '');
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    const route = getRoute(req);
+    switch (route) {
+      case 'osu/url':
+        return await handleOsuUrl(req, res);
+      case 'osu/callback':
+        return await handleOsuCallback(req, res);
+      case 'osu/refresh':
+        return await handleOsuRefresh(req, res);
+      case 'osu/byo-token':
+        return await handleOsuByoToken(req, res);
+      default:
+        console.warn('[auth-router] no handler for route:', route);
+        return sendJson(res, 404, { success: false, error: 'Not found' });
+    }
+  } catch (e: unknown) {
+    console.error('[auth-router] request failed:', e instanceof Error ? e.name : 'unknown');
+    return sendJson(res, 500, { success: false, error: 'Authentication service unavailable' });
+  }
+}

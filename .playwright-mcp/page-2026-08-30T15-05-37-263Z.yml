@@ -1,0 +1,24 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e2]: AccessDeniedAccess DeniedSB6N1GHVXJ4FS5Z91SpvXigX0WJS8z27fmmTQJXEDEYTA+JqqrKtUdKZzlt0cxtKmHPrzyaUi5ddUzzMgIYDUL0Ckd0=
+  - generic [ref=f5e4]: This XML file does not appear to have any style information associated with it. The document tree is shown below.
+  - generic [ref=f5e6]:
+    - generic [ref=f5e7]: <Error>
+    - generic [ref=f5e9]:
+      - generic [ref=f5e10]:
+        - generic [ref=f5e11]: <Code>
+        - text: AccessDenied
+        - generic [ref=f5e12]: </Code>
+      - generic [ref=f5e13]:
+        - generic [ref=f5e14]: <Message>
+        - text: Access Denied
+        - generic [ref=f5e15]: </Message>
+      - generic [ref=f5e16]:
+        - generic [ref=f5e17]: <RequestId>
+        - text: SB6N1GHVXJ4FS5Z9
+        - generic [ref=f5e18]: </RequestId>
+      - generic [ref=f5e19]:
+        - generic [ref=f5e20]: <HostId>
+        - text: 1SpvXigX0WJS8z27fmmTQJXEDEYTA+JqqrKtUdKZzlt0cxtKmHPrzyaUi5ddUzzMgIYDUL0Ckd0=
+        - generic [ref=f5e21]: </HostId>
+    - text: ...
+    - generic [ref=f5e22]: </Error>
