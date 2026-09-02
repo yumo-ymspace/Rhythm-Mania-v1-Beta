@@ -343,19 +343,17 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
   const detectedKeyCount = clusteredX.length;
   let finalKeyCount = keyCount;
 
-  // Prefer the detected count of unique columns when it is between 2 and 9
-  // and the parsed/default value falls back to 4.
-  if ((!hasExplicitKeyCount && detectedKeyCount > MAX_KEY_COUNT) || keyCount > MAX_KEY_COUNT || (keyCount >= MIN_KEY_COUNT && !Number.isInteger(keyCount))) {
-    throw new Error('Unsupported beatmap key count. RhythmMania supports 2K through 9K.');
-  }
-  if (detectedKeyCount >= MIN_KEY_COUNT && detectedKeyCount <= MAX_KEY_COUNT) {
-    if (finalKeyCount === 4 || detectedKeyCount > finalKeyCount || finalKeyCount > MAX_KEY_COUNT) {
+  if (!hasExplicitKeyCount) {
+    if (detectedKeyCount > MAX_KEY_COUNT) {
+      throw new Error('Unsupported beatmap key count. RhythmMania supports 1K through 10K.');
+    }
+    if (detectedKeyCount >= MIN_KEY_COUNT && detectedKeyCount <= MAX_KEY_COUNT) {
       finalKeyCount = detectedKeyCount;
     }
   }
 
   if (!isSupportedKeyCount(finalKeyCount)) {
-    throw new Error('Unsupported beatmap key count. RhythmMania supports 2K through 9K.');
+    throw new Error('Unsupported beatmap key count. RhythmMania supports 1K through 10K.');
   }
 
   const notes: HitObject[] = [];
@@ -497,7 +495,7 @@ export function calculateDominantBpm(timingPoints: Array<{ time: number; beatLen
  * and dynamic note deduplication.
  */
 export function convertBeatmapKeyCount(beatmap: Beatmap, targetKeyCount: number): Beatmap {
-  if (!isSupportedKeyCount(targetKeyCount)) throw new Error('Unsupported conversion target. RhythmMania supports 2K through 9K.');
+  if (!isSupportedKeyCount(targetKeyCount)) throw new Error('Unsupported conversion target. RhythmMania supports 1K through 10K.');
   if (beatmap.keyCount === targetKeyCount) return beatmap;
 
   const originalKeyCount = beatmap.keyCount;

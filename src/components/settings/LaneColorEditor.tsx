@@ -13,8 +13,8 @@
 import { useState } from 'react';
 import type { GameSettings } from '../../types';
 
-const KEY_COUNTS = [2, 3, 4, 5, 6, 7, 8, 9];
-const FALLBACK_COLORS = ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'];
+const KEY_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const FALLBACK_COLORS = ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'];
 
 export default function LaneColorEditor({
   settings,

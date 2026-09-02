@@ -324,11 +324,11 @@ export default function App() {
     const activeMods = activeReplayRecord
       ? (activeReplayRecord.mods || activeReplayRecord.recordedSettings?.selectedMods || [])
       : (settings.selectedMods || []);
-    const activeKeyChangeMod = activeMods.find(m => /^K[2-9]$/.test(m));
+    const activeKeyChangeMod = activeMods.find(m => /^K(?:[1-9]|10)$/.test(m));
     
     if (activeKeyChangeMod) {
       const targetKeys = parseInt(activeKeyChangeMod.substring(1), 10);
-      if (targetKeys >= 2 && targetKeys <= 9 && targetKeys !== selectedBeatmap.keyCount) {
+      if (targetKeys >= 1 && targetKeys <= 10 && targetKeys !== selectedBeatmap.keyCount) {
         return convertBeatmapKeyCount(selectedBeatmap, targetKeys);
       }
     }
@@ -1053,7 +1053,7 @@ export default function App() {
       selectedBeatmap.mode === 3 ||
       selectedBeatmap.mode === undefined ||
       selectedBeatmap.mode === null ||
-      (selectedBeatmap.keyCount >= 2 && selectedBeatmap.keyCount <= 9)
+      (selectedBeatmap.keyCount >= 1 && selectedBeatmap.keyCount <= 10)
     );
 
     const newRecordId = `play_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;

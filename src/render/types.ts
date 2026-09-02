@@ -112,6 +112,8 @@ export interface PlayfieldFrame {
   keyLabels: string[];
   isFocusMode: boolean;
   isMobile: boolean;
+  combo?: number;
+  breaks?: Array<{ startTime: number; endTime: number }>;
 }
 
 export interface ResolvedSkin {

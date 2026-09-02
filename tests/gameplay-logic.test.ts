@@ -85,8 +85,8 @@ describe('score and judgement math', () => {
     expect(computeModMultiplier(['HD'])).toBeCloseTo(1.0);
     expect(computeModMultiplier(['DT'])).toBeCloseTo(1.0);
 
-    // Key conversion modifiers (K2-K9 = 0.90x)
-    for (let k = 2; k <= 9; k++) {
+    // Key conversion modifiers (K1-K10 = 0.90x)
+    for (let k = 1; k <= 10; k++) {
       expect(computeModMultiplier([`K${k}`])).toBeCloseTo(0.9);
     }
 

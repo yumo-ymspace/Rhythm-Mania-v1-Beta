@@ -375,3 +375,180 @@ describe('long-note visibility', () => {
     });
   });
 });
+
+describe('Hidden, Fade In, and Cover modifiers', () => {
+  it('scales HD coverage from 160px to 400px based on combo (768px reference)', () => {
+    // combo 0
+    const [noteCombo0] = getVisibleNotes(
+      [{ id: 'n1', time: 1000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['HD'] },
+      800,
+      600,
+      1000, // note at receptorY (600)
+      0.2,
+      null,
+      0
+    );
+    expect(noteCombo0.opacity).toBe(0); // at receptor, note is hidden
+
+    // note at spawn (y = 0)
+    const [noteAtSpawn] = getVisibleNotes(
+      [{ id: 'n2', time: 4000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['HD'] },
+      800,
+      600,
+      1000, // y = 600 - (4000-1000)*0.2 = 0
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtSpawn.opacity).toBe(1.0); // at spawn, note is fully visible
+  });
+
+  it('hides notes at spawn and reveals them near receptor with Fade In (FI)', () => {
+    // note at spawn (y = 0)
+    const [noteAtSpawn] = getVisibleNotes(
+      [{ id: 'n1', time: 4000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FI'] },
+      800,
+      600,
+      1000, // y = 0
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtSpawn.opacity).toBe(0.0); // at spawn, note is hidden
+
+    // note at receptor (y = 600)
+    const [noteAtReceptor] = getVisibleNotes(
+      [{ id: 'n2', time: 1000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FI'] },
+      800,
+      600,
+      1000, // y = 600
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtReceptor.opacity).toBe(1.0); // near receptor, note is visible
+  });
+
+  it('hides notes in the top half with Cover mod', () => {
+    // note at spawn (y = 0, progress = 0)
+    const [noteAtSpawn] = getVisibleNotes(
+      [{ id: 'n1', time: 4000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['Cover'] },
+      800,
+      600,
+      1000, // y = 0
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtSpawn.opacity).toBe(0.0);
+
+    // note at receptor (y = 600, progress = 1.0)
+    const [noteAtReceptor] = getVisibleNotes(
+      [{ id: 'n2', time: 1000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['Cover'] },
+      800,
+      600,
+      1000, // y = 600
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtReceptor.opacity).toBe(1.0);
+  });
+
+  it('retracts coverage during break periods so notes are fully visible', () => {
+    const breaks = [{ startTime: 1500, endTime: 3500 }];
+    const [noteInBreak] = getVisibleNotes(
+      [{ id: 'n1', time: 2500, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['HD'] },
+      800,
+      600,
+      2500, // in the middle of break
+      0.2,
+      null,
+      100,
+      breaks
+    );
+    // When break is active, HD coverage retracts and notes are visible
+    expect(noteInBreak.opacity).toBe(1.0);
+  });
+
+  it('illuminates notes near the receptor and hides distant notes with Flashlight (FL)', () => {
+    // Note right at receptor (y = 600, dist = 0)
+    const [noteAtReceptor] = getVisibleNotes(
+      [{ id: 'n1', time: 1000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FL'] },
+      800,
+      600,
+      1000, // y = 600
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtReceptor.opacity).toBe(1.0);
+
+    // Note far away from receptor at spawn (y = 0, dist = 600 > 240)
+    const [noteAtSpawn] = getVisibleNotes(
+      [{ id: 'n2', time: 4000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FL'] },
+      800,
+      600,
+      1000, // y = 0
+      0.2,
+      null,
+      0
+    );
+    expect(noteAtSpawn.opacity).toBe(0.0);
+  });
+
+  it('shrinks Flashlight radius as combo increases (>= 100 and >= 200)', () => {
+    // Note at y = 430 (dist from 600 is 170px).
+    // At combo 0 (radius 240, inner 108): dist 170 is in the fade zone -> partial opacity > 0
+    const [noteCombo0] = getVisibleNotes(
+      [{ id: 'n1', time: 1850, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FL'] },
+      800,
+      600,
+      1000, // y = 600 - 850*0.2 = 430, dist = 170
+      0.2,
+      null,
+      0 // radius 240
+    );
+    expect(noteCombo0.opacity).toBeGreaterThan(0);
+
+    // At combo 200 (radius 150): dist 170 > 150 -> opacity is 0.0 (outside shrunk radius)
+    const [noteCombo200] = getVisibleNotes(
+      [{ id: 'n1', time: 1850, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FL'] },
+      800,
+      600,
+      1000, // y = 430, dist = 170
+      0.2,
+      null,
+      200 // radius 150
+    );
+    expect(noteCombo200.opacity).toBe(0.0);
+  });
+
+  it('restores full visibility during break periods under Flashlight (FL)', () => {
+    const breaks = [{ startTime: 1500, endTime: 3500 }];
+    const [noteInBreak] = getVisibleNotes(
+      [{ id: 'n1', time: 4000, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }],
+      { ...settings, selectedMods: ['FL'] },
+      800,
+      600,
+      2500, // inside break
+      0.2,
+      null,
+      200,
+      breaks
+    );
+    // In break, coverage retracts and notes are visible
+    expect(noteInBreak.opacity).toBe(1.0);
+  });
+});

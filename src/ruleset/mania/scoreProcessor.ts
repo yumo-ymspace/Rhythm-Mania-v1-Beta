@@ -47,7 +47,12 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   HT: 0.5,
   HR: 1.0,
   HD: 1.0,
+  FI: 1.0,
+  Cover: 1.0,
+  CO: 1.0,
+  FL: 1.0,
   DT: 1.0,
+  K1: 0.9,
   K2: 0.9,
   K3: 0.9,
   K4: 0.9,
@@ -56,6 +61,7 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   K7: 0.9,
   K8: 0.9,
   K9: 0.9,
+  K10: 0.9,
 };
 
 export function getHpDrainMultiplier(hpDrainRate: number, mods: readonly string[] = []): number {

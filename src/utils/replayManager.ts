@@ -16,6 +16,7 @@ import { computeGradeFromScoreState } from '../ruleset/mania/scoreProcessor';
 import { LAZER_HOLD_RULES_VERSION } from '../ruleset/mania/holdNote';
 import { HOLD_TICK_RULES_VERSION, holdTickIntervalMs, LEGACY_HOLD_RULES_VERSION, resolveHoldTickInterval } from './holdTickRules';
 import { sanitizeGameplayMods } from './modifiers';
+import { isSupportedKeyCount } from './keyCounts';
 
 export const CURRENT_REPLAY_SCHEMA_VERSION = 3;
 
@@ -247,7 +248,7 @@ export function migrateHistoryRecord(rawRecord: unknown, availableBeatmaps: Beat
     typeof rawRecord.chartRevisionId === 'string' &&
     !beatmapId.includes('_converted_')
   );
-  const rawKeyCount = typeof rawRecord.keyCount === 'number' && Number.isInteger(rawRecord.keyCount) && rawRecord.keyCount >= 2 && rawRecord.keyCount <= 9 ? rawRecord.keyCount : 4;
+  const rawKeyCount = typeof rawRecord.keyCount === 'number' && Number.isInteger(rawRecord.keyCount) && isSupportedKeyCount(rawRecord.keyCount) ? rawRecord.keyCount : 4;
   const rawReplaySource = rawRecord.replaySource === 'guest-local' || rawRecord.replaySource === 'account-local' || rawRecord.replaySource === 'server-remote' || rawRecord.replaySource === 'imported'
     ? rawRecord.replaySource : 'guest-local';
   const recordId = typeof rawRecord.id === 'string' ? rawRecord.id : `replay_${Date.now()}`;

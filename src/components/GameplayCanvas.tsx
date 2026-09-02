@@ -2210,7 +2210,9 @@ export default function GameplayCanvas({
           receptorY,
           visualTime,
           speedFactor,
-          scrollModelRef.current
+          scrollModelRef.current,
+          scoreStateRef.current.combo,
+          beatmap.breaks || []
         );
 
         // Decay lane glows
@@ -2275,7 +2277,9 @@ export default function GameplayCanvas({
           showKeyLabels: true,
           keyLabels: keyLabelsMapped,
           isFocusMode: isFocusModeRef.current,
-          isMobile: isMobileDevice
+          isMobile: isMobileDevice,
+          combo: scoreStateRef.current.combo,
+          breaks: beatmap.breaks || []
         });
 
         // Decay screen shake

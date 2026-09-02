@@ -101,6 +101,175 @@ export function getNoteVisualY(
   return settings.upsurfaceNoteMode ? timingY + halfHeight : timingY - halfHeight;
 }
 
+export interface CoverState {
+  isHD: boolean;
+  isFI: boolean;
+  isCover: boolean;
+  isFL: boolean;
+  effectiveCoverage: number;
+  flashlightRadius?: number;
+}
+
+/**
+ * Calculates effective coverage ratio for Hidden, Fade In, Cover, and Flashlight mods.
+ * Follows osu!(lazer) mania: 160px initial -> 400px max (on 768px reference height) for HD/FI,
+ * and 240px -> 190px (100 combo) -> 150px (200 combo) for Flashlight.
+ * Retracts coverage / restores visibility during beatmap break periods.
+ */
+export function computeCoverRatio(
+  mods: readonly string[] = [],
+  combo: number = 0,
+  songTime?: number,
+  breaks: readonly { startTime: number; endTime: number }[] = []
+): CoverState {
+  const normalizedMods = mods.map(m => m.toUpperCase());
+  const isHD = normalizedMods.includes('HD');
+  const isFI = normalizedMods.includes('FI');
+  const isCover = normalizedMods.includes('COVER') || normalizedMods.includes('CO');
+  const isFL = normalizedMods.includes('FL');
+
+  if (!isHD && !isFI && !isCover && !isFL) {
+    return { isHD: false, isFI: false, isCover: false, isFL: false, effectiveCoverage: 0 };
+  }
+
+  // Retract coverage during break periods
+  let breakFactor = 1.0;
+  if (songTime !== undefined && breaks.length > 0) {
+    for (const b of breaks) {
+      if (songTime >= b.startTime && songTime <= b.endTime) {
+        const breakDuration = b.endTime - b.startTime;
+        const transitionMs = Math.min(500, Math.max(50, breakDuration / 2));
+        if (songTime < b.startTime + transitionMs) {
+          // Retracting at break start: 1 -> 0
+          breakFactor = 1 - (songTime - b.startTime) / transitionMs;
+        } else if (songTime > b.endTime - transitionMs) {
+          // Expanding back before break end: 0 -> 1
+          breakFactor = (songTime - (b.endTime - transitionMs)) / transitionMs;
+        } else {
+          // Middle of break: fully retracted
+          breakFactor = 0;
+        }
+        break;
+      }
+    }
+  }
+
+  // Base coverage ratio on 768px reference height
+  let targetCoverage = 0;
+  let flashlightRadius: number | undefined;
+
+  if (isHD || isFI) {
+    const coveragePx = Math.min(400, Math.max(160, 160 + 0.5 * Math.max(0, combo)));
+    targetCoverage = coveragePx / 768;
+  } else if (isCover) {
+    targetCoverage = 0.5; // default 50% fixed lane cover
+  } else if (isFL) {
+    let baseRadius = 240;
+    if (combo >= 200) {
+      baseRadius = 150;
+    } else if (combo >= 100) {
+      baseRadius = 190;
+    }
+    // During break, smoothly interpolate from baseRadius up to 1000 (fully illuminated)
+    flashlightRadius = breakFactor < 1.0
+      ? baseRadius + (1000 - baseRadius) * (1 - breakFactor)
+      : baseRadius;
+    targetCoverage = 1.0;
+  }
+
+  const effectiveCoverage = Math.max(0, Math.min(1, targetCoverage * breakFactor));
+  return { isHD, isFI, isCover, isFL, effectiveCoverage, flashlightRadius };
+}
+
+/**
+ * Computes note opacity for a given Y position under HD, FI, Cover, or FL modifiers.
+ */
+export function getCoverOpacityForY(
+  y: number,
+  height: number,
+  receptorY: number,
+  upsurfaceNoteMode: boolean,
+  coverState: CoverState
+): number {
+  const { isHD, isFI, isCover, isFL, effectiveCoverage } = coverState;
+  if ((!isHD && !isFI && !isCover && !isFL) || (effectiveCoverage <= 0.0001 && !isFL)) {
+    return 1.0;
+  }
+
+  if (isFL) {
+    const radius = coverState.flashlightRadius ?? 240;
+    const dist = Math.abs(y - receptorY);
+    const innerRadius = radius * 0.45;
+    const outerRadius = radius;
+
+    if (dist <= innerRadius) {
+      return 1.0;
+    } else if (dist >= outerRadius) {
+      return 0.0;
+    } else {
+      const t = (dist - innerRadius) / (outerRadius - innerRadius);
+      return Math.max(0, Math.min(1, 1 - t));
+    }
+  }
+
+  // Progress along the track: 0.0 at note spawn (top for downscroll, bottom for upscroll),
+  // 1.0 at receptor (bottom for downscroll, top for upscroll).
+  const distance = upsurfaceNoteMode
+    ? (height - y)
+    : y;
+  const totalTrack = upsurfaceNoteMode
+    ? (height - receptorY)
+    : receptorY;
+
+  const progress = totalTrack > 0 ? distance / totalTrack : 0;
+
+  if (isHD) {
+    // Hidden: notes start visible, fade to 0 in the covered region before receptor
+    const fadeLen = Math.min(0.20, effectiveCoverage * 0.5);
+    const fadeStart = 1 - effectiveCoverage;
+    const fadeEnd = fadeStart + fadeLen;
+
+    if (progress <= fadeStart) {
+      return 1.0;
+    } else if (progress >= fadeEnd) {
+      return 0.0;
+    } else {
+      const t = (progress - fadeStart) / (fadeEnd - fadeStart);
+      return Math.max(0, Math.min(1, 1 - t));
+    }
+  } else if (isFI) {
+    // Fade In: notes start invisible at spawn, fade in towards receptor
+    const fadeLen = Math.min(0.20, effectiveCoverage * 0.5);
+    const fadeEnd = effectiveCoverage;
+    const fadeStart = fadeEnd - fadeLen;
+
+    if (progress <= fadeStart) {
+      return 0.0;
+    } else if (progress >= fadeEnd) {
+      return 1.0;
+    } else {
+      const t = (progress - fadeStart) / (fadeEnd - fadeStart);
+      return Math.max(0, Math.min(1, t));
+    }
+  } else if (isCover) {
+    // Cover: player-set top lane cover
+    const fadeLen = 0.05;
+    const fadeEnd = effectiveCoverage;
+    const fadeStart = fadeEnd - fadeLen;
+
+    if (progress <= fadeStart) {
+      return 0.0;
+    } else if (progress >= fadeEnd) {
+      return 1.0;
+    } else {
+      const t = (progress - fadeStart) / (fadeEnd - fadeStart);
+      return Math.max(0, Math.min(1, t));
+    }
+  }
+
+  return 1.0;
+}
+
 export function getHiddenOpacityForY(
   y: number,
   height: number,
@@ -108,17 +277,11 @@ export function getHiddenOpacityForY(
   upsurfaceNoteMode: boolean,
   isHD: boolean
 ): number {
-  if (!isHD) return 1.0;
-  const distancePercent = upsurfaceNoteMode
-    ? (height - y) / (height - receptorY)
-    : y / receptorY;
-
-  if (distancePercent < 0.35) {
-    return 1.0;
-  } else if (distancePercent < 0.70) {
-    const fadeFactor = 1 - (distancePercent - 0.35) / 0.35;
-    return Math.max(0, fadeFactor);
-  } else {
-    return 0.0;
-  }
+  return getCoverOpacityForY(y, height, receptorY, upsurfaceNoteMode, {
+    isHD,
+    isFI: false,
+    isCover: false,
+    isFL: false,
+    effectiveCoverage: isHD ? (160 / 768) : 0,
+  });
 }

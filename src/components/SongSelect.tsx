@@ -18,7 +18,7 @@ import {
   Music,
   ChevronDown, Star, Check, SlidersHorizontal, Shuffle,
   Clock, Heart, Award, X, Infinity as InfinityIcon,
-  SquareSlash, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles
+  SquareSlash, Eye, Layers, Flashlight, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
@@ -96,7 +96,34 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: SquareSlash,
     activeClass: 'bg-purple-500/25 text-purple-300 shadow-[0_8px_24px_rgba(168,85,247,0.18)]',
-    exclusiveWith: undefined
+    exclusiveWith: ['FI', 'Cover', 'CO', 'FL']
+  },
+  {
+    id: 'FI',
+    name: 'Fade In',
+    title: 'Fade In (FI)',
+    multiplier: '1.00x',
+    icon: Eye,
+    activeClass: 'bg-indigo-500/25 text-indigo-300 shadow-[0_8px_24px_rgba(99,102,241,0.18)]',
+    exclusiveWith: ['HD', 'Cover', 'CO', 'FL']
+  },
+  {
+    id: 'Cover',
+    name: 'Cover',
+    title: 'Cover (CO)',
+    multiplier: '1.00x',
+    icon: Layers,
+    activeClass: 'bg-violet-500/25 text-violet-300 shadow-[0_8px_24px_rgba(139,92,246,0.18)]',
+    exclusiveWith: ['HD', 'FI', 'FL']
+  },
+  {
+    id: 'FL',
+    name: 'Flashlight',
+    title: 'Flashlight (FL)',
+    multiplier: '1.00x',
+    icon: Flashlight,
+    activeClass: 'bg-amber-500/25 text-amber-300 shadow-[0_8px_24px_rgba(245,158,11,0.18)]',
+    exclusiveWith: ['HD', 'FI', 'Cover', 'CO']
   },
   {
     id: 'DT',
@@ -637,7 +664,7 @@ export default function SongSelect({
   // Automatically remove conflicting key change mods when switching to a song group that has native difficulties for those keys
   useEffect(() => {
     const activeMods = settings.selectedMods || [];
-    const activeKeyChangeMod = activeMods.find(m => /^K[2-9]$/.test(m));
+    const activeKeyChangeMod = activeMods.find(m => /^K(?:[1-9]|10)$/.test(m));
     
     if (activeKeyChangeMod) {
       const keyCount = parseInt(activeKeyChangeMod.substring(1), 10);
@@ -892,15 +919,18 @@ export default function SongSelect({
     }
   };
 
-  const toggleModifier = (id: string, exclusiveWith?: string) => {
+  const toggleModifier = (id: string, exclusiveWith?: string | readonly string[] | string[]) => {
     const activeMods = settings.selectedMods || [];
     if (activeMods.includes(id)) {
       updateSettings({ selectedMods: activeMods.filter((mod) => mod !== id) });
       return;
     }
 
-    const nextMods = exclusiveWith
-      ? activeMods.filter((mod) => mod !== exclusiveWith)
+    const exclusiveList = Array.isArray(exclusiveWith)
+      ? exclusiveWith
+      : exclusiveWith ? [exclusiveWith] : [];
+    const nextMods = exclusiveList.length > 0
+      ? activeMods.filter((mod) => !exclusiveList.includes(mod))
       : [...activeMods];
     nextMods.push(id);
     updateSettings({ selectedMods: nextMods });
@@ -911,7 +941,7 @@ export default function SongSelect({
     const activeMods = settings.selectedMods || [];
     const nextMods = activeMods.includes(id)
       ? activeMods.filter((mod) => mod !== id)
-      : [...activeMods.filter((mod) => !/^K[2-9]$/.test(mod)), id];
+      : [...activeMods.filter((mod) => !/^K(?:[1-9]|10)$/.test(mod)), id];
     updateSettings({ selectedMods: nextMods });
   };
 
@@ -1330,7 +1360,7 @@ export default function SongSelect({
                         </button>
                       );
                     })}
-                    {[2, 3, 4, 5, 6, 7, 8, 9].map((keyCount) => {
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((keyCount) => {
                       const id = `K${keyCount}`;
                       const isActive = (settings.selectedMods || []).includes(id);
                       const isDisabled = availableKeyCounts.includes(keyCount);
@@ -2332,7 +2362,29 @@ export default function SongSelect({
                           id: 'HD',
                           title: 'Hidden (HD)',
                           activeBg: 'bg-purple-500/20 border-purple-500/60 text-purple-400',
-                          mult: '1.00x'
+                          mult: '1.00x',
+                          exclusiveWith: ['FI', 'Cover', 'CO', 'FL']
+                        },
+                        {
+                          id: 'FI',
+                          title: 'FadeIn (FI)',
+                          activeBg: 'bg-indigo-500/20 border-indigo-500/60 text-indigo-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['HD', 'Cover', 'CO', 'FL']
+                        },
+                        {
+                          id: 'Cover',
+                          title: 'Cover (CO)',
+                          activeBg: 'bg-violet-500/20 border-violet-500/60 text-violet-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['HD', 'FI', 'FL']
+                        },
+                        {
+                          id: 'FL',
+                          title: 'Flashlight (FL)',
+                          activeBg: 'bg-amber-500/20 border-amber-500/60 text-amber-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['HD', 'FI', 'Cover', 'CO']
                         },
                         {
                           id: 'DT',
@@ -2356,8 +2408,11 @@ export default function SongSelect({
                               if (isActive) {
                                 mods = mods.filter(m => m !== mod.id);
                               } else {
-                                if (mod.exclusiveWith) {
-                                  mods = mods.filter(m => m !== mod.exclusiveWith);
+                                const exclusiveList = Array.isArray(mod.exclusiveWith)
+                                  ? mod.exclusiveWith
+                                  : mod.exclusiveWith ? [mod.exclusiveWith] : [];
+                                if (exclusiveList.length > 0) {
+                                  mods = mods.filter(m => !exclusiveList.includes(m));
                                 }
                                 mods.push(mod.id);
                               }
@@ -2381,7 +2436,7 @@ export default function SongSelect({
                    {/* KEY CONVERSION MODS */}
                    <div className="contents">
                      <span className="sr-only">Key conversion</span>
-                     {[2, 3, 4, 5, 6, 7, 8, 9].map((keyCount) => {
+                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((keyCount) => {
                        const id = `K${keyCount}`;
                        const isActive = (settings.selectedMods || []).includes(id);
                        const isDisabled = availableKeyCounts.includes(keyCount);

@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   masterVolume: 1.0,
   keyMode: 4,
   bindings: {
+    1: [' '],
     2: ['f', 'j'],
     3: ['f', ' ', 'j'],
     4: ['d', 'f', 'j', 'k'],
@@ -37,7 +38,8 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
     6: ['s', 'd', 'f', 'j', 'k', 'l'],
     7: ['s', 'd', 'f', ' ', 'j', 'k', 'l'],
     8: ['a', 's', 'd', 'f', 'j', 'k', 'l', ';'],
-    9: ['a', 's', 'd', 'f', ' ', 'j', 'k', 'l', ';']
+    9: ['a', 's', 'd', 'f', ' ', 'j', 'k', 'l', ';'],
+    10: ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';'],
   },
   upsurfaceNoteMode: false,
   videoOpacity: 1.0,
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   skinId: 'argon',
   squareRenderStyle: 'rhythmmania',
   receptorColorsByKeyCount: {
+    1: ['#00b0ff'],
     2: ['#00b0ff', '#00b0ff'],
     3: ['#00b0ff', '#00b0ff', '#00b0ff'],
     4: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
@@ -58,6 +61,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
     7: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
     8: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
     9: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
+    10: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
   },
   noteOpacity: 1.0,
   receptorOpacity: 1.0,

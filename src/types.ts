@@ -257,7 +257,7 @@ export interface PlayHistoryRecord {
 }
 
 export interface KeyBindings {
-  [keys: number]: string[]; // maps column counts (4, 5, 6, 7) to key arrays (e.g. ['d', 'f', 'j', 'k'])
+  [keys: number]: string[]; // maps column counts (1..10) to key arrays (e.g. ['d', 'f', 'j', 'k'])
 }
 
 export interface GameSettings {
@@ -268,7 +268,7 @@ export interface GameSettings {
   musicVolume: number; // 0 to 1
   previewVolume: number; // 0 to 1 multiplier applied to song previews
   masterVolume: number; // 0 to 1 applied to all gameplay audio
-  keyMode: number; // 4, 5, 6, 7
+  keyMode: number; // 1..10
   bindings: KeyBindings;
   upsurfaceNoteMode: boolean; // whether notes scroll upwards rather than downwards
   videoOpacity: number; // background video opacity (0 to 1)
@@ -282,7 +282,7 @@ export interface GameSettings {
   customSkinColors?: string[]; // user parsed custom colors: [blueKeyColor, whiteKeyColor, accentKeyColor, cyanKeyColor, holdNoteColor]
   customSkinName?: string;
   squareRenderStyle?: 'rhythmmania' | 'rhythmplus' | 'rhythmplus-dynamic';
-  receptorColorsByKeyCount?: Record<number, string[]>; // per-lane receptor colors for 2K-9K
+  receptorColorsByKeyCount?: Record<number, string[]>; // per-lane receptor colors for 1K-10K
   noteOpacity?: number; // 0.1 to 1.0 (opacity for note visuals)
   receptorOpacity?: number; // 0.1 to 1.0 (opacity for landline keys receptors)
   circleSize?: number; // scale multiplier for circle skin notes (0.5 to 1.5)

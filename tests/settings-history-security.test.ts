@@ -62,20 +62,32 @@ describe('settings, history, and URL boundaries', () => {
     expect(clean.bindings[4]).toEqual(['d', 'f', 'j', 'k']);
   });
 
-  it('preserves 9K settings and replay widths', () => {
-    const clean = sanitizeSettings({ keyMode: 9, bindings: { 9: ['a', 's', 'd', 'f', ' ', 'j', 'k', 'l', ';'] }, receptorColorsByKeyCount: { 9: Array(9).fill('#00b0ff') }, selectedMods: ['K9', 'K4'] }, DEFAULT_SETTINGS);
-    expect(clean.keyMode).toBe(9);
-    expect(clean.bindings[9]).toHaveLength(9);
-    expect(clean.receptorColorsByKeyCount?.[9]).toHaveLength(9);
-    expect(clean.selectedMods).toEqual(['K9']);
-    const record = sanitizeHistoryRecord({ id: 'nine', timestamp: 1, beatmapId: 'map', beatmapTitle: 'Title', beatmapArtist: 'Artist', keyCount: 9, score: 0, accuracy: 0, maxCombo: 0, grade: 'F', isFailed: false, scoreState: { ...scoreState, columnJudgements: Array.from({ length: 9 }, (_, column) => ({ column })) }, replayFrames: [{ time: 0, keysPressed: Array(9).fill(false) }, { time: 10, keysPressed: [false, false, false, false, false, false, false, false, true] }] }, DEFAULT_SETTINGS);
-    expect(record?.keyCount).toBe(9);
-    expect(record?.replayFrames[1]?.keysPressed[8]).toBe(true);
+  it('preserves 10K and 1K settings and replay widths', () => {
+    const clean10 = sanitizeSettings({ keyMode: 10, bindings: { 10: ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';'] }, receptorColorsByKeyCount: { 10: Array(10).fill('#00b0ff') }, selectedMods: ['K10', 'K4'] }, DEFAULT_SETTINGS);
+    expect(clean10.keyMode).toBe(10);
+    expect(clean10.bindings[10]).toHaveLength(10);
+    expect(clean10.receptorColorsByKeyCount?.[10]).toHaveLength(10);
+    expect(clean10.selectedMods).toEqual(['K10']);
+
+    const clean1 = sanitizeSettings({ keyMode: 1, bindings: { 1: [' '] }, receptorColorsByKeyCount: { 1: ['#00b0ff'] }, selectedMods: ['K1'] }, DEFAULT_SETTINGS);
+    expect(clean1.keyMode).toBe(1);
+    expect(clean1.bindings[1]).toEqual([' ']);
+    expect(clean1.receptorColorsByKeyCount?.[1]).toEqual(['#00b0ff']);
+    expect(clean1.selectedMods).toEqual(['K1']);
+
+    const record = sanitizeHistoryRecord({ id: 'ten', timestamp: 1, beatmapId: 'map', beatmapTitle: 'Title', beatmapArtist: 'Artist', keyCount: 10, score: 0, accuracy: 0, maxCombo: 0, grade: 'F', isFailed: false, scoreState: { ...scoreState, columnJudgements: Array.from({ length: 10 }, (_, column) => ({ column })) }, replayFrames: [{ time: 0, keysPressed: Array(10).fill(false) }, { time: 10, keysPressed: [false, false, false, false, false, false, false, false, false, true] }] }, DEFAULT_SETTINGS);
+    expect(record?.keyCount).toBe(10);
+    expect(record?.replayFrames[1]?.keysPressed[9]).toBe(true);
   });
 
   it('normalizes persisted modifiers without duplicate scoring or conflicts', () => {
-    const clean = sanitizeSettings({ selectedMods: ['nf', 'NF', 'EZ', 'HR', 'DT', 'HT', 'K4', 'K5', 'UNKNOWN'] }, DEFAULT_SETTINGS);
-    expect(clean.selectedMods).toEqual(['NF', 'EZ', 'DT', 'K4']);
+    const clean = sanitizeSettings({ selectedMods: ['nf', 'NF', 'EZ', 'HR', 'DT', 'HT', 'K10', 'K1', 'K4', 'UNKNOWN'] }, DEFAULT_SETTINGS);
+    expect(clean.selectedMods).toEqual(['NF', 'EZ', 'DT', 'K10']);
+  });
+
+  it('enforces mutual exclusivity for visual cover mods (HD, FI, Cover)', () => {
+    const clean = sanitizeSettings({ selectedMods: ['HD', 'FI', 'Cover'] }, DEFAULT_SETTINGS);
+    expect(clean.selectedMods).toEqual(['HD']);
   });
 
   it('keeps an optional local display name and strips hostile characters', () => {

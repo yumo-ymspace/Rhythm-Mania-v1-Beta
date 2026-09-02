@@ -18,7 +18,7 @@
 
 import { HitObject } from '../types';
 import { PlayfieldVisualSettings, VisibleNote } from './types';
-import { getScrollYPosition, getHiddenOpacityForY } from './playfieldLayout';
+import { getScrollYPosition, computeCoverRatio, getCoverOpacityForY } from './playfieldLayout';
 import { ScrollModel } from './scrollVelocity';
 import { isHoldBodyAnchored } from './noteState';
 import { HOLD_TICK_RULES_VERSION } from '../utils/holdTickRules';
@@ -49,12 +49,14 @@ export function getVisibleNotes(
   visualTime: number,
   speedFactor: number,
   scrollModel?: ScrollModel | null,
+  combo: number = 0,
+  breaks: Array<{ startTime: number; endTime: number }> = [],
 ): VisibleNote[] {
   const visible: VisibleNote[] = [];
   const paddingLimit = 100;
   const up = settings.upsurfaceNoteMode;
-  const isHD = settings.selectedMods?.includes('HD') || false;
   const noteOpacityVal = settings.noteOpacity ?? 1.0;
+  const coverState = computeCoverRatio(settings.selectedMods || [], combo, visualTime, breaks);
   const orderedNotes = notes.every((note, index) => index === 0 || note.time >= notes[index - 1].time)
     ? notes
     : [...notes].sort((a, b) => a.time - b.time);
@@ -118,9 +120,9 @@ export function getVisibleNotes(
     }
     if (!isVisible) continue;
 
-    const opacity = getHiddenOpacityForY(bodyStartY, height, receptorY, up, isHD) * noteOpacityVal;
+    const opacity = getCoverOpacityForY(bodyStartY, height, receptorY, up, coverState) * noteOpacityVal;
     const endOpacity = endY !== undefined
-      ? getHiddenOpacityForY(endY, height, receptorY, up, isHD) * noteOpacityVal
+      ? getCoverOpacityForY(endY, height, receptorY, up, coverState) * noteOpacityVal
       : undefined;
 
     const tailEngaged = n.isHeadHit || n.tailEngagedTime !== undefined;

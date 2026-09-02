@@ -892,6 +892,58 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       });
     }
 
+    // 6b. RENDER FLASHLIGHT VIGNETTE
+    const isFlashlight = (settingsSlice.selectedMods || []).some(m => m.toUpperCase() === 'FL');
+    if (isFlashlight) {
+      const combo = frame.combo || 0;
+      let baseRadius = 240;
+      if (combo >= 200) {
+        baseRadius = 150;
+      } else if (combo >= 100) {
+        baseRadius = 190;
+      }
+
+      // Check break retraction
+      let breakFactor = 1.0;
+      const breaks = frame.breaks || [];
+      const songTime = frame.timeMs;
+      if (breaks.length > 0) {
+        for (const b of breaks) {
+          if (songTime >= b.startTime && songTime <= b.endTime) {
+            const breakDuration = b.endTime - b.startTime;
+            const transitionMs = Math.min(500, Math.max(50, breakDuration / 2));
+            if (songTime < b.startTime + transitionMs) {
+              breakFactor = 1 - (songTime - b.startTime) / transitionMs;
+            } else if (songTime > b.endTime - transitionMs) {
+              breakFactor = (songTime - (b.endTime - transitionMs)) / transitionMs;
+            } else {
+              breakFactor = 0;
+            }
+            break;
+          }
+        }
+      }
+
+      const flRadius = breakFactor < 1.0
+        ? baseRadius + (Math.max(width, height) - baseRadius) * (1 - breakFactor)
+        : baseRadius;
+
+      const centerX = width / 2;
+      ctx.save();
+      const flGrad = ctx.createRadialGradient(
+        centerX, receptorY, flRadius * 0.45,
+        centerX, receptorY, flRadius
+      );
+      flGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      flGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
+      flGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.88)');
+      flGrad.addColorStop(1, 'rgba(0, 0, 0, 1.0)');
+
+      ctx.fillStyle = flGrad;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+
     ctx.restore(); // POP screen shake translations
 
     // 7. DRAW TIMING (HIT ERROR) METER

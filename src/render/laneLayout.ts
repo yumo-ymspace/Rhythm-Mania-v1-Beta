@@ -54,12 +54,18 @@ export function getColumnStyles(
 
   return Array.from({ length: keyCount }, (_, i) => {
     let color = colors.white;
-    if (keyCount === 5) {
+    if (keyCount === 1) {
+      color = colors.accent;
+    } else if (keyCount === 5) {
       color = i === 2 ? colors.accent : i === 0 || i === 4 ? colors.blue : colors.white;
     } else if (keyCount === 7) {
       color = i === 3 ? colors.accent : i % 2 === 0 ? colors.blue : colors.white;
     } else if (keyCount === 8) {
       color = i === 0 ? colors.cyan : i % 2 === 1 ? colors.blue : colors.white;
+    } else if (keyCount === 9) {
+      color = i === 4 ? colors.accent : (i === 0 || i === 8) ? colors.cyan : i % 2 === 1 ? colors.blue : colors.white;
+    } else if (keyCount === 10) {
+      color = (i === 0 || i === 9) ? colors.cyan : i % 2 === 1 ? colors.blue : colors.white;
     } else if (keyCount === 6) {
       color = i === 0 || i === 2 || i === 3 || i === 5 ? colors.blue : colors.white;
     } else {
