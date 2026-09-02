@@ -38,7 +38,7 @@ export interface VisibleNote {
   earlyReleaseTime?: number;
   tailResumedTime?: number;
   releaseZoneArmedTime?: number;
-  holdRulesVersion?: 1 | 2;
+  holdRulesVersion?: 1 | 2 | 3;
   tailSegments?: Array<{ startY: number; endY: number }>;
   missedTailSegments?: Array<{ startY: number; endY: number }>;
   endpointTailSegment?: { startY: number; endY: number };

@@ -248,3 +248,55 @@ describe('replay cursor and unstable rate math', () => {
     expect(accumulator.unstableRate).toBeCloseTo(Math.sqrt(200 / 3) * 10);
   });
 });
+
+describe('autonomous misses with lazer hold rules (TASK-021)', () => {
+  it('handles head timeout and tail timeout for version 3 lazer holds without ticks', async () => {
+    const { checkNotesAutonomousMisses } = await import('../src/components/GameplayCanvas');
+    const { createHoldNoteState, LAZER_HOLD_RULES_VERSION } = await import('../src/ruleset/mania/holdNote');
+
+    const holdNote: HitObject = {
+      id: 'hold_v3',
+      time: 1000,
+      endTime: 2000,
+      column: 0,
+      type: 'hold',
+      isHit: false,
+      isReleased: false,
+      isMissed: false,
+      isHoldFailed: false,
+      holdRulesVersion: LAZER_HOLD_RULES_VERSION,
+      holdState: createHoldNoteState({ id: 'hold_v3', startTime: 1000, endTime: 2000, column: 0 }),
+    };
+
+    const misses: HitObject[] = [];
+    const onMiss = (n: HitObject) => misses.push(n);
+
+    // 1. Before head expiry (t = 1100, missBound = 150 -> expiry = 1150)
+    checkNotesAutonomousMisses([holdNote], 1100, 150, onMiss);
+    expect(misses).toHaveLength(0);
+    expect(holdNote.isMissed).toBe(false);
+
+    // 2. After head expiry (t = 1200 > 1150) -> head miss
+    checkNotesAutonomousMisses([holdNote], 1200, 150, onMiss);
+    expect(misses).toHaveLength(1);
+    expect(holdNote.isMissed).toBe(true);
+    expect(holdNote.holdState?.headMissed).toBe(true);
+    expect(holdNote.holdState?.hasHoldBreak).toBe(true);
+    expect(holdNote.isReleased).toBe(false);
+
+    // 3. Before tail expiry (endTime = 2000, 1.5x lenience -> expiry = 2000 + 150 * 1.5 = 2225)
+    checkNotesAutonomousMisses([holdNote], 2200, 150, onMiss);
+    expect(misses).toHaveLength(1); // No new miss yet
+    expect(holdNote.isReleased).toBe(false);
+
+    // 4. After tail expiry (t = 2300 > 2225) -> tail miss
+    checkNotesAutonomousMisses([holdNote], 2300, 150, onMiss);
+    expect(misses).toHaveLength(2); // Tail missed
+    expect(holdNote.isReleased).toBe(true);
+    expect(holdNote.isReleaseMissed).toBe(true);
+    expect(holdNote.isHoldFailed).toBe(true);
+    expect(holdNote.holdState?.tailMissed).toBe(true);
+    expect(holdNote.holdState?.isComplete).toBe(true);
+  });
+});
+

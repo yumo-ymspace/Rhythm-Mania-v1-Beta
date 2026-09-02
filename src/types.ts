@@ -11,7 +11,7 @@
  */
 
 export type NoteType = 'normal' | 'hold';
-export type HoldRulesVersion = 1 | 2;
+export type HoldRulesVersion = 1 | 2 | 3;
 
 export type CloudBeatmapSource = 'osuapi';
 export type CloudCatalogState = 'pending' | 'active';
@@ -83,6 +83,7 @@ export interface HitObject {
   clearedTailIntervals?: Array<{ startTime: number; endTime: number }>;
   missedTailIntervals?: Array<{ startTime: number; endTime: number }>;
   holdRulesVersion?: HoldRulesVersion;
+  holdState?: import('./ruleset/mania/holdNote').HoldNoteState;
   hitSound?: number;
   hitSample?: HitSample;
 
@@ -180,6 +181,7 @@ export interface ScoreState {
   recordId?: string;
   unstableRate: number | null;
   hitErrorSampleCount: number;
+  comboBreakCount?: number;
   columnJudgements: ColumnJudgementCounts[];
   isAutoplay?: boolean;
 }

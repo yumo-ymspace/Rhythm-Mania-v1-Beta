@@ -13,6 +13,7 @@
 import { Beatmap, GameSettings, PlayHistoryRecord, ReplayFrame, ReplaySource, ScoreState } from '../types';
 import { sanitizeSavedBeatmap, storageManager } from './storageManager';
 import { computeGradeFromScoreState } from '../ruleset/mania/scoreProcessor';
+import { LAZER_HOLD_RULES_VERSION } from '../ruleset/mania/holdNote';
 import { HOLD_TICK_RULES_VERSION, holdTickIntervalMs, LEGACY_HOLD_RULES_VERSION, resolveHoldTickInterval } from './holdTickRules';
 import { sanitizeGameplayMods } from './modifiers';
 
@@ -144,7 +145,7 @@ export function createPlayHistoryRecord(params: {
   replaySource?: ReplaySource;
   holdRules?: HoldRulesInfo;
 }): PlayHistoryRecord {
-  const { id, timestamp, beatmap, scoreState, replayFrames, recordedSettings, mods, replaySource = 'guest-local', holdRules = { holdRulesVersion: HOLD_TICK_RULES_VERSION, holdTickIntervalMs } } = params;
+  const { id, timestamp, beatmap, scoreState, replayFrames, recordedSettings, mods, replaySource = 'guest-local', holdRules = { holdRulesVersion: LAZER_HOLD_RULES_VERSION } } = params;
   
   const catalogInfo = determineCatalogIdentity(beatmap, beatmap.id);
   const hash = beatmap.beatmapHash || computeBeatmapHash(beatmap);
@@ -200,11 +201,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export interface HoldRulesInfo {
-  holdRulesVersion: 1 | 2;
+  holdRulesVersion: 1 | 2 | 3;
   holdTickIntervalMs?: number;
 }
 
 export function getHoldRulesInfo(record: Record<string, unknown> | null | undefined): HoldRulesInfo {
+  if (record?.holdRulesVersion === LAZER_HOLD_RULES_VERSION || record?.holdRulesVersion === 3) {
+    return { holdRulesVersion: LAZER_HOLD_RULES_VERSION };
+  }
   if (record?.holdRulesVersion === HOLD_TICK_RULES_VERSION) {
     return { holdRulesVersion: HOLD_TICK_RULES_VERSION, holdTickIntervalMs: resolveHoldTickInterval(record.holdTickIntervalMs) };
   }

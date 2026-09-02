@@ -510,7 +510,7 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
     uploadEligibility: isUploadEligibility(record.uploadEligibility) ? record.uploadEligibility : undefined,
     uploadStatus: isUploadStatus(record.uploadStatus) ? record.uploadStatus : undefined,
     isServerCatalogMap: typeof record.isServerCatalogMap === 'boolean' ? record.isServerCatalogMap : undefined,
-    holdRulesVersion: record.holdRulesVersion === 1 || record.holdRulesVersion === 2 ? record.holdRulesVersion : undefined,
+    holdRulesVersion: record.holdRulesVersion === 1 || record.holdRulesVersion === 2 || record.holdRulesVersion === 3 ? record.holdRulesVersion : undefined,
     holdTickIntervalMs: typeof record.holdTickIntervalMs === 'number' && Number.isInteger(record.holdTickIntervalMs) &&
       record.holdTickIntervalMs >= 10 && record.holdTickIntervalMs <= 100
       ? record.holdTickIntervalMs

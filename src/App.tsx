@@ -43,6 +43,7 @@ import { unpackBeatmap } from './utils/unpackHelper';
 import { sanitizeSettings, sanitizeHistoryRecord, sanitizeCssUrl, MAX_COMPRESSED_SIZE_BYTES, validateZipLimits, createZipExtractionBudget, decodeBoundedUtf8 } from './utils/securityLimits';
 import { createPlayHistoryRecord, migrateAndNormalizeBeatmaps, computeBeatmapHash, findMatchingBeatmap } from './utils/replayManager';
 import { HOLD_TICK_RULES_VERSION, holdTickIntervalMs } from './utils/holdTickRules';
+import { LAZER_HOLD_RULES_VERSION } from './ruleset/mania/holdNote';
 import { extractZipEntry } from './utils/zipResolver';
 import { AssetLifecycleManager } from './utils/assetLifecycle';
 import { computeChecksum, inferChecksumAlgorithm } from './utils/checksum';
@@ -1073,7 +1074,7 @@ export default function App() {
         recordedSettings: settings,
         mods: settings.selectedMods,
         replaySource: 'guest-local',
-        holdRules: { holdRulesVersion: HOLD_TICK_RULES_VERSION, holdTickIntervalMs },
+        holdRules: { holdRulesVersion: LAZER_HOLD_RULES_VERSION },
       });
       if (localName) newRecord.playedBy = localName;
 

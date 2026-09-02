@@ -19,6 +19,11 @@ import type { JudgementType, JudgementWindow } from '../../types';
 export const TAIL_RELEASE_WINDOW_LENIENCE = 1.5;
 
 /**
+ * osu!(lazer) mania hold rules version.
+ */
+export const LAZER_HOLD_RULES_VERSION = 3;
+
+/**
  * The judgement type used when a tail is capped (osu! Meh -> internal 'bad').
  */
 export const HOLD_MEH_CAP_TYPE: JudgementType = 'bad';
