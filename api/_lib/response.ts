@@ -21,7 +21,7 @@ export interface ApiResponse<T = unknown> {
   meta?: Record<string, unknown>;
 }
 
-export const ALLOWED_HOSTS = ['rhythm-mania.com', 'beta.rhythm-mania.com'] as const;
+export const ALLOWED_HOSTS = ['rhythm-mania.com', 'beta.rhythm-mania.com', 'v1.rhythm-mania.com'] as const;
 
 export function isAllowedHost(hostWithPort?: string | null, isProduction?: boolean): boolean {
   if (!hostWithPort || typeof hostWithPort !== 'string') return false;

@@ -23,15 +23,19 @@ import {
 
 describe('API origin and host validation', () => {
   describe('isAllowedHost', () => {
-    it('accepts rhythm-mania.com and beta.rhythm-mania.com in both prod and dev', () => {
+    it('accepts rhythm-mania.com, beta.rhythm-mania.com, and v1.rhythm-mania.com in both prod and dev', () => {
       expect(isAllowedHost('rhythm-mania.com', true)).toBe(true);
       expect(isAllowedHost('rhythm-mania.com', false)).toBe(true);
       expect(isAllowedHost('beta.rhythm-mania.com', true)).toBe(true);
       expect(isAllowedHost('beta.rhythm-mania.com', false)).toBe(true);
+      expect(isAllowedHost('v1.rhythm-mania.com', true)).toBe(true);
+      expect(isAllowedHost('v1.rhythm-mania.com', false)).toBe(true);
       expect(isAllowedHost('RHYTHM-MANIA.COM', true)).toBe(true);
       expect(isAllowedHost('BETA.RHYTHM-MANIA.COM', true)).toBe(true);
+      expect(isAllowedHost('V1.RHYTHM-MANIA.COM', true)).toBe(true);
       expect(isAllowedHost('rhythm-mania.com:443', true)).toBe(true);
       expect(isAllowedHost('beta.rhythm-mania.com:443', true)).toBe(true);
+      expect(isAllowedHost('v1.rhythm-mania.com:443', true)).toBe(true);
     });
 
     it('rejects unauthorized hostnames and subdomains in production', () => {
@@ -59,8 +63,10 @@ describe('API origin and host validation', () => {
     it('accepts valid https origins for allowed domains in production', () => {
       expect(isAllowedOrigin('https://rhythm-mania.com', true)).toBe(true);
       expect(isAllowedOrigin('https://beta.rhythm-mania.com', true)).toBe(true);
+      expect(isAllowedOrigin('https://v1.rhythm-mania.com', true)).toBe(true);
       expect(isAllowedOrigin('http://rhythm-mania.com', true)).toBe(false);
       expect(isAllowedOrigin('http://beta.rhythm-mania.com', true)).toBe(false);
+      expect(isAllowedOrigin('http://v1.rhythm-mania.com', true)).toBe(false);
       expect(isAllowedOrigin('https://evil.com', true)).toBe(false);
     });
 
