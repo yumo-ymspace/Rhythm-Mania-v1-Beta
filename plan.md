@@ -720,7 +720,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-020** | Implement hold head + 1.5× tail + Meh cap in ruleset module with tests only (not wired to canvas yet) | `holdNote.ts`, tests | `npm test` |
+| **TASK-020** | Implement hold head + 1.5× tail + Meh cap in ruleset module with tests only (not wired to canvas yet) **(done)** | `holdNote.ts`, tests | `npm test` |
 | **TASK-021** | Wire live `GameplayCanvas` to TASK-020; disable ticks on `rulesetVersion` 3 | `GameplayCanvas.tsx` | browser: LN drop combo-breaks, no tick misses; Playwright play |
 | **TASK-022** | Local replay simulation: v2 tick records still watch; v3 ComboBreak watches | replay sim, tests | watch one old and one new local replay |
 | **TASK-023** | Port `ManiaHealthProcessor`; fail at 0; EZ extra lives; NF | `healthProcessor.ts`, gameplay | tests + fail/NF Playwright |
