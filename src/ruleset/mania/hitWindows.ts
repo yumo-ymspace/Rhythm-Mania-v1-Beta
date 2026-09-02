@@ -57,7 +57,7 @@ export function computeDifficultyRange(od: number, min: number, mid: number, max
 
 /**
  * Computes hit window half-width in ms matching osu!(lazer):
- * floor(range / difficultyMultiplier) + 0.5
+ * floor(range * (speedMultiplier / difficultyMultiplier)) + 0.5
  */
 export function computeLazerHitWindow(
   od: number,
@@ -65,16 +65,19 @@ export function computeLazerHitWindow(
   mid: number,
   max: number,
   difficultyMultiplier: number = 1,
+  speedMultiplier: number = 1,
 ): number {
-  return Math.floor(computeDifficultyRange(od, min, mid, max) / difficultyMultiplier) + 0.5;
+  const totalMultiplier = speedMultiplier / difficultyMultiplier;
+  return Math.floor(computeDifficultyRange(od, min, mid, max) * totalMultiplier) + 0.5;
 }
 
 /**
- * Resolves full JudgementWindow list for a given overall difficulty and mod multiplier.
+ * Resolves full JudgementWindow list for a given overall difficulty, difficulty multiplier, and speed multiplier.
  */
 export function getJudgementWindows(
   od: number,
   difficultyMultiplier: number = 1,
+  speedMultiplier: number = 1,
 ): JudgementWindow[] {
   const types: JudgementType[] = ['marvelous', 'perfect', 'great', 'good', 'bad', 'miss'];
   return types.map((type) => {
@@ -83,7 +86,7 @@ export function getJudgementWindows(
     return {
       type,
       name: JUDGEMENT_UPPERCASE_NAMES[type],
-      windowMs: computeLazerHitWindow(od, range.min, range.mid, range.max, difficultyMultiplier),
+      windowMs: computeLazerHitWindow(od, range.min, range.mid, range.max, difficultyMultiplier, speedMultiplier),
       baseScore: ACCURACY_BASE_SCORE[type],
       hpDelta: DEFAULT_HP_DELTAS[type],
       color,
@@ -91,3 +94,24 @@ export function getJudgementWindows(
     };
   });
 }
+
+/**
+ * Resolves difficultyMultiplier from active gameplay mods (HR = 1.4, EZ = 1 / 1.4, default = 1.0).
+ */
+export function getDifficultyMultiplier(mods?: readonly string[] | string[] | null): number {
+  if (!mods || !Array.isArray(mods)) return 1.0;
+  if (mods.includes('HR')) return 1.4;
+  if (mods.includes('EZ')) return 1 / 1.4;
+  return 1.0;
+}
+
+/**
+ * Resolves speedMultiplier / rate from active gameplay mods (DT/NC = 1.5, HT/DC = 0.75, default = 1.0).
+ */
+export function getSpeedMultiplier(mods?: readonly string[] | string[] | null): number {
+  if (!mods || !Array.isArray(mods)) return 1.0;
+  if (mods.includes('DT') || mods.includes('NC')) return 1.5;
+  if (mods.includes('HT') || mods.includes('DC')) return 0.75;
+  return 1.0;
+}
+

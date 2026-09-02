@@ -19,8 +19,10 @@ import { initializeColumnJudgements, incrementColumnJudgement } from '../utils/p
 import { VideoSyncController, computeTargetVideoTimeSec } from '../utils/videoSyncController';
 import { executeTeardown } from '../utils/gameplayTeardown';
 import {
+  getDifficultyMultiplier,
   getHoldTailJudgement,
   getJudgementWindows,
+  getSpeedMultiplier,
   isHoldGraceActive,
   resolveHoldGrace,
   resolveJudgementForError,
@@ -716,13 +718,14 @@ export default function GameplayCanvas({
     };
   }, [settings.renderEngine, settings.limitDprToOne, beatmap.keyCount, isAudioLoaded]);
 
-  // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD.
-  const windowDifficultyMultiplier = settings.selectedMods?.includes('HR')
-    ? 1.4
-    : settings.selectedMods?.includes('EZ')
-      ? 1 / 1.4
-      : 1;
-  const judgementWindows = getJudgementWindows(beatmap.overallDifficulty, windowDifficultyMultiplier);
+  // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD; DT/HT/NC/DC scale song-time hit-windows with clock rate.
+  const windowDifficultyMultiplier = getDifficultyMultiplier(settings.selectedMods);
+  const windowSpeedMultiplier = getSpeedMultiplier(settings.selectedMods);
+  const judgementWindows = getJudgementWindows(
+    beatmap.overallDifficulty,
+    windowDifficultyMultiplier,
+    windowSpeedMultiplier,
+  );
   const marvelousJudg = judgementWindows.find(w => w.type === 'marvelous') || judgementWindows[0];
   const badJudg = judgementWindows.find(w => w.type === 'bad') || judgementWindows[judgementWindows.length - 2];
   const missJudg = judgementWindows.find(w => w.type === 'miss') || judgementWindows[judgementWindows.length - 1];
@@ -888,12 +891,7 @@ export default function GameplayCanvas({
       mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
       mainAudio.setOffset(settings.audioOffset);
 
-      let activeRate = 1.0;
-      if (settings.selectedMods?.includes('DT')) {
-        activeRate = 1.5;
-      } else if (settings.selectedMods?.includes('HT')) {
-        activeRate = 0.75;
-      }
+      const activeRate = getSpeedMultiplier(settings.selectedMods);
       mainAudio.playbackRate = activeRate;
 
        const success = await mainAudio.loadTrack(resolved.audioUrl || '', (p) => {

@@ -14,7 +14,9 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDifficultyRange,
   computeLazerHitWindow,
+  getDifficultyMultiplier,
   getJudgementWindows,
+  getSpeedMultiplier,
   MANIA_DIFFICULTY_RANGES,
 } from '../src/ruleset/mania/hitWindows';
 import type { JudgementType } from '../src/types';
@@ -135,6 +137,136 @@ describe('osu!(lazer) mania hit window fixtures (TASK-011)', () => {
       expect(w.bad).toBe(97.5);
       // 173.0 / 1.4 = 123.571... -> floor(123.571) + 0.5 = 123.5
       expect(w.miss).toBe(123.5);
+    });
+  });
+
+  describe('DT and HT speedMultiplier scaling (TASK-012)', () => {
+    it('scales OD 5 windows with DT/NC (speedMultiplier = 1.5)', () => {
+      const dtSpeed = 1.5;
+      const windows = getJudgementWindows(5, 1, dtSpeed);
+      const w = windows.reduce<Record<JudgementType, number>>((acc, curr) => {
+        acc[curr.type] = curr.windowMs;
+        return acc;
+      }, {} as Record<JudgementType, number>);
+
+      // 19.4 * 1.5 = 29.1 -> floor(29.1) + 0.5 = 29.5
+      expect(w.marvelous).toBe(29.5);
+      // 49.0 * 1.5 = 73.5 -> floor(73.5) + 0.5 = 73.5
+      expect(w.perfect).toBe(73.5);
+      // 82.0 * 1.5 = 123.0 -> floor(123.0) + 0.5 = 123.5
+      expect(w.great).toBe(123.5);
+      // 112.0 * 1.5 = 168.0 -> floor(168.0) + 0.5 = 168.5
+      expect(w.good).toBe(168.5);
+      // 136.0 * 1.5 = 204.0 -> floor(204.0) + 0.5 = 204.5
+      expect(w.bad).toBe(204.5);
+      // 173.0 * 1.5 = 259.5 -> floor(259.5) + 0.5 = 259.5
+      expect(w.miss).toBe(259.5);
+    });
+
+    it('scales OD 5 windows with HT/DC (speedMultiplier = 0.75)', () => {
+      const htSpeed = 0.75;
+      const windows = getJudgementWindows(5, 1, htSpeed);
+      const w = windows.reduce<Record<JudgementType, number>>((acc, curr) => {
+        acc[curr.type] = curr.windowMs;
+        return acc;
+      }, {} as Record<JudgementType, number>);
+
+      // 19.4 * 0.75 = 14.55 -> floor(14.55) + 0.5 = 14.5
+      expect(w.marvelous).toBe(14.5);
+      // 49.0 * 0.75 = 36.75 -> floor(36.75) + 0.5 = 36.5
+      expect(w.perfect).toBe(36.5);
+      // 82.0 * 0.75 = 61.50 -> floor(61.50) + 0.5 = 61.5
+      expect(w.great).toBe(61.5);
+      // 112.0 * 0.75 = 84.00 -> floor(84.00) + 0.5 = 84.5
+      expect(w.good).toBe(84.5);
+      // 136.0 * 0.75 = 102.0 -> floor(102.0) + 0.5 = 102.5
+      expect(w.bad).toBe(102.5);
+      // 173.0 * 0.75 = 129.75 -> floor(129.75) + 0.5 = 129.5
+      expect(w.miss).toBe(129.5);
+    });
+
+    it('scales OD 8 windows with DT (speedMultiplier = 1.5)', () => {
+      const dtSpeed = 1.5;
+      const windows = getJudgementWindows(8, 1, dtSpeed);
+      const w = windows.reduce<Record<JudgementType, number>>((acc, curr) => {
+        acc[curr.type] = curr.windowMs;
+        return acc;
+      }, {} as Record<JudgementType, number>);
+
+      // OD 8 marvelous = 16.1 * 1.5 = 24.15 -> 24.5
+      expect(w.marvelous).toBe(24.5);
+      // OD 8 perfect = 40.0 * 1.5 = 60.0 -> 60.5
+      expect(w.perfect).toBe(60.5);
+      // OD 8 great = 73.0 * 1.5 = 109.5 -> 109.5
+      expect(w.great).toBe(109.5);
+      // OD 8 good = 103.0 * 1.5 = 154.5 -> 154.5
+      expect(w.good).toBe(154.5);
+      // OD 8 bad = 127.0 * 1.5 = 190.5 -> 190.5
+      expect(w.bad).toBe(190.5);
+      // OD 8 miss = 164.0 * 1.5 = 246.0 -> 246.5
+      expect(w.miss).toBe(246.5);
+    });
+
+    it('combines DT and HR (speedMultiplier = 1.5, difficultyMultiplier = 1.4)', () => {
+      const windows = getJudgementWindows(5, 1.4, 1.5);
+      const w = windows.reduce<Record<JudgementType, number>>((acc, curr) => {
+        acc[curr.type] = curr.windowMs;
+        return acc;
+      }, {} as Record<JudgementType, number>);
+
+      // 19.4 * 1.5 / 1.4 = 20.785... -> floor(20.785) + 0.5 = 20.5
+      expect(w.marvelous).toBe(20.5);
+      // 49.0 * 1.5 / 1.4 = 52.5 -> floor(52.5) + 0.5 = 52.5
+      expect(w.perfect).toBe(52.5);
+      // 82.0 * 1.5 / 1.4 = 87.857... -> floor(87.857) + 0.5 = 87.5
+      expect(w.great).toBe(87.5);
+      // 112.0 * 1.5 / 1.4 = 120.0 -> floor(120.0) + 0.5 = 120.5
+      expect(w.good).toBe(120.5);
+      // 136.0 * 1.5 / 1.4 = 145.714... -> floor(145.714) + 0.5 = 145.5
+      expect(w.bad).toBe(145.5);
+      // 173.0 * 1.5 / 1.4 = 185.357... -> floor(185.357) + 0.5 = 185.5
+      expect(w.miss).toBe(185.5);
+    });
+
+    it('combines DT and EZ (speedMultiplier = 1.5, difficultyMultiplier = 1 / 1.4)', () => {
+      const windows = getJudgementWindows(5, 1 / 1.4, 1.5);
+      const w = windows.reduce<Record<JudgementType, number>>((acc, curr) => {
+        acc[curr.type] = curr.windowMs;
+        return acc;
+      }, {} as Record<JudgementType, number>);
+
+      // 19.4 * 1.5 * 1.4 = 40.74 -> floor(40.74) + 0.5 = 40.5
+      expect(w.marvelous).toBe(40.5);
+      // 49.0 * 1.5 * 1.4 = 102.9 -> floor(102.9) + 0.5 = 102.5
+      expect(w.perfect).toBe(102.5);
+      // 82.0 * 1.5 * 1.4 = 172.2 -> floor(172.2) + 0.5 = 172.5
+      expect(w.great).toBe(172.5);
+      // 112.0 * 1.5 * 1.4 = 235.2 -> floor(235.2) + 0.5 = 235.5
+      expect(w.good).toBe(235.5);
+      // 136.0 * 1.5 * 1.4 = 285.6 -> floor(285.6) + 0.5 = 285.5
+      expect(w.bad).toBe(285.5);
+      // 173.0 * 1.5 * 1.4 = 363.3 -> floor(363.3) + 0.5 = 363.5
+      expect(w.miss).toBe(363.5);
+    });
+  });
+
+  describe('Mod multiplier resolver helpers', () => {
+    it('resolves difficultyMultiplier for HR, EZ, and default', () => {
+      expect(getDifficultyMultiplier(['HR'])).toBe(1.4);
+      expect(getDifficultyMultiplier(['EZ'])).toBeCloseTo(1 / 1.4);
+      expect(getDifficultyMultiplier([])).toBe(1.0);
+      expect(getDifficultyMultiplier(null)).toBe(1.0);
+      expect(getDifficultyMultiplier(undefined)).toBe(1.0);
+    });
+
+    it('resolves speedMultiplier for DT, NC, HT, DC, and default', () => {
+      expect(getSpeedMultiplier(['DT'])).toBe(1.5);
+      expect(getSpeedMultiplier(['NC'])).toBe(1.5);
+      expect(getSpeedMultiplier(['HT'])).toBe(0.75);
+      expect(getSpeedMultiplier(['DC'])).toBe(0.75);
+      expect(getSpeedMultiplier([])).toBe(1.0);
+      expect(getSpeedMultiplier(null)).toBe(1.0);
+      expect(getSpeedMultiplier(undefined)).toBe(1.0);
     });
   });
 
