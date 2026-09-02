@@ -11,6 +11,23 @@
  */
 
 const BASE_MODIFIERS = new Set(['NF', 'EZ', 'HR', 'HT', 'DT', 'HD', 'AT']);
+ 
+export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
+  NF: 0.5,
+  EZ: 0.5,
+  HT: 0.5,
+  HR: 1.0,
+  HD: 1.0,
+  DT: 1.0,
+  K2: 0.9,
+  K3: 0.9,
+  K4: 0.9,
+  K5: 0.9,
+  K6: 0.9,
+  K7: 0.9,
+  K8: 0.9,
+  K9: 0.9,
+};
 
 export function sanitizeGameplayMods(value: unknown): string[] {
   if (!Array.isArray(value)) return [];

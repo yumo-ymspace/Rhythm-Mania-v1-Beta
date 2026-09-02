@@ -34,6 +34,7 @@ import { calculateChartStarRating, CHART_STAR_RATING_VERSION } from '../utils/ch
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import metadata from '../../metadata.json';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
+import { computeModMultiplier } from '../ruleset/mania/scoreProcessor';
 
 const DEFAULT_SONG_BANNER = '/backgrounds/Ferineon.webp';
 
@@ -65,7 +66,7 @@ const MODIFIER_TILES = [
     id: 'EZ',
     name: 'Easy',
     title: 'Easy (EZ)',
-    multiplier: '0.80x',
+    multiplier: '0.50x',
     icon: Sparkles,
     activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
     exclusiveWith: 'HR'
@@ -83,7 +84,7 @@ const MODIFIER_TILES = [
     id: 'HR',
     name: 'Hard Rock',
     title: 'Hard Rock (HR)',
-    multiplier: '1.10x',
+    multiplier: '1.00x',
     icon: ArrowUpToLine,
     activeClass: 'bg-rose-500/25 text-rose-300 shadow-[0_8px_24px_rgba(244,63,94,0.18)]',
     exclusiveWith: 'EZ'
@@ -92,7 +93,7 @@ const MODIFIER_TILES = [
     id: 'HD',
     name: 'Hidden',
     title: 'Hidden (HD)',
-    multiplier: '1.15x',
+    multiplier: '1.00x',
     icon: SquareSlash,
     activeClass: 'bg-purple-500/25 text-purple-300 shadow-[0_8px_24px_rgba(168,85,247,0.18)]',
     exclusiveWith: undefined
@@ -101,7 +102,7 @@ const MODIFIER_TILES = [
     id: 'DT',
     name: 'Double Time',
     title: 'Double Time (DT)',
-    multiplier: '1.25x',
+    multiplier: '1.00x',
     icon: FastForward,
     activeClass: 'bg-pink-500/25 text-pink-300 shadow-[0_8px_24px_rgba(236,72,153,0.18)]',
     exclusiveWith: 'HT'
@@ -1293,16 +1294,9 @@ export default function SongSelect({
                   <div className="bg-[#1a1525] border border-[#ff80a5]/20 p-3 rounded-xl flex items-center justify-between gap-3 shadow-md text-left">
                     <span className="text-[10px] font-bold text-slate-300 font-mono uppercase">
                       MULTIPLIER: {(() => {
-                        let factor = 1.0;
                         const active = settings.selectedMods || [];
                         if (active.includes('AT')) return 'UNRANKED';
-                        if (active.includes('NF')) factor *= 0.5;
-                        if (active.includes('EZ')) factor *= 0.8;
-                        if (active.includes('HT')) factor *= 0.5;
-                        if (active.includes('HR')) factor *= 1.1;
-                        if (active.includes('HD')) factor *= 1.15;
-                        if (active.includes('DT')) factor *= 1.25;
-                        if (active.some(mod => /^K[2-9]$/.test(mod))) factor *= 0.9;
+                        const factor = computeModMultiplier(active);
                         return factor.toFixed(2) + 'x';
                       })()}
                     </span>
@@ -2247,15 +2241,8 @@ export default function SongSelect({
                   </div>
                   <div className="text-xs font-medium text-[#ff9fba] bg-[#ff80a5]/10 border border-[#ff80a5]/20 rounded-full px-3 py-1.5">
                     {(() => {
-                      let factor = 1.0;
                       const active = settings.selectedMods || [];
-                      if (active.includes('NF')) factor *= 0.5;
-                      if (active.includes('EZ')) factor *= 0.8;
-                      if (active.includes('HT')) factor *= 0.5;
-                      if (active.includes('HR')) factor *= 1.1;
-                      if (active.includes('HD')) factor *= 1.15;
-                      if (active.includes('DT')) factor *= 1.25;
-                      if (active.some(mod => /^K[2-9]$/.test(mod))) factor *= 0.9;
+                      const factor = computeModMultiplier(active);
                       return `Multiplier ${factor.toFixed(2)}x${active.includes('AT') ? ' / Unranked' : ''}`;
                     })()}
                   </div>
@@ -2280,7 +2267,7 @@ export default function SongSelect({
                           id: 'EZ',
                           title: 'Easy (EZ)',
                           activeBg: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400',
-                          mult: '0.80x',
+                          mult: '0.50x',
                           exclusiveWith: 'HR'
                         },
                         {
@@ -2338,20 +2325,20 @@ export default function SongSelect({
                           id: 'HR',
                           title: 'HardRock (HR)',
                           activeBg: 'bg-rose-500/20 border-rose-500/60 text-rose-400',
-                          mult: '1.10x',
+                          mult: '1.00x',
                           exclusiveWith: 'EZ'
                         },
                         {
                           id: 'HD',
                           title: 'Hidden (HD)',
                           activeBg: 'bg-purple-500/20 border-purple-500/60 text-purple-400',
-                          mult: '1.15x'
+                          mult: '1.00x'
                         },
                         {
                           id: 'DT',
                           title: 'DoubleTime (DT)',
                           activeBg: 'bg-[#ff80a5]/20 border-[#ff80a5]/60 text-[#ff80a5]',
-                          mult: '1.25x',
+                          mult: '1.00x',
                           exclusiveWith: 'HT'
                         }
                       ].map((mod) => {

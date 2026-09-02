@@ -43,11 +43,11 @@ export const COMBO_LOG_CAP = Math.log(400) / Math.log(COMBO_LOG_BASE);
 
 export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   NF: 0.5,
-  EZ: 0.8,
+  EZ: 0.5,
   HT: 0.5,
-  HR: 1.1,
-  HD: 1.15,
-  DT: 1.25,
+  HR: 1.0,
+  HD: 1.0,
+  DT: 1.0,
   K2: 0.9,
   K3: 0.9,
   K4: 0.9,

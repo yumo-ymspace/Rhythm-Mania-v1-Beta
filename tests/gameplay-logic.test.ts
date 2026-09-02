@@ -69,8 +69,33 @@ describe('score and judgement math', () => {
       judgedCount: 2,
       totalJudgements: 2,
     })).toBe(1_000_000);
-    expect(computeModMultiplier(['NF', 'HD'])).toBeCloseTo(0.575);
+    expect(computeModMultiplier(['NF', 'HD'])).toBeCloseTo(0.5);
     expect(computeGrade(98, { ...counts, perfectCount: 1, greatCount: 1 })).toBe('S');
+  });
+
+  it('calculates osu!(lazer) mania mod multipliers correctly (TASK-030)', () => {
+    // Single modifiers
+    expect(computeModMultiplier([])).toBe(1);
+    expect(computeModMultiplier(null)).toBe(1);
+    expect(computeModMultiplier(undefined)).toBe(1);
+    expect(computeModMultiplier(['NF'])).toBeCloseTo(0.5);
+    expect(computeModMultiplier(['EZ'])).toBeCloseTo(0.5);
+    expect(computeModMultiplier(['HT'])).toBeCloseTo(0.5);
+    expect(computeModMultiplier(['HR'])).toBeCloseTo(1.0);
+    expect(computeModMultiplier(['HD'])).toBeCloseTo(1.0);
+    expect(computeModMultiplier(['DT'])).toBeCloseTo(1.0);
+
+    // Key conversion modifiers (K2-K9 = 0.90x)
+    for (let k = 2; k <= 9; k++) {
+      expect(computeModMultiplier([`K${k}`])).toBeCloseTo(0.9);
+    }
+
+    // Compound modifiers
+    expect(computeModMultiplier(['EZ', 'NF'])).toBeCloseTo(0.25);
+    expect(computeModMultiplier(['HD', 'DT', 'HR'])).toBeCloseTo(1.0);
+    expect(computeModMultiplier(['EZ', 'DT'])).toBeCloseTo(0.5);
+    expect(computeModMultiplier(['HD', 'DT', 'K4'])).toBeCloseTo(0.9);
+    expect(computeModMultiplier(['NF', 'HD', 'K7'])).toBeCloseTo(0.45);
   });
 
   it('applies EZ and HR HP drain modifiers on top of map drain', () => {

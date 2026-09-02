@@ -729,7 +729,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-030** | Fix multipliers (EZ/NF 0.50, others per current `ManiaMod*` source); overlay shows live product | `modifiers.ts`, SongSelect tiles | unit tests; select UI |
+| **TASK-030** | Fix multipliers (EZ/NF 0.50, others per current `ManiaMod*` source); overlay shows live product **(done)** | `modifiers.ts`, SongSelect tiles | unit tests; select UI |
 | **TASK-031** | Hidden + Fade In + Cover (coverage math, breaks retract) | playfield, mods | Playwright HD/FI vs Argon HD look |
 | **TASK-032** | Flashlight vignette | playfield | Playwright |
 | **TASK-033** | Key 1K–10K bindings + conversion; K-mod exclusivity | settings, `keyCounts.ts` | lint + bind 4K/7K/10K |
