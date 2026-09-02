@@ -325,50 +325,50 @@ export default function ResultsScreen({
             {/* RIGHT SECTION: JUDGEMENT COUNT VERTICAL ROW BADGES */}
             <div className="md:col-span-4 flex flex-col gap-2 max-w-xs w-full mx-auto md:mx-0">
               
-              {/* Marvelous pill */}
+              {/* Perfect pill */}
               <div className="flex items-center justify-between bg-zinc-950/40 p-1.5 rounded-2xl border border-white/[0.02]">
                 <div className="bg-cyan-400 text-slate-950 px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
-                  Marvelous
+                  Perfect
                 </div>
                 <span className="font-mono text-sm md:text-base font-extrabold text-white pr-3">
                   {marvelousCount}
                 </span>
               </div>
 
-              {/* Perfect pill */}
+              {/* Great pill */}
               <div className="flex items-center justify-between bg-zinc-950/40 p-1.5 rounded-2xl border border-white/[0.02]">
-                <div className="bg-teal-600 text-white px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
-                  Perfect
+                <div className="bg-amber-500 text-slate-950 px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
+                  Great
                 </div>
                 <span className="font-mono text-sm md:text-base font-extrabold text-white pr-3">
                   {perfectCount}
                 </span>
               </div>
 
-              {/* Great pill */}
+              {/* Good pill */}
               <div className="flex items-center justify-between bg-zinc-950/40 p-1.5 rounded-2xl border border-white/[0.02]">
                 <div className="bg-green-600 text-white px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
-                  Great
+                  Good
                 </div>
                 <span className="font-mono text-sm md:text-base font-extrabold text-white pr-3">
                   {greatCount}
                 </span>
               </div>
 
-              {/* Good pill */}
+              {/* Ok pill */}
               <div className="flex items-center justify-between bg-zinc-950/40 p-1.5 rounded-2xl border border-white/[0.02]">
-                <div className="bg-amber-600 text-white px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
-                  Good
+                <div className="bg-blue-600 text-white px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
+                  Ok
                 </div>
                 <span className="font-mono text-sm md:text-base font-extrabold text-white pr-3">
                   {goodCount}
                 </span>
               </div>
 
-              {/* Bad pill */}
+              {/* Meh pill */}
               <div className="flex items-center justify-between bg-zinc-950/40 p-1.5 rounded-2xl border border-white/[0.02]">
                 <div className="bg-purple-700 text-white px-3.5 py-1 text-[10px] font-black uppercase rounded-xl tracking-wider shadow-sm min-w-[90px] text-center">
-                  Bad
+                  Meh
                 </div>
                 <span className="font-mono text-sm md:text-base font-extrabold text-white pr-3">
                   {badCount}

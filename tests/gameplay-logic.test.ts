@@ -27,6 +27,12 @@ import {
   resolveJudgementForError,
 } from '../src/ruleset/mania/judgementTiming';
 import {
+  JUDGEMENT_DISPLAY_NAMES,
+  JUDGEMENT_UPPERCASE_NAMES,
+  getJudgementDisplayName,
+  getJudgementUppercaseName,
+} from '../src/ruleset/mania/judgements';
+import {
   consumeReplayFrames,
   createReplayCursor,
   normalizeReplayFrames,
@@ -45,9 +51,9 @@ import {
 } from '../src/utils/holdTickRules';
 
 const windows: JudgementWindow[] = [
-  { type: 'marvelous', name: 'Marvelous', windowMs: 10, baseScore: 305, hpDelta: 3, color: '', glowColor: '' },
-  { type: 'perfect', name: 'Perfect', windowMs: 20, baseScore: 300, hpDelta: 2, color: '', glowColor: '' },
-  { type: 'miss', name: 'Miss', windowMs: 30, baseScore: 0, hpDelta: -10, color: '', glowColor: '' },
+  { type: 'marvelous', name: 'PERFECT', windowMs: 10, baseScore: 305, hpDelta: 3, color: '', glowColor: '' },
+  { type: 'perfect', name: 'GREAT', windowMs: 20, baseScore: 300, hpDelta: 2, color: '', glowColor: '' },
+  { type: 'miss', name: 'MISS', windowMs: 30, baseScore: 0, hpDelta: -10, color: '', glowColor: '' },
 ];
 
 describe('score and judgement math', () => {
@@ -89,6 +95,27 @@ describe('score and judgement math', () => {
     };
     expect(resolveHoldGrace(note, 100).resolution).toBe('active');
     expect(resolveHoldGrace(note, 101)).toMatchObject({ resolution: 'expired', isHoldFailed: true, isReleased: true });
+  });
+
+  it('maps judgement schema types to osu!(lazer) display and uppercase names', () => {
+    expect(JUDGEMENT_DISPLAY_NAMES.marvelous).toBe('Perfect');
+    expect(JUDGEMENT_DISPLAY_NAMES.perfect).toBe('Great');
+    expect(JUDGEMENT_DISPLAY_NAMES.great).toBe('Good');
+    expect(JUDGEMENT_DISPLAY_NAMES.good).toBe('Ok');
+    expect(JUDGEMENT_DISPLAY_NAMES.bad).toBe('Meh');
+    expect(JUDGEMENT_DISPLAY_NAMES.miss).toBe('Miss');
+
+    expect(JUDGEMENT_UPPERCASE_NAMES.marvelous).toBe('PERFECT');
+    expect(JUDGEMENT_UPPERCASE_NAMES.perfect).toBe('GREAT');
+    expect(JUDGEMENT_UPPERCASE_NAMES.great).toBe('GOOD');
+    expect(JUDGEMENT_UPPERCASE_NAMES.good).toBe('OK');
+    expect(JUDGEMENT_UPPERCASE_NAMES.bad).toBe('MEH');
+    expect(JUDGEMENT_UPPERCASE_NAMES.miss).toBe('MISS');
+
+    expect(getJudgementDisplayName('marvelous')).toBe('Perfect');
+    expect(getJudgementUppercaseName('marvelous')).toBe('PERFECT');
+    expect(getJudgementDisplayName('bad')).toBe('Meh');
+    expect(getJudgementUppercaseName('bad')).toBe('MEH');
   });
 });
 

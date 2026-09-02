@@ -11,4 +11,5 @@
  */
 
 export * from './judgementTiming';
+export * from './judgements';
 export * from './scoreProcessor';

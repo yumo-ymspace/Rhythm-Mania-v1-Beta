@@ -728,7 +728,7 @@ export default function GameplayCanvas({
     return [
       {
         type: 'marvelous',
-        name: 'MARVELOUS',
+        name: 'PERFECT',
         windowMs: lazerWindowMs(od, 22.4, 19.4, 13.9, difficultyMultiplier),
         baseScore: ACCURACY_BASE_SCORE.marvelous,
         hpDelta: 3,
@@ -737,7 +737,7 @@ export default function GameplayCanvas({
       },
       {
         type: 'perfect',
-        name: 'PERFECT',
+        name: 'GREAT',
         windowMs: lazerWindowMs(od, 64, 49, 34, difficultyMultiplier),
         baseScore: ACCURACY_BASE_SCORE.perfect,
         hpDelta: 2,
@@ -746,7 +746,7 @@ export default function GameplayCanvas({
       },
       {
         type: 'great',
-        name: 'GREAT',
+        name: 'GOOD',
         windowMs: lazerWindowMs(od, 97, 82, 67, difficultyMultiplier),
         baseScore: ACCURACY_BASE_SCORE.great,
         hpDelta: 1,
@@ -755,7 +755,7 @@ export default function GameplayCanvas({
       },
       {
         type: 'good',
-        name: 'GOOD',
+        name: 'OK',
         windowMs: lazerWindowMs(od, 127, 112, 97, difficultyMultiplier),
         baseScore: ACCURACY_BASE_SCORE.good,
         hpDelta: 0.2,
@@ -764,7 +764,7 @@ export default function GameplayCanvas({
       },
       {
         type: 'bad',
-        name: 'BAD',
+        name: 'MEH',
         windowMs: lazerWindowMs(od, 151, 136, 121, difficultyMultiplier),
         baseScore: ACCURACY_BASE_SCORE.bad,
         hpDelta: -3,
