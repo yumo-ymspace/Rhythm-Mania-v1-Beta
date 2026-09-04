@@ -108,8 +108,6 @@ import {
   isSkipWindowActive,
 } from '../utils/introSkip';
 
-const COUNTDOWN_DURATION_MS = 2100;
-
 export function checkNotesAutonomousMisses(
   notes: HitObject[],
   currentTime: number,
@@ -462,8 +460,8 @@ export default function GameplayCanvas({
         setIsFocusMode((prevActive) => {
           if (prevActive) {
             // Leaving fullscreen before the player starts must not create a
-            // pause state underneath the pre-play screen or during active countdowns.
-            if (isPrePlayRef.current || showCountdownRef.current > 0 || unpauseCountdownRef.current > 0) return false;
+            // pause state underneath the pre-play screen or during unpause countdown.
+            if (isPrePlayRef.current || unpauseCountdownRef.current > 0) return false;
             // Trigger pause because user exited native fullscreen externally
             setIsPaused(true);
             isPlayingRef.current = false;
@@ -604,7 +602,6 @@ export default function GameplayCanvas({
   const [uiJudgement, setUiJudgement] = useState<{ text: string; color: string; time: number } | null>(null);
   const [comboBurst, setComboBurst] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [showCountdown, setShowCountdown] = useState<number>(0);
   const [unpauseCountdown, setUnpauseCountdown] = useState<number>(0);
   const [isFailed, setIsFailed] = useState<boolean>(false);
 
@@ -624,7 +621,6 @@ export default function GameplayCanvas({
   const fpsLabelRef = useRef<HTMLSpanElement>(null);
   const fpsFramesRef = useRef<number>(0);
   const fpsLastSampleRef = useRef<number>(0);
-  const countdownStartTimeRef = useRef<number | null>(null);
   const isReplayMode = !!replayRecord;
   const isAutoplay = !isReplayMode && ((settings.selectedMods || []).includes('AT') || (settings.selectedMods || []).includes('CN'));
   const isCinema = !isReplayMode && (settings.selectedMods || []).includes('CN');
@@ -634,12 +630,10 @@ export default function GameplayCanvas({
   const finishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uiJudgementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const comboBurstTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unpauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef<boolean>(true);
   const isPausedRef = useRef<boolean>(false);
-  const showCountdownRef = useRef<number>(0);
   const unpauseCountdownRef = useRef<number>(0);
   const showSettingsModalRef = useRef<boolean>(false);
   const showInfoModalRef = useRef<boolean>(false);
@@ -649,7 +643,6 @@ export default function GameplayCanvas({
   const skipVisibleRef = useRef<boolean>(false);
 
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
-  useEffect(() => { showCountdownRef.current = showCountdown; }, [showCountdown]);
   useEffect(() => { unpauseCountdownRef.current = unpauseCountdown; }, [unpauseCountdown]);
   useEffect(() => { hasSkippedIntroRef.current = hasSkippedIntro; }, [hasSkippedIntro]);
   useEffect(() => { skipVisibleRef.current = isSkipVisible; }, [isSkipVisible]);
@@ -1051,7 +1044,6 @@ export default function GameplayCanvas({
     if (!introSkippable) return false;
     if (isPausedRef.current) return false;
     if (scoreStateRef.current.failed) return false;
-    if (showCountdownRef.current > 0) return false;
     const currentTime = audioTimeRef.current;
     if (!canPerformSkip(currentTime, firstNoteTime, false, INTRO_SKIP_THRESHOLD_MS)) return false;
 
@@ -1107,32 +1099,6 @@ export default function GameplayCanvas({
     return true;
   }, [beatmap.bpm, beatmap.keyCount, firstNoteTime, introSkippable, isAutoplay, isReplayMode, skipTargetMs]);
 
-  // Handle countdown intervals
-  useEffect(() => {
-    if (showCountdown > 0) {
-      if (showCountdown === 3) countdownStartTimeRef.current = performance.now();
-      const timer = setTimeout(() => {
-        countdownTimeoutRef.current = null;
-        setShowCountdown(prev => {
-          if (prev === 1) {
-            audioStartPendingRef.current = true;
-            void mainAudio.playAsync(beatmap.bpm, settings.audioOffset, startDelayMs).then(() => {
-              audioStartPendingRef.current = false;
-              isPlayingRef.current = true;
-              audioTimeRef.current = mainAudio.getCurrentTimeMs();
-              snapVideoToAudio(audioTimeRef.current, true);
-            }).catch(() => {
-              audioStartPendingRef.current = false;
-            });
-          }
-          return prev - 1;
-        });
-      }, 700);
-      countdownTimeoutRef.current = timer;
-      return () => clearTimeout(timer);
-    }
-  }, [showCountdown, beatmap.bpm, settings.audioOffset, startDelayMs]);
-
   useEffect(() => {
     if (unpauseCountdown > 0) {
       const timer = setTimeout(() => {
@@ -1170,7 +1136,7 @@ export default function GameplayCanvas({
     
     // Refcounted lane press so keyboard + touch on the same column do not fight.
     const virtualKeyDown = (colIndex: number) => {
-      if (isPrePlayRef.current || showCountdownRef.current > 0 || isPausedRef.current || scoreStateRef.current.failed || isAutoplay) return;
+      if (isPrePlayRef.current || isPausedRef.current || scoreStateRef.current.failed || isAutoplay) return;
       if (colIndex < 0 || colIndex >= keyCount) return;
 
       const counts = lanePressCountRef.current;
@@ -1197,7 +1163,7 @@ export default function GameplayCanvas({
     };
 
     const virtualKeyUp = (colIndex: number) => {
-      if (isPrePlayRef.current || showCountdownRef.current > 0 || isPausedRef.current || scoreStateRef.current.failed || isAutoplay) return;
+      if (isPrePlayRef.current || isPausedRef.current || scoreStateRef.current.failed || isAutoplay) return;
       if (colIndex < 0 || colIndex >= keyCount) return;
 
       const counts = lanePressCountRef.current;
@@ -1251,7 +1217,7 @@ export default function GameplayCanvas({
 
       if (isPauseTrigger) {
         e.preventDefault();
-        if (showCountdownRef.current > 0 || unpauseCountdownRef.current > 0) {
+        if (unpauseCountdownRef.current > 0) {
           return; // Ignore / disable Escape and pause key during active countdowns
         }
         if (isFocusModeRef.current) {
@@ -1267,8 +1233,8 @@ export default function GameplayCanvas({
         const skipKey = ((currentSettings as unknown as Record<string, string>).bindSkipIntro || 'enter').toLowerCase();
         const pressed = e.key.toLowerCase();
         const code = (e.code || '').toLowerCase();
-        const isSkipKey = pressed === skipKey || code === skipKey || (skipKey === 'enter' && (pressed === 'enter' || code === 'enter' || code === 'numpadenter'));
-        if (isSkipKey && introSkippable && !hasSkippedIntroRef.current && showCountdownRef.current === 0) {
+        const isSkipKey = pressed === skipKey || code === skipKey || (skipKey === 'enter' && (pressed === 'enter' || code === 'enter' || code === 'numpadenter')) || pressed === ' ' || code === 'space';
+        if (isSkipKey && introSkippable && !hasSkippedIntroRef.current) {
           if (performIntroSkip()) {
             e.preventDefault();
             return;
@@ -1302,7 +1268,7 @@ export default function GameplayCanvas({
 
     // On focus restore after blur/pause, drop stale press counts so holds do not stick forever
     const reconcileInputOnFocus = () => {
-      if (isPausedRef.current || showCountdownRef.current > 0 || unpauseCountdownRef.current > 0) return;
+      if (isPausedRef.current || unpauseCountdownRef.current > 0) return;
       lanePressCountRef.current.fill(0);
       for (let i = 0; i < keyCount; i++) {
         if (keysPressedRef.current[i]) {
@@ -2020,15 +1986,8 @@ export default function GameplayCanvas({
         songTime = audioTimeRef.current;
       } else {
         const offsetDiff = currentSettings.audioOffset - smoothOffsetRef.current;
-
-        if ((showCountdown > 0 || audioStartPendingRef.current) && countdownStartTimeRef.current !== null) {
-          const elapsed = performance.now() - countdownStartTimeRef.current;
-          songTime = -startDelayMs - COUNTDOWN_DURATION_MS + Math.min(elapsed, COUNTDOWN_DURATION_MS);
-        } else {
-          const rawSongTime = mainAudio.getCurrentTimeMs();
-          songTime = rawSongTime + offsetDiff;
-        }
-
+        const rawSongTime = mainAudio.getCurrentTimeMs();
+        songTime = rawSongTime + offsetDiff;
         audioTimeRef.current = songTime;
       }
 
@@ -2060,7 +2019,7 @@ export default function GameplayCanvas({
       }
 
       if (introSkippable && !hasSkippedIntroRef.current && !isPrePlayRef.current) {
-        const shouldShow = !isPausedRef.current && !scoreStateRef.current.failed && showCountdownRef.current === 0 && isSkipWindowActive(songTime, firstNoteTime, false, INTRO_SKIP_THRESHOLD_MS);
+        const shouldShow = !isPausedRef.current && !scoreStateRef.current.failed && isSkipWindowActive(songTime, firstNoteTime, false, INTRO_SKIP_THRESHOLD_MS);
         if (shouldShow !== skipVisibleRef.current) {
           skipVisibleRef.current = shouldShow;
           setIsSkipVisible(shouldShow);
@@ -2163,7 +2122,7 @@ export default function GameplayCanvas({
         }
       }
 
-      if (isPlayingRef.current && !isPaused && showCountdown === 0 && unpauseCountdown === 0) {
+      if (isPlayingRef.current && !isPaused && unpauseCountdown === 0) {
         if (isAutoplay) {
           const dueEvents: { type: 'head' | 'tail'; note: HitObject; eventTime: number }[] = [];
 
@@ -2497,14 +2456,14 @@ export default function GameplayCanvas({
         }, 1200);
       }
 
-      if ((isPlayingRef.current && !isPaused) || audioStartPendingRef.current || showCountdown > 0 || unpauseCountdown > 0) {
+      if ((isPlayingRef.current && !isPaused) || audioStartPendingRef.current || unpauseCountdown > 0) {
         requestId = requestAnimationFrame(render);
         animationFrameRef.current = requestId;
       }
     };
 
     // Begin looping
-    if ((isPlayingRef.current && !isPaused) || audioStartPendingRef.current || showCountdown > 0 || unpauseCountdown > 0) {
+    if ((isPlayingRef.current && !isPaused) || audioStartPendingRef.current || unpauseCountdown > 0) {
       requestId = requestAnimationFrame(render);
       animationFrameRef.current = requestId;
     } else {
@@ -2518,11 +2477,11 @@ export default function GameplayCanvas({
       }
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, [beatmap, settings.renderEngine, isPaused, isPrePlay, showCountdown, unpauseCountdown]);
+  }, [beatmap, settings.renderEngine, isPaused, isPrePlay, unpauseCountdown]);
 
   // Pause / Resume Handlers
   const pauseGameplay = () => {
-    if (showCountdownRef.current > 0 || unpauseCountdownRef.current > 0 || scoreStateRef.current.failed) return;
+    if (unpauseCountdownRef.current > 0 || scoreStateRef.current.failed) return;
     setUnpauseCountdown(0);
     if (isPausedRef.current) return;
     setIsPaused(true);
@@ -2557,10 +2516,10 @@ export default function GameplayCanvas({
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [isPaused, showCountdown]);
+  }, [isPaused]);
 
   const togglePause = () => {
-    if (showCountdownRef.current > 0 || unpauseCountdownRef.current > 0 || scoreStateRef.current.failed) return;
+    if (unpauseCountdownRef.current > 0 || scoreStateRef.current.failed) return;
 
     if (isPausedRef.current) {
       if (isReplayMode || isAutoplay) {
@@ -3147,19 +3106,15 @@ export default function GameplayCanvas({
     setIsPaused(false);
     isPausedRef.current = false;
     setIsPrePlay(false);
-    if (isReplayMode || isAutoplay) {
-      audioStartPendingRef.current = true;
-      void mainAudio.playAsync(beatmap.bpm, settings.audioOffset, startDelayMs).then(() => {
-        audioStartPendingRef.current = false;
-        isPlayingRef.current = true;
-        audioTimeRef.current = mainAudio.getCurrentTimeMs();
-        snapVideoToAudio(audioTimeRef.current, true);
-      }).catch(() => {
-        audioStartPendingRef.current = false;
-      });
-    } else {
-      setShowCountdown(3);
-    }
+    audioStartPendingRef.current = true;
+    void mainAudio.playAsync(beatmap.bpm, settings.audioOffset, startDelayMs).then(() => {
+      audioStartPendingRef.current = false;
+      isPlayingRef.current = true;
+      audioTimeRef.current = mainAudio.getCurrentTimeMs();
+      snapVideoToAudio(audioTimeRef.current, true);
+    }).catch(() => {
+      audioStartPendingRef.current = false;
+    });
   };
 
   // Handle keys in PrePlay
@@ -3725,9 +3680,9 @@ export default function GameplayCanvas({
             {/* Pause button */}
             <button
               onClick={togglePause}
-              disabled={showCountdown > 0 || unpauseCountdown > 0}
+              disabled={unpauseCountdown > 0}
               className={`flex items-center justify-center p-2.5 bg-slate-900/80 hover:bg-slate-800/80 text-slate-400 hover:text-white rounded-xl border border-white/5 transition active:scale-95 cursor-pointer shadow-lg ${
-                showCountdown > 0 || unpauseCountdown > 0 ? 'opacity-50 pointer-events-none' : ''
+                unpauseCountdown > 0 ? 'opacity-50 pointer-events-none' : ''
               }`}
               title={isPaused ? "Resume" : "Pause"}
             >
@@ -3741,17 +3696,6 @@ export default function GameplayCanvas({
                 <span>REPLAY</span>
               </div>
             )}
-          </div>
-        )}
-
-        {!isReplayMode && !isAutoplay && showCountdown > 0 && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#050508]/85 pointer-events-none select-none animate-fade-in font-sans">
-            <div className="text-4xl md:text-5xl font-black text-white tracking-widest uppercase mb-4 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] animate-pulse">
-              Get Ready...
-            </div>
-            <div className="text-6xl md:text-8xl font-black text-cyan-400 drop-shadow-[0_4px_16px_rgba(34,211,238,0.5)]">
-              {showCountdown}
-            </div>
           </div>
         )}
 
@@ -3951,9 +3895,10 @@ export default function GameplayCanvas({
         {isSkipVisible && !isPrePlay && (
           <button
             type="button"
+            id="skip-intro-btn"
             onClick={performIntroSkip}
             aria-label="Skip intro"
-            className="absolute right-4 sm:right-6 bottom-[max(4.5rem,calc(3.5rem+env(safe-area-inset-bottom,0px)))] z-30 flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/85 px-4 py-2 font-mono text-xs font-black uppercase tracking-widest text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:border-cyan-400/40 hover:bg-slate-800 hover:text-cyan-200 active:scale-95"
+            className="absolute right-4 sm:right-6 bottom-[max(4.5rem,calc(3.5rem+env(safe-area-inset-bottom,0px)))] z-30 flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/85 px-4 py-2 font-mono text-xs font-black uppercase tracking-widest text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:border-cyan-400/40 hover:bg-slate-800 hover:text-cyan-200 active:scale-95 cursor-pointer"
           >
             <span>Skip</span>
             <span className="text-[10px] leading-none opacity-70">{(((settings as unknown as Record<string, string>).bindSkipIntro || 'enter') === ' ' ? 'Space' : ((settings as unknown as Record<string, string>).bindSkipIntro || 'enter').toUpperCase())}</span>

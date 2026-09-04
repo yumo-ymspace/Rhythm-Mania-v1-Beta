@@ -742,7 +742,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-041** | Remove “Get Ready” countdown; lazer-style lead-in + skip intro | `GameplayCanvas.tsx`, `introSkip.ts` | Playwright skip button |
+| **TASK-041** | Remove “Get Ready” countdown; lazer-style lead-in + skip intro **(done)** | `GameplayCanvas.tsx`, `introSkip.ts` | Playwright skip button |
 | **TASK-042** | Lock scroll speed during play; F3/F4 or Ctrl± on song select | settings, SongSelect, GameplayCanvas | cannot change mid-map |
 | **TASK-043** | Pause overlay (Continue / Retry / Exit) Argon-like | new overlay | Playwright pause vs ref |
 | **TASK-044** | Fail overlay | new overlay | Playwright |
