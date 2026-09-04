@@ -12,6 +12,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, RotateCcw, ShieldAlert, Maximize, Settings, Info, Home, Sliders, X } from 'lucide-react';
+import PauseOverlay from './PauseOverlay';
 import { mainAudio } from '../audio/AudioEngine';
 import { previewPlayer } from '../utils/previewPlayer';
 import { Beatmap, GameSettings, HitObject, JudgementType, JudgementWindow, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
@@ -623,6 +624,7 @@ export default function GameplayCanvas({
   const [comboBurst, setComboBurst] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [unpauseCountdown, setUnpauseCountdown] = useState<number>(0);
+  const [retryCount, setRetryCount] = useState<number>(0);
   const [isFailed, setIsFailed] = useState<boolean>(false);
 
   // Active inputs trace (boolean edge + refcount for multi-source keyboard/touch)
@@ -1245,7 +1247,7 @@ export default function GameplayCanvas({
         if (unpauseCountdownRef.current > 0) {
           return; // Ignore / disable Escape and pause key during active countdowns
         }
-        if (isFocusModeRef.current) {
+        if (!isPausedRef.current && isFocusModeRef.current) {
           // Programmatically exit focus mode which triggers the fullscreen change listener to exit and pause
           FullscreenManager.exitFocusMode();
         } else {
@@ -3106,6 +3108,7 @@ export default function GameplayCanvas({
   };
 
   const restartMap = () => {
+    setRetryCount(prev => prev + 1);
     if (finishTimeoutRef.current) {
       clearTimeout(finishTimeoutRef.current);
       finishTimeoutRef.current = null;
@@ -3700,7 +3703,7 @@ export default function GameplayCanvas({
         )}
 
         {/* TOP STATUS BAR: DYNAMIC HIGH-CONTRAST FLOATING CONTROLS (z-40 overlay) */}
-        {!isPrePlay && (
+        {!isPrePlay && !isPaused && (
           <div className="absolute top-5 left-6 z-40 flex items-center gap-2 pointer-events-auto select-none">
             {/* Quit/Exit button */}
             <button
@@ -4165,39 +4168,24 @@ export default function GameplayCanvas({
             </div>
           )}
 
-          {/* PAUSED DRAWER CARD */}
-          {!isPrePlay && isPaused && unpauseCountdown === 0 && (
-            <div id="game-paused-overlay" className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-              <h2 className="text-4xl font-extrabold font-sans tracking-tight text-slate-100 mb-2">GAME PAUSED</h2>
-              <p className="text-sm text-slate-400 font-mono tracking-wider mb-8">
-                {beatmap.title} // Mapped by {beatmap.creator}
-              </p>
-              
-              <div className="flex flex-col gap-3 w-48">
-                <button
-                  id="pause-resume-btn"
-                  onClick={togglePause}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-sans text-sm font-extrabold rounded-xl transition hover:scale-102 cursor-pointer"
-                >
-                  <Play className="h-4 w-4 fill-current" /> Resume Game
-                </button>
-                <button
-                  id="pause-retry-btn"
-                  onClick={restartMap}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 font-sans text-sm font-bold rounded-xl border border-slate-850 transition hover:scale-102 cursor-pointer"
-                >
-                  <RotateCcw className="h-4 w-4" /> Restart Track
-                </button>
-                <button
-                  id="pause-quit-btn"
-                  onClick={handleExit}
-                  className="w-full px-5 py-2.5 bg-slate-950 hover:bg-red-950/40 text-slate-400 hover:text-red-400 font-sans text-sm font-bold rounded-xl border border-slate-900 hover:border-red-900/40 transition cursor-pointer"
-                >
-                  Quit Match
-                </button>
-              </div>
-            </div>
-          )}
+          {/* ARGON PAUSE OVERLAY */}
+          <PauseOverlay
+            isOpen={!isPrePlay && isPaused && unpauseCountdown === 0}
+            onResume={togglePause}
+            onRetry={restartMap}
+            onExit={handleExit}
+            retryCount={retryCount}
+            songProgressPercent={
+              beatmap.duration && beatmap.duration > 0
+                ? Math.min(100, Math.max(0, ((audioTimeRef.current || 0) / (beatmap.duration * 1000)) * 100))
+                : 0
+            }
+            accuracyPercent={scoreStateRef.current.accuracy}
+            beatmapTitle={beatmap.title}
+            beatmapArtist={beatmap.artist}
+            beatmapVersion={beatmap.difficulty}
+            mods={settings.selectedMods}
+          />
         </div>
       </div>
     </div>

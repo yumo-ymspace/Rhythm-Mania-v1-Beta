@@ -23,8 +23,13 @@ Sources (retrieved 2026-08-30):
 
 ## Comparison checklist (TASK-043–044)
 
-- [ ] Esc opens this overlay; no on-canvas pause toast cluster
-- [ ] Continue / Retry / Exit (fail: Retry / Exit only)
-- [ ] Dimmed playfield, not a separate opaque settings page
-- [ ] ~200 ms fade; respect `prefers-reduced-motion`
-- [ ] No Google/upload chrome on the overlay
+- [x] Esc opens this overlay; no on-canvas pause toast cluster (TASK-043)
+- [x] Continue / Retry / Exit (TASK-043; fail: Retry / Exit only in TASK-044)
+- [x] Dimmed playfield, not a separate opaque settings page (TASK-043)
+- [x] ~200 ms fade; respect `prefers-reduced-motion` (TASK-043)
+- [x] No Google/upload chrome on the overlay (TASK-043)
+
+Captured Playwright verification screenshots:
+- `pause-overlay-1280x720.png` (Desktop 1280×720)
+- `pause-overlay-390x844.png` (Mobile 390×844)
+
