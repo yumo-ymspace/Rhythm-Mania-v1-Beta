@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, RotateCcw, ShieldAlert, Maximize, Settings, Info, Home, Sliders, X } from 'lucide-react';
+import { Play, Pause, Maximize, Settings, Info, Home, Sliders, X } from 'lucide-react';
 import PauseOverlay from './PauseOverlay';
 import { mainAudio } from '../audio/AudioEngine';
 import { previewPlayer } from '../utils/previewPlayer';
@@ -3365,14 +3365,21 @@ export default function GameplayCanvas({
                       </div>
                       <input 
                         type="range" min={SCROLL_SPEED_MIN} max={SCROLL_SPEED_MAX} step="1"
-                        value={settings.scrollSpeed} 
-                        onChange={(e) => updateSettings?.({ scrollSpeed: Number(e.target.value) })}
+                        value={(!isPrePlay && settings.lockScrollSpeedDuringPlay !== false) ? lockedScrollSpeedRef.current : settings.scrollSpeed} 
+                        disabled={!isPrePlay && settings.lockScrollSpeedDuringPlay !== false}
+                        onChange={(e) => {
+                          if (!isPrePlay && settings.lockScrollSpeedDuringPlay !== false) return;
+                          updateSettings?.({ scrollSpeed: Number(e.target.value) });
+                        }}
                         onMouseDown={(e) => e.stopPropagation()}
                         onTouchStart={(e) => e.stopPropagation()}
                         onTouchMove={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
-                        className="w-full accent-cyan-400 h-1 bg-slate-800 rounded-lg cursor-pointer"
+                        className={`w-full accent-cyan-400 h-1 bg-slate-800 rounded-lg ${(!isPrePlay && settings.lockScrollSpeedDuringPlay !== false) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       />
+                      {!isPrePlay && settings.lockScrollSpeedDuringPlay !== false && (
+                        <p className="text-[10px] text-amber-400/80 font-mono uppercase tracking-wider">Locked mid-map</p>
+                      )}
                     </div>
                   )}
 
@@ -3703,7 +3710,7 @@ export default function GameplayCanvas({
         )}
 
         {/* TOP STATUS BAR: DYNAMIC HIGH-CONTRAST FLOATING CONTROLS (z-40 overlay) */}
-        {!isPrePlay && !isPaused && (
+        {!isPrePlay && !isPaused && !isFailed && (
           <div className="absolute top-5 left-6 z-40 flex items-center gap-2 pointer-events-auto select-none">
             {/* Quit/Exit button */}
             <button
@@ -3938,7 +3945,7 @@ export default function GameplayCanvas({
           style={{ display: 'none' }}
         />
 
-        {isSkipVisible && !isPrePlay && (
+        {isSkipVisible && !isPrePlay && !isFailed && !isPaused && (
           <button
             type="button"
             id="skip-intro-btn"
@@ -4138,39 +4145,29 @@ export default function GameplayCanvas({
             </div>
           </div>
           
-          {/* FAIL CARD OVERLAY */}
-          {(isFailed || scoreStateRef.current.failed) && (
-            <div id="game-fail-overlay" className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-sm">
-              <div className="relative flex items-center justify-center p-4 bg-red-950/40 rounded-full border border-red-500/30 mb-6 font-mono">
-                <ShieldAlert className="h-14 w-14 text-rose-500 animate-bounce" />
-              </div>
-              <h2 className="text-3xl font-black font-sans tracking-tight text-rose-500 mb-2">TRACK FAILED</h2>
-              <p className="text-sm text-slate-400 font-mono tracking-wide max-w-xs text-center mb-8">
-                Your HP fell to 0. Set scroll speed lower or calibrate timing offset in settings.
-              </p>
-              
-              <div className="flex gap-4">
-                <button
-                  id="fail-retry-btn"
-                  onClick={restartMap}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-sans text-sm font-bold rounded-xl border border-rose-500 shadow-lg shadow-rose-600/30 transition hover:scale-105 cursor-pointer"
-                >
-                  <RotateCcw className="h-4 w-4" /> Retry Song
-                </button>
-                <button
-                  id="fail-quit-btn"
-                  onClick={handleExit}
-                  className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 font-sans text-sm font-bold rounded-xl border border-slate-800 transition hover:scale-105 cursor-pointer"
-                >
-                  Back to Select
-                </button>
-              </div>
-            </div>
-          )}
+          {/* ARGON FAIL OVERLAY — same container as pause, without Continue */}
+          <PauseOverlay
+            mode="fail"
+            isOpen={!isPrePlay && isFailed}
+            onRetry={restartMap}
+            onExit={handleExit}
+            retryCount={retryCount}
+            songProgressPercent={
+              beatmap.duration && beatmap.duration > 0
+                ? Math.min(100, Math.max(0, ((audioTimeRef.current || 0) / (beatmap.duration * 1000)) * 100))
+                : 0
+            }
+            accuracyPercent={scoreStateRef.current.accuracy}
+            beatmapTitle={beatmap.title}
+            beatmapArtist={beatmap.artist}
+            beatmapVersion={beatmap.difficulty}
+            mods={settings.selectedMods}
+          />
 
           {/* ARGON PAUSE OVERLAY */}
           <PauseOverlay
-            isOpen={!isPrePlay && isPaused && unpauseCountdown === 0}
+            mode="pause"
+            isOpen={!isPrePlay && isPaused && unpauseCountdown === 0 && !isFailed}
             onResume={togglePause}
             onRetry={restartMap}
             onExit={handleExit}

@@ -13,9 +13,13 @@
 import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
+export type GameplayMenuMode = 'pause' | 'fail';
+
 export interface PauseOverlayProps {
   isOpen: boolean;
-  onResume: () => void;
+  /** Pause shows Continue; fail is the same overlay without OnResume. */
+  mode?: GameplayMenuMode;
+  onResume?: () => void;
   onRetry: () => void;
   onExit: () => void;
   retryCount?: number;
@@ -29,6 +33,7 @@ export interface PauseOverlayProps {
 
 export default function PauseOverlay({
   isOpen,
+  mode = 'pause',
   onResume,
   onRetry,
   onExit,
@@ -40,6 +45,8 @@ export default function PauseOverlay({
   beatmapVersion,
   mods = [],
 }: PauseOverlayProps) {
+  const isFail = mode === 'fail';
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -50,7 +57,9 @@ export default function PauseOverlay({
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        onResume();
+        // PauseOverlay Back/Esc → first button (Continue). FailOverlay Back → last button (Quit).
+        if (isFail) onExit();
+        else onResume?.();
       } else if (e.key.toLowerCase() === 'r') {
         e.preventDefault();
         e.stopPropagation();
@@ -62,7 +71,7 @@ export default function PauseOverlay({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
-  }, [isOpen, onResume, onRetry]);
+  }, [isOpen, isFail, onResume, onRetry, onExit]);
 
   const prefersReducedMotion =
     typeof window !== 'undefined' &&
@@ -72,10 +81,10 @@ export default function PauseOverlay({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          id="game-paused-overlay"
+          id={isFail ? 'game-fail-overlay' : 'game-paused-overlay'}
           role="dialog"
           aria-modal="true"
-          aria-label="Game paused"
+          aria-label={isFail ? 'Track failed' : 'Game paused'}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -86,7 +95,7 @@ export default function PauseOverlay({
           {/* Header */}
           <div className="flex flex-col items-center mb-6 text-center">
             <h2 className="text-[48px] leading-tight font-black tracking-tight text-[#ffcc22] font-sans drop-shadow-[0_2px_12px_rgba(255,204,34,0.35)]">
-              paused
+              {isFail ? 'failed' : 'paused'}
             </h2>
             {(beatmapTitle || beatmapArtist) && (
               <p className="text-sm text-slate-300 font-sans font-medium mt-1 drop-shadow-sm max-w-lg truncate px-4">
@@ -114,29 +123,28 @@ export default function PauseOverlay({
 
           {/* Action Buttons Stack (Argon layout: height 80, horizontal padding 50, 2px gap) */}
           <div className="w-full max-w-[440px] flex flex-col gap-[2px]">
-            {/* 1. Continue (Green / OnResume) */}
-            <button
-              id="pause-resume-btn"
-              type="button"
-              onClick={onResume}
-              className="h-[80px] px-[50px] w-full flex items-center justify-center bg-[#26aa55] hover:bg-[#2ec564] active:bg-[#209449] text-white font-sans font-black text-2xl tracking-wide rounded-t-xl transition-all duration-150 border-t border-white/20 hover:shadow-[0_0_24px_rgba(46,197,100,0.4)] active:scale-[0.99] cursor-pointer"
-            >
-              Continue
-            </button>
+            {!isFail && onResume && (
+              <button
+                id="pause-resume-btn"
+                type="button"
+                onClick={onResume}
+                className="h-[80px] px-[50px] w-full flex items-center justify-center bg-[#26aa55] hover:bg-[#2ec564] active:bg-[#209449] text-white font-sans font-black text-2xl tracking-wide rounded-t-xl transition-all duration-150 border-t border-white/20 hover:shadow-[0_0_24px_rgba(46,197,100,0.4)] active:scale-[0.99] cursor-pointer"
+              >
+                Continue
+              </button>
+            )}
 
-            {/* 2. Retry (Dark yellow / OnRetry) */}
             <button
-              id="pause-retry-btn"
+              id={isFail ? 'fail-retry-btn' : 'pause-retry-btn'}
               type="button"
               onClick={onRetry}
-              className="h-[80px] px-[50px] w-full flex items-center justify-center bg-[#e59900] hover:bg-[#f5a623] active:bg-[#cc8800] text-white font-sans font-black text-2xl tracking-wide transition-all duration-150 border-t border-white/20 hover:shadow-[0_0_24px_rgba(245,166,35,0.4)] active:scale-[0.99] cursor-pointer"
+              className={`h-[80px] px-[50px] w-full flex items-center justify-center bg-[#e59900] hover:bg-[#f5a623] active:bg-[#cc8800] text-white font-sans font-black text-2xl tracking-wide transition-all duration-150 border-t border-white/20 hover:shadow-[0_0_24px_rgba(245,166,35,0.4)] active:scale-[0.99] cursor-pointer ${isFail ? 'rounded-t-xl' : ''}`}
             >
               Retry
             </button>
 
-            {/* 3. Quit / Exit (rgb(170, 27, 39) / OnExit) */}
             <button
-              id="pause-quit-btn"
+              id={isFail ? 'fail-quit-btn' : 'pause-quit-btn'}
               type="button"
               onClick={onExit}
               className="h-[80px] px-[50px] w-full flex items-center justify-center bg-[#aa1b27] hover:bg-[#c42533] active:bg-[#8f1620] text-white font-sans font-black text-2xl tracking-wide rounded-b-xl transition-all duration-150 border-t border-white/20 hover:shadow-[0_0_24px_rgba(170,27,39,0.45)] active:scale-[0.99] cursor-pointer"

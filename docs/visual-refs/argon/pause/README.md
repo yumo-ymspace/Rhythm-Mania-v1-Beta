@@ -28,8 +28,13 @@ Sources (retrieved 2026-08-30):
 - [x] Dimmed playfield, not a separate opaque settings page (TASK-043)
 - [x] ~200 ms fade; respect `prefers-reduced-motion` (TASK-043)
 - [x] No Google/upload chrome on the overlay (TASK-043)
+- [x] Fail header is lowercase yellow “failed”; no Continue; Retry + Quit (TASK-044)
+- [x] Fail Esc/Back triggers Quit (last button), not Continue (TASK-044)
+- [x] Fail stays on the playfield overlay instead of instantly dumping to results (TASK-044)
 
 Captured Playwright verification screenshots:
 - `pause-overlay-1280x720.png` (Desktop 1280×720)
 - `pause-overlay-390x844.png` (Mobile 390×844)
+- `fail-overlay-1280x720.png` (Desktop 1280×720, TASK-044)
+- `fail-overlay-390x844.png` (Mobile 390×844, TASK-044)
 
