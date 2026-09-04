@@ -14,7 +14,7 @@ describe('Gameplay Modifiers (TASK-034)', () => {
       expect(MOD_SCORE_MULTIPLIERS.HT).toBe(0.5);
     });
 
-    it('has 1.00x multipliers for HR, SD, PF, DT, NC, HD, FI, Cover, FL, MR, IN', () => {
+    it('has 1.00x multipliers for HR, SD, PF, DT, NC, HD, FI, Cover, FL, MR, IN, CL, DA', () => {
       expect(MOD_SCORE_MULTIPLIERS.HR).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.SD).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.PF).toBe(1.0);
@@ -26,6 +26,10 @@ describe('Gameplay Modifiers (TASK-034)', () => {
       expect(MOD_SCORE_MULTIPLIERS.FL).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.MR).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.IN).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.CL).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.Classic).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.DA).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.DifficultyAdjust).toBe(1.0);
     });
 
     it('has 0.80x multiplier for Constant Speed (CS)', () => {

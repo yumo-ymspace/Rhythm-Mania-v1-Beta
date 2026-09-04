@@ -348,6 +348,16 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     enableSongPreview: settings.enableSongPreview !== undefined ? Boolean(settings.enableSongPreview) : true,
     showFpsCounter: Boolean(settings.showFpsCounter),
     localDisplayName: sanitizeString(settings.localDisplayName, '', 32),
+    difficultyAdjust: isRecord(settings.difficultyAdjust)
+      ? {
+          overallDifficulty: settings.difficultyAdjust.overallDifficulty !== undefined
+            ? clamp(settings.difficultyAdjust.overallDifficulty, 0, 10, 8)
+            : undefined,
+          hpDrainRate: settings.difficultyAdjust.hpDrainRate !== undefined
+            ? clamp(settings.difficultyAdjust.hpDrainRate, 0, 10, 8)
+            : undefined,
+        }
+      : undefined,
   };
 }
 

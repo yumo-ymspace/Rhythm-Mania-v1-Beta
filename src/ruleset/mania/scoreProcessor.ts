@@ -108,7 +108,8 @@ export function computeModMultiplier(mods: string[] | undefined | null): number 
   if (!mods || mods.length === 0) return 1;
   let mult = 1;
   for (const modId of mods) {
-    const factor = MOD_SCORE_MULTIPLIERS[modId];
+    const key = modId.startsWith('DA:') || modId.startsWith('DA_') ? 'DA' : modId;
+    const factor = MOD_SCORE_MULTIPLIERS[key] ?? MOD_SCORE_MULTIPLIERS[modId];
     if (typeof factor === 'number') mult *= factor;
   }
   return mult;

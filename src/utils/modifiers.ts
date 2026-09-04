@@ -16,7 +16,9 @@ const BASE_MODIFIERS = new Set([
   'CS', 'CONSTANTSPEED',
   'IN', 'INVERT',
   'HO', 'HOLDOFF',
-  'NR', 'NORELEASE'
+  'NR', 'NORELEASE',
+  'DA', 'DIFFICULTYADJUST',
+  'CL', 'CLASSIC'
 ]);
  
 export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
@@ -43,6 +45,10 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   HoldOff: 0.9,
   NR: 0.9,
   NoRelease: 0.9,
+  DA: 1.0,
+  DifficultyAdjust: 1.0,
+  CL: 1.0,
+  Classic: 1.0,
   K1: 0.9,
   K2: 0.9,
   K3: 0.9,
@@ -57,6 +63,10 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
 
 const VISUAL_COVER_MODS = new Set(['HD', 'FI', 'COVER', 'CO', 'FL']);
 
+function isDifficultyAdjustPattern(upper: string): boolean {
+  return upper === 'DA' || upper === 'DIFFICULTYADJUST' || upper.startsWith('DA:') || upper.startsWith('DA_') || upper.startsWith('DIFFICULTYADJUST:') || upper.startsWith('DIFFICULTYADJUST_');
+}
+
 function normalizeModName(upper: string): string {
   if (upper === 'COVER' || upper === 'CO') return 'Cover';
   if (upper === 'MIRROR') return 'MR';
@@ -64,6 +74,10 @@ function normalizeModName(upper: string): string {
   if (upper === 'INVERT') return 'IN';
   if (upper === 'HOLDOFF') return 'HO';
   if (upper === 'NORELEASE') return 'NR';
+  if (upper === 'CLASSIC') return 'CL';
+  if (upper === 'DIFFICULTYADJUST') return 'DA';
+  if (upper.startsWith('DIFFICULTYADJUST:')) return `DA:${upper.substring(17)}`;
+  if (upper.startsWith('DIFFICULTYADJUST_')) return `DA_${upper.substring(17)}`;
   return upper;
 }
 
@@ -74,7 +88,7 @@ export function sanitizeGameplayMods(value: unknown): string[] {
   for (const raw of value) {
     if (typeof raw !== 'string') continue;
     const upper = raw.toUpperCase();
-    if (!BASE_MODIFIERS.has(upper) && !/^K(?:[1-9]|10)$/.test(upper)) continue;
+    if (!BASE_MODIFIERS.has(upper) && !isDifficultyAdjustPattern(upper) && !/^K(?:[1-9]|10)$/.test(upper)) continue;
     const mod = normalizeModName(upper);
     if (mods.includes(mod)) continue;
     if ((mod === 'EZ' && mods.includes('HR')) || (mod === 'HR' && mods.includes('EZ'))) continue;
@@ -86,6 +100,8 @@ export function sanitizeGameplayMods(value: unknown): string[] {
     if (VISUAL_COVER_MODS.has(mod.toUpperCase()) && mods.some((item) => VISUAL_COVER_MODS.has(item.toUpperCase()))) continue;
     if ((mod === 'IN' && mods.includes('HO')) || (mod === 'HO' && mods.includes('IN'))) continue;
     if ((mod === 'HO' && mods.includes('NR')) || (mod === 'NR' && mods.includes('HO'))) continue;
+    if (isDifficultyAdjustPattern(mod) && mods.some((item) => isDifficultyAdjustPattern(item))) continue;
+    if ((isDifficultyAdjustPattern(mod) && (mods.includes('EZ') || mods.includes('HR'))) || ((mod === 'EZ' || mod === 'HR') && mods.some((item) => isDifficultyAdjustPattern(item)))) continue;
     if (/^K(?:[1-9]|10)$/.test(mod) && mods.some((item) => /^K(?:[1-9]|10)$/.test(item))) continue;
     mods.push(mod);
   }

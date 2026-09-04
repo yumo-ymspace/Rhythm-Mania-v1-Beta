@@ -72,27 +72,85 @@ export function computeLazerHitWindow(
 }
 
 /**
- * Resolves full JudgementWindow list for a given overall difficulty, difficulty multiplier, and speed multiplier.
+ * osu! stable mania hit window formulas for each judgement result:
+ * - Marvelous (300g): 16 ms (fixed)
+ * - Perfect (300): 64 - 3 * OD
+ * - Great (200): 97 - 3 * OD
+ * - Good (100): 127 - 3 * OD
+ * - Bad (50): 151 - 3 * OD
+ * - Miss: 188 - 3 * OD
+ * 
+ * Source: osu! wiki (Gameplay/Judgement/osu!mania) & osu-stable reference.
+ */
+export const MANIA_STABLE_DIFFICULTY_RANGES: Record<JudgementType, (od: number) => number> = {
+  marvelous: () => 16,
+  perfect: (od: number) => 64 - 3 * od,
+  great: (od: number) => 97 - 3 * od,
+  good: (od: number) => 127 - 3 * od,
+  bad: (od: number) => 151 - 3 * od,
+  miss: (od: number) => 188 - 3 * od,
+};
+
+/**
+ * Computes hit window half-width in ms matching osu! stable (Classic mod):
+ * floor(range * totalMultiplier) + 0.5
+ * Note: Under Classic, speedMultiplier is NOT applied (no speed compensation for DT/HT),
+ * so totalMultiplier = 1 / difficultyMultiplier.
+ */
+export function computeStableHitWindow(
+  type: JudgementType,
+  od: number,
+  difficultyMultiplier: number = 1,
+): number {
+  const base = MANIA_STABLE_DIFFICULTY_RANGES[type](od);
+  const totalMultiplier = 1 / difficultyMultiplier;
+  return Math.floor(base * totalMultiplier) + 0.5;
+}
+
+/**
+ * Resolves full JudgementWindow list for a given overall difficulty, difficulty multiplier, speed multiplier, and classic mode flag.
+ * When isClassic is true, stable hit window formulas are used and speedMultiplier compensation is suppressed (speedMultiplier = 1).
  */
 export function getJudgementWindows(
   od: number,
   difficultyMultiplier: number = 1,
   speedMultiplier: number = 1,
+  isClassic: boolean = false,
 ): JudgementWindow[] {
   const types: JudgementType[] = ['marvelous', 'perfect', 'great', 'good', 'bad', 'miss'];
+  // Under Classic, hit windows do not scale with track rate (no speed compensation)
+  const effectiveSpeedMultiplier = isClassic ? 1 : speedMultiplier;
+
   return types.map((type) => {
-    const range = MANIA_DIFFICULTY_RANGES[type];
     const { color, glowColor } = JUDGEMENT_COLORS[type];
+    let windowMs: number;
+    if (isClassic) {
+      const base = MANIA_STABLE_DIFFICULTY_RANGES[type](od);
+      const totalMultiplier = effectiveSpeedMultiplier / difficultyMultiplier;
+      windowMs = Math.floor(base * totalMultiplier) + 0.5;
+    } else {
+      const range = MANIA_DIFFICULTY_RANGES[type];
+      windowMs = computeLazerHitWindow(od, range.min, range.mid, range.max, difficultyMultiplier, effectiveSpeedMultiplier);
+    }
+
     return {
       type,
       name: JUDGEMENT_UPPERCASE_NAMES[type],
-      windowMs: computeLazerHitWindow(od, range.min, range.mid, range.max, difficultyMultiplier, speedMultiplier),
+      windowMs,
       baseScore: ACCURACY_BASE_SCORE[type],
       hpDelta: DEFAULT_HP_DELTAS[type],
       color,
       glowColor,
     };
   });
+}
+
+/**
+ * Checks if the Classic (CL) mod is active in the provided mod list.
+ */
+export function isClassicMod(mods?: readonly string[] | string[] | null): boolean {
+  if (!mods || !Array.isArray(mods)) return false;
+  return mods.some((m) => m.toUpperCase() === 'CL' || m.toUpperCase() === 'CLASSIC');
 }
 
 /**

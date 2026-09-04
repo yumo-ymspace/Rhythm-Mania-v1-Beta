@@ -155,11 +155,76 @@ export function isConstantSpeedMod(mods?: string[] | null): boolean {
   return mods.some((m) => m.toUpperCase() === 'CS' || m.toUpperCase() === 'CONSTANTSPEED');
 }
 
+export interface DifficultyAdjustOptions {
+  overallDifficulty?: number;
+  hpDrainRate?: number;
+}
+
 /**
- * Master beatmap mod pipeline: applies all structural mods (Key conversion, Invert, HoldOff, Mirror)
+ * Checks if Difficulty Adjust (DA) mod is active in the provided mod list.
+ */
+export function isDifficultyAdjustMod(mods?: string[] | null): boolean {
+  if (!mods) return false;
+  return mods.some((m) => {
+    const u = m.toUpperCase();
+    return u === 'DA' || u === 'DIFFICULTYADJUST' || u.startsWith('DA:') || u.startsWith('DA_');
+  });
+}
+
+/**
+ * Parses inline Difficulty Adjust parameters from a mod string like "DA:OD=9,HP=7" or "DA_OD8".
+ */
+export function parseDifficultyAdjustModString(mod: string): DifficultyAdjustOptions | null {
+  const match = mod.match(/^DA[:_](.+)$/i);
+  if (!match) return null;
+  const parts = match[1].split(/[,_]/);
+  const options: DifficultyAdjustOptions = {};
+  for (const part of parts) {
+    const odMatch = part.match(/^OD=?([0-9]+(?:\.[0-9]+)?)$/i);
+    if (odMatch) {
+      options.overallDifficulty = parseFloat(odMatch[1]);
+    }
+    const hpMatch = part.match(/^HP=?([0-9]+(?:\.[0-9]+)?)$/i);
+    if (hpMatch) {
+      options.hpDrainRate = parseFloat(hpMatch[1]);
+    }
+  }
+  return options;
+}
+
+/**
+ * Applies the Difficulty Adjust (DA) mod to a Beatmap.
+ * Overrides overallDifficulty (0..10) and/or hpDrainRate (0..10) if specified.
+ */
+export function applyDifficultyAdjustMod(
+  beatmap: Beatmap,
+  options?: DifficultyAdjustOptions,
+): Beatmap {
+  const nextOd = options?.overallDifficulty !== undefined && Number.isFinite(options.overallDifficulty)
+    ? Math.max(0, Math.min(10, options.overallDifficulty))
+    : beatmap.overallDifficulty;
+
+  const nextHp = options?.hpDrainRate !== undefined && Number.isFinite(options.hpDrainRate)
+    ? Math.max(0, Math.min(10, options.hpDrainRate))
+    : beatmap.hpDrainRate;
+
+  return {
+    ...beatmap,
+    overallDifficulty: nextOd,
+    hpDrainRate: nextHp,
+    id: `${beatmap.id}_da`,
+  };
+}
+
+/**
+ * Master beatmap mod pipeline: applies all structural mods (Key conversion, Invert, HoldOff, Mirror, Difficulty Adjust)
  * to produce the active playable beatmap.
  */
-export function applyBeatmapMods(beatmap: Beatmap, mods: string[]): Beatmap {
+export function applyBeatmapMods(
+  beatmap: Beatmap,
+  mods: string[],
+  options?: { difficultyAdjust?: DifficultyAdjustOptions },
+): Beatmap {
   if (!mods || mods.length === 0) return beatmap;
 
   let current = beatmap;
@@ -187,6 +252,17 @@ export function applyBeatmapMods(beatmap: Beatmap, mods: string[]): Beatmap {
   const hasMirror = mods.some((m) => m.toUpperCase() === 'MR' || m.toUpperCase() === 'MIRROR');
   if (hasMirror) {
     current = applyMirrorMod(current);
+  }
+
+  // 4. Difficulty Adjust
+  const daMod = mods.find((m) => isDifficultyAdjustMod([m]));
+  if (daMod) {
+    const inlineOptions = parseDifficultyAdjustModString(daMod);
+    const combinedOptions: DifficultyAdjustOptions = {
+      overallDifficulty: inlineOptions?.overallDifficulty ?? options?.difficultyAdjust?.overallDifficulty,
+      hpDrainRate: inlineOptions?.hpDrainRate ?? options?.difficultyAdjust?.hpDrainRate,
+    };
+    current = applyDifficultyAdjustMod(current, combinedOptions);
   }
 
   return current;

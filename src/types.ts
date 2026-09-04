@@ -260,6 +260,11 @@ export interface KeyBindings {
   [keys: number]: string[]; // maps column counts (1..10) to key arrays (e.g. ['d', 'f', 'j', 'k'])
 }
 
+export interface DifficultyAdjustSettings {
+  overallDifficulty?: number; // 0..10
+  hpDrainRate?: number; // 0..10
+}
+
 export interface GameSettings {
   scrollSpeed: number; // multiplier or speed factor (e.g., 20)
   audioOffset: number; // in milliseconds (positive means audio is delayed)
@@ -306,6 +311,7 @@ export interface GameSettings {
   enableSongPreview?: boolean; // play an audio preview of the selected map on Song Select
   showFpsCounter?: boolean; // render a small FPS readout during gameplay
   localDisplayName?: string; // optional device-local player name; not an account
+  difficultyAdjust?: DifficultyAdjustSettings; // Difficulty Adjust (DA) mod overrides
 }
 
 export type GameScreen = 'menu' | 'select' | 'play' | 'results' | 'settings' | 'skins' | 'calibrate' | 'history';

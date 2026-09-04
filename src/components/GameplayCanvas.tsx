@@ -26,6 +26,7 @@ import {
   getJudgementWindows,
   getSpeedMultiplier,
   HoldNoteState,
+  isClassicMod,
   isConstantSpeedMod,
   isHoldGraceActive,
   isNoReleaseMod,
@@ -781,12 +782,15 @@ export default function GameplayCanvas({
   }, [settings.renderEngine, settings.limitDprToOne, beatmap.keyCount, isAudioLoaded]);
 
   // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD; DT/HT/NC/DC scale song-time hit-windows with clock rate.
+  // Classic mod restores stable-style hit windows without speed compensation.
+  const isClassic = isClassicMod(settings.selectedMods);
   const windowDifficultyMultiplier = getDifficultyMultiplier(settings.selectedMods);
-  const windowSpeedMultiplier = getSpeedMultiplier(settings.selectedMods);
+  const windowSpeedMultiplier = isClassic ? 1.0 : getSpeedMultiplier(settings.selectedMods);
   const judgementWindows = getJudgementWindows(
     beatmap.overallDifficulty,
     windowDifficultyMultiplier,
     windowSpeedMultiplier,
+    isClassic,
   );
   const marvelousJudg = judgementWindows.find(w => w.type === 'marvelous') || judgementWindows[0];
   const badJudg = judgementWindows.find(w => w.type === 'bad') || judgementWindows[judgementWindows.length - 2];

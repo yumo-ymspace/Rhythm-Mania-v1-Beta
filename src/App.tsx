@@ -326,8 +326,8 @@ export default function App() {
       ? (activeReplayRecord.mods || activeReplayRecord.recordedSettings?.selectedMods || [])
       : (settings.selectedMods || []);
     
-    return applyBeatmapMods(selectedBeatmap, activeMods);
-  }, [selectedBeatmap, settings.selectedMods, activeReplayRecord]);
+    return applyBeatmapMods(selectedBeatmap, activeMods, { difficultyAdjust: settings.difficultyAdjust });
+  }, [selectedBeatmap, settings.selectedMods, settings.difficultyAdjust, activeReplayRecord]);
 
   // Preload default backgrounds for instant, low-latency visual performance
   useEffect(() => {

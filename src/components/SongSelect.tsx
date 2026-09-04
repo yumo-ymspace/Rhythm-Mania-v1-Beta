@@ -70,7 +70,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: Sparkles,
     activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
-    exclusiveWith: ['HR', 'SD', 'PF']
+    exclusiveWith: ['HR', 'SD', 'PF', 'DA']
   },
   {
     id: 'HT',
@@ -88,7 +88,7 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: ArrowUpToLine,
     activeClass: 'bg-rose-500/25 text-rose-300 shadow-[0_8px_24px_rgba(244,63,94,0.18)]',
-    exclusiveWith: 'EZ'
+    exclusiveWith: ['EZ', 'DA']
   },
   {
     id: 'SD',
@@ -206,6 +206,24 @@ const MODIFIER_TILES = [
     icon: MousePointerClick,
     activeClass: 'bg-teal-500/25 text-teal-300 shadow-[0_8px_24px_rgba(20,184,166,0.18)]',
     exclusiveWith: ['HO']
+  },
+  {
+    id: 'CL',
+    name: 'Classic',
+    title: 'Classic (CL)',
+    multiplier: '1.00x',
+    icon: Clock,
+    activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
+    exclusiveWith: undefined
+  },
+  {
+    id: 'DA',
+    name: 'Diff Adjust',
+    title: 'Difficulty Adjust (DA)',
+    multiplier: '1.00x',
+    icon: Sliders,
+    activeClass: 'bg-yellow-500/25 text-yellow-300 shadow-[0_8px_24px_rgba(234,179,8,0.18)]',
+    exclusiveWith: ['EZ', 'HR']
   },
   {
     id: 'AT',
@@ -1456,6 +1474,63 @@ export default function SongSelect({
                       );
                     })}
                   </div>
+
+                  {(settings.selectedMods || []).includes('DA') && (
+                    <div className="flex flex-col gap-3 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 mt-2">
+                      <div className="flex items-center gap-1.5 font-bold text-xs">
+                        <Sliders className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>Difficulty Adjust (DA) Settings</span>
+                      </div>
+                      <div className="flex flex-col gap-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-white/80">OD:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            step="0.5"
+                            value={settings.difficultyAdjust?.overallDifficulty ?? selectedCustomMap?.overallDifficulty ?? 8}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              updateSettings({
+                                difficultyAdjust: {
+                                  ...(settings.difficultyAdjust || {}),
+                                  overallDifficulty: val,
+                                },
+                              });
+                            }}
+                            className="flex-1 accent-yellow-400 h-1.5 rounded-lg cursor-pointer"
+                          />
+                          <span className="font-mono font-bold w-6 text-white text-right">
+                            {(settings.difficultyAdjust?.overallDifficulty ?? selectedCustomMap?.overallDifficulty ?? 8).toFixed(1)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-white/80">HP:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            step="0.5"
+                            value={settings.difficultyAdjust?.hpDrainRate ?? selectedCustomMap?.hpDrainRate ?? 5}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              updateSettings({
+                                difficultyAdjust: {
+                                  ...(settings.difficultyAdjust || {}),
+                                  hpDrainRate: val,
+                                },
+                              });
+                            }}
+                            className="flex-1 accent-yellow-400 h-1.5 rounded-lg cursor-pointer"
+                          />
+                          <span className="font-mono font-bold w-6 text-white text-right">
+                            {(settings.difficultyAdjust?.hpDrainRate ?? selectedCustomMap?.hpDrainRate ?? 5).toFixed(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-none px-5 py-4 pb-[max(1rem,calc(0.5rem+env(safe-area-inset-bottom,0px)))] bg-[#101016]/85 border-t border-white/5 flex justify-end">
@@ -2372,7 +2447,7 @@ export default function SongSelect({
                           title: 'Easy (EZ)',
                           activeBg: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400',
                           mult: '0.50x',
-                          exclusiveWith: ['HR', 'SD', 'PF']
+                          exclusiveWith: ['HR', 'SD', 'PF', 'DA']
                         },
                         {
                           id: 'HT',
@@ -2440,7 +2515,7 @@ export default function SongSelect({
                           title: 'HardRock (HR)',
                           activeBg: 'bg-rose-500/20 border-rose-500/60 text-rose-400',
                           mult: '1.00x',
-                          exclusiveWith: 'EZ'
+                          exclusiveWith: ['EZ', 'DA']
                         },
                         {
                           id: 'SD',
@@ -2570,6 +2645,20 @@ export default function SongSelect({
                           activeBg: 'bg-orange-500/20 border-orange-500/60 text-orange-400',
                           mult: '0.90x',
                           exclusiveWith: ['IN', 'NR']
+                        },
+                        {
+                          id: 'CL',
+                          title: 'Classic (CL)',
+                          activeBg: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400',
+                          mult: '1.00x',
+                          exclusiveWith: undefined
+                        },
+                        {
+                          id: 'DA',
+                          title: 'DifficultyAdjust (DA)',
+                          activeBg: 'bg-yellow-500/20 border-yellow-500/60 text-yellow-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['EZ', 'HR']
                         }
                       ].map((mod) => {
                         const isActive = (settings.selectedMods || []).includes(mod.id);
@@ -2664,6 +2753,63 @@ export default function SongSelect({
                    </div>
 
                 </div>
+
+                {(settings.selectedMods || []).includes('DA') && (
+                  <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200">
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      <Sliders className="w-4 h-4 text-yellow-400" />
+                      <span>Difficulty Adjust (DA) Settings</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-6 text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-white/80">Overall Difficulty (OD):</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={settings.difficultyAdjust?.overallDifficulty ?? selectedCustomMap?.overallDifficulty ?? 8}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            updateSettings({
+                              difficultyAdjust: {
+                                ...(settings.difficultyAdjust || {}),
+                                overallDifficulty: val,
+                              },
+                            });
+                          }}
+                          className="w-28 accent-yellow-400 h-1.5 rounded-lg cursor-pointer"
+                        />
+                        <span className="font-mono font-bold w-7 text-white text-right">
+                          {(settings.difficultyAdjust?.overallDifficulty ?? selectedCustomMap?.overallDifficulty ?? 8).toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-white/80">HP Drain Rate (HP):</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="10"
+                          step="0.5"
+                          value={settings.difficultyAdjust?.hpDrainRate ?? selectedCustomMap?.hpDrainRate ?? 5}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            updateSettings({
+                              difficultyAdjust: {
+                                ...(settings.difficultyAdjust || {}),
+                                hpDrainRate: val,
+                              },
+                            });
+                          }}
+                          className="w-28 accent-yellow-400 h-1.5 rounded-lg cursor-pointer"
+                        />
+                        <span className="font-mono font-bold w-7 text-white text-right">
+                          {(settings.difficultyAdjust?.hpDrainRate ?? selectedCustomMap?.hpDrainRate ?? 5).toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
 

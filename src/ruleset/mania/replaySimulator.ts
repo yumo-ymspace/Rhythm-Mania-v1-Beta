@@ -11,7 +11,7 @@
  */
 
 import type { Beatmap, HitObject, JudgementWindow, ReplayFrame, ScoreState } from '../../types';
-import { getDifficultyMultiplier, getJudgementWindows, getSpeedMultiplier } from './hitWindows';
+import { getDifficultyMultiplier, getJudgementWindows, getSpeedMultiplier, isClassicMod } from './hitWindows';
 import {
   createHoldNoteState,
   LAZER_HOLD_RULES_VERSION,
@@ -90,9 +90,10 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
 
   const od = activeBeatmap.overallDifficulty ?? 8;
   const hpDrainRate = activeBeatmap.hpDrainRate ?? 5;
+  const isClassic = isClassicMod(selectedMods);
   const difficultyMultiplier = getDifficultyMultiplier(selectedMods);
-  const speedMultiplier = getSpeedMultiplier(selectedMods);
-  const judgementWindows = getJudgementWindows(od, difficultyMultiplier, speedMultiplier);
+  const speedMultiplier = isClassic ? 1.0 : getSpeedMultiplier(selectedMods);
+  const judgementWindows = getJudgementWindows(od, difficultyMultiplier, speedMultiplier, isClassic);
 
   const marvelousJudg = judgementWindows.find((w) => w.type === 'marvelous') || judgementWindows[0];
   const badJudg = judgementWindows.find((w) => w.type === 'bad') || judgementWindows[judgementWindows.length - 2];
