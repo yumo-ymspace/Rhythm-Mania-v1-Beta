@@ -19,7 +19,8 @@ import {
   ChevronDown, Star, Check, SlidersHorizontal, Shuffle,
   Clock, Heart, Award, X, Infinity as InfinityIcon,
   SquareSlash, Eye, Layers, Flashlight, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles,
-  Skull, Zap, FlipHorizontal, Gauge, ArrowUpDown, Ban, MousePointerClick
+  Skull, Zap, FlipHorizontal, Gauge, ArrowUpDown, Ban, MousePointerClick,
+  TrendingUp, TrendingDown, Activity, VolumeX, Film, Target
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
@@ -61,7 +62,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: InfinityIcon,
     activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
-    exclusiveWith: ['SD', 'PF']
+    exclusiveWith: ['SD', 'PF', 'AC']
   },
   {
     id: 'EZ',
@@ -70,7 +71,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: Sparkles,
     activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
-    exclusiveWith: ['HR', 'SD', 'PF', 'DA']
+    exclusiveWith: ['HR', 'SD', 'PF', 'AC', 'DA']
   },
   {
     id: 'HT',
@@ -79,7 +80,7 @@ const MODIFIER_TILES = [
     multiplier: '0.50x',
     icon: Rewind,
     activeClass: 'bg-teal-500/25 text-teal-300 shadow-[0_8px_24px_rgba(20,184,166,0.18)]',
-    exclusiveWith: ['DT', 'NC']
+    exclusiveWith: ['DT', 'NC', 'WU', 'WD', 'AS']
   },
   {
     id: 'HR',
@@ -97,7 +98,7 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: Skull,
     activeClass: 'bg-rose-500/25 text-rose-300 shadow-[0_8px_24px_rgba(244,63,94,0.18)]',
-    exclusiveWith: ['NF', 'PF', 'EZ']
+    exclusiveWith: ['NF', 'PF', 'AC', 'EZ']
   },
   {
     id: 'PF',
@@ -106,7 +107,16 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: Award,
     activeClass: 'bg-amber-500/25 text-amber-300 shadow-[0_8px_24px_rgba(245,158,11,0.18)]',
-    exclusiveWith: ['NF', 'SD', 'EZ']
+    exclusiveWith: ['NF', 'SD', 'AC', 'EZ']
+  },
+  {
+    id: 'AC',
+    name: 'Accuracy Challenge',
+    title: 'Accuracy Challenge (AC)',
+    multiplier: '1.00x',
+    icon: Target,
+    activeClass: 'bg-red-500/25 text-red-300 shadow-[0_8px_24px_rgba(239,68,68,0.18)]',
+    exclusiveWith: ['NF', 'SD', 'PF', 'EZ']
   },
   {
     id: 'HD',
@@ -151,7 +161,7 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: FastForward,
     activeClass: 'bg-pink-500/25 text-pink-300 shadow-[0_8px_24px_rgba(236,72,153,0.18)]',
-    exclusiveWith: ['HT', 'NC']
+    exclusiveWith: ['HT', 'NC', 'WU', 'WD', 'AS']
   },
   {
     id: 'NC',
@@ -160,7 +170,7 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: Zap,
     activeClass: 'bg-pink-500/25 text-pink-300 shadow-[0_8px_24px_rgba(236,72,153,0.18)]',
-    exclusiveWith: ['HT', 'DT']
+    exclusiveWith: ['HT', 'DT', 'WU', 'WD', 'AS']
   },
   {
     id: 'MR',
@@ -169,7 +179,16 @@ const MODIFIER_TILES = [
     multiplier: '1.00x',
     icon: FlipHorizontal,
     activeClass: 'bg-cyan-500/25 text-cyan-300 shadow-[0_8px_24px_rgba(6,182,212,0.18)]',
-    exclusiveWith: undefined
+    exclusiveWith: ['RD']
+  },
+  {
+    id: 'RD',
+    name: 'Random',
+    title: 'Random (RD)',
+    multiplier: '1.00x',
+    icon: Shuffle,
+    activeClass: 'bg-emerald-500/25 text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.18)]',
+    exclusiveWith: ['MR']
   },
   {
     id: 'CS',
@@ -226,13 +245,58 @@ const MODIFIER_TILES = [
     exclusiveWith: ['EZ', 'HR']
   },
   {
+    id: 'WU',
+    name: 'Wind Up',
+    title: 'Wind Up (WU)',
+    multiplier: '1.00x',
+    icon: TrendingUp,
+    activeClass: 'bg-amber-500/25 text-amber-300 shadow-[0_8px_24px_rgba(245,158,11,0.18)]',
+    exclusiveWith: ['HT', 'DT', 'NC', 'WD', 'AS']
+  },
+  {
+    id: 'WD',
+    name: 'Wind Down',
+    title: 'Wind Down (WD)',
+    multiplier: '1.00x',
+    icon: TrendingDown,
+    activeClass: 'bg-blue-500/25 text-blue-300 shadow-[0_8px_24px_rgba(59,130,246,0.18)]',
+    exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'AS']
+  },
+  {
+    id: 'AS',
+    name: 'Adaptive Speed',
+    title: 'Adaptive Speed (AS)',
+    multiplier: '1.00x',
+    icon: Activity,
+    activeClass: 'bg-teal-500/25 text-teal-300 shadow-[0_8px_24px_rgba(20,184,166,0.18)]',
+    exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'WD']
+  },
+  {
+    id: 'MU',
+    name: 'Muted',
+    title: 'Muted (MU)',
+    multiplier: '1.00x',
+    icon: VolumeX,
+    activeClass: 'bg-purple-500/25 text-purple-300 shadow-[0_8px_24px_rgba(168,85,247,0.18)]',
+    exclusiveWith: undefined
+  },
+  {
     id: 'AT',
     name: 'Autoplay',
     title: 'Autoplay (AP)',
     multiplier: 'UNRANKED',
     icon: Sparkles,
     activeClass: 'bg-sky-500/25 text-sky-300 shadow-[0_8px_24px_rgba(14,165,233,0.18)]',
-    exclusiveWith: undefined
+    exclusiveWith: ['CN']
+  },
+  {
+    id: 'CN',
+    name: 'Cinema',
+    title: 'Cinema (CN)',
+    multiplier: 'UNRANKED',
+    icon: Film,
+    activeClass: 'bg-sky-500/25 text-sky-300 shadow-[0_8px_24px_rgba(14,165,233,0.18)]',
+    exclusiveWith: ['AT']
   }
 ] as const;
 
@@ -1416,7 +1480,7 @@ export default function SongSelect({
                     <span className="text-[10px] font-bold text-slate-300 font-mono uppercase">
                       MULTIPLIER: {(() => {
                         const active = settings.selectedMods || [];
-                        if (active.includes('AT')) return 'UNRANKED';
+                        if (active.includes('AT') || active.includes('CN')) return 'UNRANKED';
                         const factor = computeModMultiplier(active);
                         return factor.toFixed(2) + 'x';
                       })()}
@@ -2421,7 +2485,7 @@ export default function SongSelect({
                     {(() => {
                       const active = settings.selectedMods || [];
                       const factor = computeModMultiplier(active);
-                      return `Multiplier ${factor.toFixed(2)}x${active.includes('AT') ? ' / Unranked' : ''}`;
+                      return `Multiplier ${factor.toFixed(2)}x${(active.includes('AT') || active.includes('CN')) ? ' / Unranked' : ''}`;
                     })()}
                   </div>
                 </div>
@@ -2529,7 +2593,14 @@ export default function SongSelect({
                           title: 'Perfect (PF)',
                           activeBg: 'bg-amber-500/20 border-amber-500/60 text-amber-400',
                           mult: '1.00x',
-                          exclusiveWith: ['NF', 'SD', 'EZ']
+                          exclusiveWith: ['NF', 'SD', 'AC', 'EZ']
+                        },
+                        {
+                          id: 'AC',
+                          title: 'AccuracyChallenge (AC)',
+                          activeBg: 'bg-red-500/20 border-red-500/60 text-red-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['NF', 'SD', 'PF', 'EZ']
                         },
                         {
                           id: 'HD',
@@ -2623,7 +2694,14 @@ export default function SongSelect({
                           title: 'Mirror (MR)',
                           activeBg: 'bg-cyan-500/20 border-cyan-500/60 text-cyan-400',
                           mult: '1.00x',
-                          exclusiveWith: undefined
+                          exclusiveWith: ['RD']
+                        },
+                        {
+                          id: 'RD',
+                          title: 'Random (RD)',
+                          activeBg: 'bg-emerald-500/20 border-emerald-500/60 text-emerald-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['MR']
                         },
                         {
                           id: 'CS',
@@ -2700,6 +2778,109 @@ export default function SongSelect({
                     </div>
                   </div>
 
+                    {/* AUTOMATION MODS */}
+                    <div className="contents">
+                      <span className="sr-only">Automation mods</span>
+                      {[
+                        { id: 'AT', title: 'Autoplay (AP)', mult: 'UNRANKED', exclusiveWith: ['CN'] },
+                        { id: 'CN', title: 'Cinema (CN)', mult: 'UNRANKED', exclusiveWith: ['AT'] },
+                      ].map((mod) => {
+                        const tile = MODIFIER_TILES.find((item) => item.id === mod.id);
+                        if (!tile) return null;
+                        const isActive = (settings.selectedMods || []).includes(mod.id);
+                        const Icon = tile.icon;
+                        return (
+                          <button
+                            type="button"
+                            key={mod.id}
+                            onClick={() => toggleModifier(mod.id, mod.exclusiveWith)}
+                            title={tile.title}
+                            className="group flex min-w-0 flex-col items-center gap-2 text-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#28292d]"
+                          >
+                            <span className={`relative flex h-[104px] w-[104px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-150 group-hover:-translate-y-0.5 group-hover:bg-white/[.14] group-active:scale-95 ${isActive ? tile.activeClass : 'bg-white/[.08] text-white/80'}`}>
+                              <span className="absolute inset-x-0 top-2 text-center text-[10px] font-black tracking-wide text-white/70">{tile.multiplier}</span>
+                              <Icon className="h-10 w-10 stroke-[2.25] transition-transform duration-150 group-hover:scale-110" />
+                              {isActive && <span className="absolute bottom-2 h-1 w-1 rounded-full bg-current" />}
+                            </span>
+                            <span className={`max-w-[112px] text-xs font-semibold leading-tight ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white/85'}`}>{tile.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* FUN MODS */}
+                    <div className="contents">
+                      <span className="sr-only">Fun mods</span>
+                      <div className="contents">
+                        {[
+                          {
+                            id: 'WU',
+                            title: 'WindUp (WU)',
+                            activeBg: 'bg-amber-500/20 border-amber-500/60 text-amber-400',
+                            mult: '1.00x',
+                            exclusiveWith: ['HT', 'DT', 'NC', 'WD', 'AS']
+                          },
+                          {
+                            id: 'WD',
+                            title: 'WindDown (WD)',
+                            activeBg: 'bg-blue-500/20 border-blue-500/60 text-blue-400',
+                            mult: '1.00x',
+                            exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'AS']
+                          },
+                          {
+                            id: 'AS',
+                            title: 'AdaptiveSpeed (AS)',
+                            activeBg: 'bg-teal-500/20 border-teal-500/60 text-teal-400',
+                            mult: '1.00x',
+                            exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'WD']
+                          },
+                          {
+                            id: 'MU',
+                            title: 'Muted (MU)',
+                            activeBg: 'bg-purple-500/20 border-purple-500/60 text-purple-400',
+                            mult: '1.00x',
+                            exclusiveWith: undefined
+                          }
+                        ].map((mod) => {
+                          const isActive = (settings.selectedMods || []).includes(mod.id);
+                          const tile = MODIFIER_TILES.find((item) => item.id === mod.id);
+                          const Icon = tile?.icon || Sparkles;
+                          return (
+                            <button
+                              type="button"
+                              key={mod.id}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                let mods = [...(settings.selectedMods || [])];
+                                if (isActive) {
+                                  mods = mods.filter(m => m !== mod.id);
+                                } else {
+                                  const exclusiveList = Array.isArray(mod.exclusiveWith)
+                                    ? mod.exclusiveWith
+                                    : mod.exclusiveWith ? [mod.exclusiveWith] : [];
+                                  if (exclusiveList.length > 0) {
+                                    mods = mods.filter(m => !exclusiveList.includes(m));
+                                  }
+                                  mods.push(mod.id);
+                                }
+                                updateSettings({ selectedMods: mods });
+                              }}
+                              title={mod.title}
+                              className="group flex min-w-0 flex-col items-center gap-2 text-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#28292d]"
+                            >
+                              <span className={`relative flex h-[104px] w-[104px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-150 group-hover:-translate-y-0.5 group-hover:bg-white/[.14] group-active:scale-95 ${isActive ? tile?.activeClass || 'bg-white/20 text-white' : 'bg-white/[.08] text-white/80'}`}>
+                                <span className="absolute inset-x-0 top-2 text-center text-[10px] font-black tracking-wide text-white/70">{mod.mult}</span>
+                                <Icon className="h-10 w-10 stroke-[2.25] transition-transform duration-150 group-hover:scale-110" />
+                                {isActive && <span className="absolute bottom-2 h-1 w-1 rounded-full bg-current" />}
+                              </span>
+                              <span className={`max-w-[112px] text-xs font-semibold leading-tight ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white/85'}`}>{tile?.name || mod.title}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                    {/* KEY CONVERSION MODS */}
                    <div className="contents">
                      <span className="sr-only">Key conversion</span>
@@ -2727,30 +2908,6 @@ export default function SongSelect({
                      })}
                    </div>
 
-                   {/* AUTOMATION MODS */}
-                   <div className="contents">
-                     <span className="sr-only">Autoplay</span>
-                     {(() => {
-                       const mod = MODIFIER_TILES.find((item) => item.id === 'AT')!;
-                       const isActive = (settings.selectedMods || []).includes(mod.id);
-                       const Icon = mod.icon;
-                       return (
-                         <button
-                           type="button"
-                           onClick={() => toggleModifier(mod.id)}
-                           title={mod.title}
-                           className="group flex min-w-0 flex-col items-center gap-2 text-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#28292d]"
-                         >
-                           <span className={`relative flex h-[104px] w-[104px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-150 group-hover:-translate-y-0.5 group-hover:bg-white/[.14] group-active:scale-95 ${isActive ? mod.activeClass : 'bg-white/[.08] text-white/80'}`}>
-                             <span className="absolute inset-x-0 top-2 text-center text-[10px] font-black tracking-wide text-white/70">{mod.multiplier}</span>
-                             <Icon className="h-10 w-10 stroke-[2.25] transition-transform duration-150 group-hover:scale-110" />
-                             {isActive && <span className="absolute bottom-2 h-1 w-1 rounded-full bg-current" />}
-                           </span>
-                           <span className={`max-w-[112px] text-xs font-semibold leading-tight ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white/85'}`}>{mod.name}</span>
-                         </button>
-                       );
-                     })()}
-                   </div>
 
                 </div>
 

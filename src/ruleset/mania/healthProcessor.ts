@@ -47,6 +47,7 @@
  */
 
 import type { JudgementType } from '../../types';
+import { parseAccuracyChallengeThreshold } from './beatmapMods';
 
 /** Interpolates difficulty range: OD 0 → min, OD 5 → mid, OD 10 → max. */
 function difficultyRange(difficulty: number, min: number, mid: number, max: number): number {
@@ -191,6 +192,12 @@ export interface HealthState {
 
   /** Whether Perfect is active (fails on anything below Great / <300 or combo break). */
   isPerfect: boolean;
+
+  /** Whether Accuracy Challenge is active. */
+  isAccuracyChallenge: boolean;
+
+  /** Minimum accuracy required before failure (0.0 .. 1.0, default 0.90). */
+  minimumAccuracy: number;
 }
 
 /**
@@ -208,6 +215,17 @@ export function createHealthState(
   const isSD = mods.some(m => m.toUpperCase() === 'SD');
   const isPF = mods.some(m => m.toUpperCase() === 'PF');
 
+  const acMod = mods.find(m => {
+    const u = m.toUpperCase();
+    return u === 'AC' || u === 'ACCURACYCHALLENGE' || u.startsWith('AC:') || u.startsWith('AC_') || u.startsWith('ACCURACYCHALLENGE:') || u.startsWith('ACCURACYCHALLENGE_');
+  });
+  const isAC = !!acMod;
+  let minAccuracy = 0.90;
+  if (acMod) {
+    const parsed = parseAccuracyChallengeThreshold(acMod);
+    if (parsed !== null && Number.isFinite(parsed)) minAccuracy = parsed;
+  }
+
   return {
     health: 1.0,
     failed: false,
@@ -216,7 +234,28 @@ export function createHealthState(
     isNoFail: isNF,
     isSuddenDeath: isSD,
     isPerfect: isPF,
+    isAccuracyChallenge: isAC,
+    minimumAccuracy: minAccuracy,
   };
+}
+
+/**
+ * Checks whether the Accuracy Challenge (AC) mod condition has triggered a failure.
+ * Fails if AC is active, at least one judgement has occurred, and accuracy is below minimum threshold.
+ */
+export function checkAccuracyChallengeFail(
+  state: HealthState,
+  accuracyRatio: number,
+  judgedCount: number,
+): boolean {
+  if (state.failed || !state.isAccuracyChallenge || state.isNoFail || judgedCount <= 0) return false;
+  const ratio = accuracyRatio > 1.0 ? accuracyRatio / 100 : accuracyRatio;
+  if (ratio < state.minimumAccuracy) {
+    state.health = 0;
+    state.failed = true;
+    return true;
+  }
+  return false;
 }
 
 /**

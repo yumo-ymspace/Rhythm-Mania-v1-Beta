@@ -736,7 +736,7 @@ Status starts as pending. Dependencies must be completed first.
 | **TASK-034** | SD, PF, NC (pitch already from rate; NC ticks optional stub) **(done)** | mods, audio | Playwright fail-on-miss; NC rate |
 | **TASK-035** | Mirror, Constant Speed, Invert, Hold Off, No Release **(done)** | mods, parser/gameplay | tests per mod |
 | **TASK-036** | Difficulty Adjust + Classic (stable windows, no speed compensation) **(done)** | mods | tests |
-| **TASK-037** | Random columns, remaining fun/system (Wind Up/Down, Adaptive Speed, Muted, Cinema, AC) | mods | smoke; skip Dual Stages |
+| **TASK-037** | Random columns, remaining fun/system (Wind Up/Down, Adaptive Speed, Muted, Cinema, AC) **(done)** | mods | smoke; skip Dual Stages |
 
 ### Session chrome
 

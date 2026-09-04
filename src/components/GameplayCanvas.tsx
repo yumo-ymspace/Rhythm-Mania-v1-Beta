@@ -76,6 +76,7 @@ import {
 import {
   createHealthState,
   applyHealthJudgement,
+  checkAccuracyChallengeFail,
   healthToDisplayPercent,
   type HealthState,
   type HealthJudgementContext,
@@ -625,9 +626,11 @@ export default function GameplayCanvas({
   const fpsLastSampleRef = useRef<number>(0);
   const countdownStartTimeRef = useRef<number | null>(null);
   const isReplayMode = !!replayRecord;
-  const isAutoplay = !isReplayMode && (settings.selectedMods || []).includes('AT');
+  const isAutoplay = !isReplayMode && ((settings.selectedMods || []).includes('AT') || (settings.selectedMods || []).includes('CN'));
+  const isCinema = !isReplayMode && (settings.selectedMods || []).includes('CN');
   const isNoRelease = isNoReleaseMod(settings.selectedMods);
   const isConstantSpeed = isConstantSpeedMod(settings.selectedMods);
+  const adaptiveSpeedAvgErrorRef = useRef<number>(0);
   const finishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uiJudgementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const comboBurstTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1455,7 +1458,7 @@ export default function GameplayCanvas({
       if (resolvedJudgement.type !== 'miss') {
         note.isHit = true;
         note.hitTime = playTime;
-        applyJudgement(resolvedJudgement, colIndex);
+        applyJudgement(resolvedJudgement, colIndex, 'note', playTime - note.time);
         mainAudio.playBeatmapHitsound(note.hitSound, note.hitSample?.filename);
 
         const hitError = playTime - note.time;
@@ -1571,7 +1574,7 @@ export default function GameplayCanvas({
       note.hitTime = playTime;
       markHoldStartHit(note);
       
-      applyJudgement(resolvedJudgement, colIndex, note.type === 'hold' ? 'hold_head' : 'note');
+      applyJudgement(resolvedJudgement, colIndex, note.type === 'hold' ? 'hold_head' : 'note', playTime - note.time);
       mainAudio.playBeatmapHitsound(note.hitSound, note.hitSample?.filename);
 
       // Calculate and store Hit Error details for timing feedback meter
@@ -1639,6 +1642,9 @@ export default function GameplayCanvas({
           scoreStateRef.current.comboBreakCount++;
         }
         setUiCombo(0);
+        if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
+          mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
+        }
         if (!settingsRef.current.disableLaneShake) {
           screenShakeRef.current = 4;
         }
@@ -1668,7 +1674,7 @@ export default function GameplayCanvas({
         holdNote.isReleaseMissed = false;
 
         const tailJudg = judgementWindows.find(w => w.type === action.judgement) || missJudg;
-        applyJudgement(tailJudg, colIndex, 'hold_tail');
+        applyJudgement(tailJudg, colIndex, 'hold_tail', action.effectiveErrorMs);
         recordHitErrorSample(action.effectiveErrorMs);
         mainAudio.playBeatmapHitsound(holdNote.hitSound, holdNote.hitSample?.filename);
 
@@ -1732,7 +1738,7 @@ export default function GameplayCanvas({
       holdNote.isReleaseMissed = releaseMissed;
       holdNote.isReleaseHit = !releaseMissed;
        if (releaseMissed) markHoldEarlyRelease(holdNote, playTime);
-      applyJudgement(releaseJudgement, colIndex, 'hold_tail');
+      applyJudgement(releaseJudgement, colIndex, 'hold_tail', endDiff);
       if (!releaseMissed) {
         markHoldReleaseHit(holdNote);
         recordHitErrorSample(endDiff);
@@ -1765,13 +1771,22 @@ export default function GameplayCanvas({
   };
 
   // Score counter math accumulator
-  const applyJudgement = (judg: JudgementWindow, col: number, healthContext: HealthJudgementContext = 'note') => {
+  const applyJudgement = (
+    judg: JudgementWindow,
+    col: number,
+    healthContext: HealthJudgementContext = 'note',
+    errorMs?: number,
+  ) => {
     const state = scoreStateRef.current;
     if (!state.columnJudgements || state.columnJudgements.length === 0) {
       state.columnJudgements = initializeColumnJudgements(beatmap.keyCount);
     }
     if (typeof col === 'number' && col >= 0) {
       incrementColumnJudgement(state.columnJudgements, col, judg.type);
+    }
+
+    if (errorMs !== undefined && (settings.selectedMods || []).includes('AS') && Math.abs(errorMs) < 500) {
+      adaptiveSpeedAvgErrorRef.current = adaptiveSpeedAvgErrorRef.current * 0.8 + errorMs * 0.2;
     }
 
     // Upgrades
@@ -1833,6 +1848,19 @@ export default function GameplayCanvas({
     state.accuracy = computeAccuracyPercent(counts);
 
     const judgedCount = countTotalHits(counts);
+    if (checkAccuracyChallengeFail(healthStateRef.current, state.accuracy, judgedCount)) {
+      state.hp = healthToDisplayPercent(healthStateRef.current.health);
+      if (!isReplayMode) {
+        state.failed = true;
+        isPlayingRef.current = false;
+        setIsFailed(true);
+        mainAudio.pause();
+        if (videoRef.current) {
+          try { videoRef.current.pause(); } catch (e) {}
+        }
+      }
+    }
+
     if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
       totalJudgementsRef.current = judgedCount;
       maxComboPortionRef.current = computeMaxComboPortion(judgedCount);
@@ -1847,6 +1875,12 @@ export default function GameplayCanvas({
       totalJudgements: totalJudgementsRef.current,
       modMultiplier,
     });
+
+    // Muted (MU) mod: fade audio as combo builds, restore on break/miss
+    if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
+      const muteFactor = Math.max(0, 1 - state.combo / 30);
+      mainAudio.setVolumes(settings.musicVolume * muteFactor, settings.hitsoundVolume, settings.masterVolume);
+    }
 
     // Update canvas visual trackers
     currentJudgementRef.current = {
@@ -1996,6 +2030,26 @@ export default function GameplayCanvas({
         }
 
         audioTimeRef.current = songTime;
+      }
+
+      // Dynamic playback rate updates for WU (Wind Up), WD (Wind Down), and AS (Adaptive Speed)
+      const activeMods = settingsRef.current.selectedMods || [];
+      const isWU = activeMods.includes('WU');
+      const isWD = activeMods.includes('WD');
+      const isAS = activeMods.includes('AS');
+
+      if ((isWU || isWD) && isPlayingRef.current && !isPausedRef.current) {
+        const totalDuration = Math.max(1, (beatmap.duration || 10) * 1000);
+        const progress = Math.max(0, Math.min(1, (songTime - firstNoteTime) / totalDuration));
+        const targetRate = isWU ? (1.0 + 0.5 * progress) : (1.0 - 0.25 * progress);
+        if (Math.abs(mainAudio.playbackRate - targetRate) > 0.01) {
+          mainAudio.setPlaybackRate(targetRate);
+        }
+      } else if (isAS && isPlayingRef.current && !isPausedRef.current) {
+        const targetRate = Math.max(0.75, Math.min(1.5, 1.0 - adaptiveSpeedAvgErrorRef.current / 150));
+        if (Math.abs(mainAudio.playbackRate - targetRate) > 0.01) {
+          mainAudio.setPlaybackRate(targetRate);
+        }
       }
 
       if (breakLabelRef.current) {
@@ -3982,7 +4036,7 @@ export default function GameplayCanvas({
 
           <div 
             ref={containerRef} 
-            className="h-full relative transition-all duration-205 z-20 playfield-chassis-container" 
+            className={`h-full relative transition-all duration-205 z-20 playfield-chassis-container ${isCinema ? 'opacity-0 pointer-events-none' : ''}`} 
             style={{ 
               width: `${settings.playfieldWidthPercent ?? 40}%`, 
               minWidth: '280px',

@@ -18,7 +18,14 @@ const BASE_MODIFIERS = new Set([
   'HO', 'HOLDOFF',
   'NR', 'NORELEASE',
   'DA', 'DIFFICULTYADJUST',
-  'CL', 'CLASSIC'
+  'CL', 'CLASSIC',
+  'RD', 'RANDOM',
+  'WU', 'WINDUP',
+  'WD', 'WINDDOWN',
+  'AS', 'ADAPTIVESPEED',
+  'MU', 'MUTED',
+  'CN', 'CINEMA',
+  'AC', 'ACCURACYCHALLENGE',
 ]);
  
 export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
@@ -49,6 +56,20 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   DifficultyAdjust: 1.0,
   CL: 1.0,
   Classic: 1.0,
+  RD: 1.0,
+  Random: 1.0,
+  WU: 1.0,
+  WindUp: 1.0,
+  WD: 1.0,
+  WindDown: 1.0,
+  AS: 1.0,
+  AdaptiveSpeed: 1.0,
+  MU: 1.0,
+  Muted: 1.0,
+  CN: 0.0,
+  Cinema: 0.0,
+  AC: 1.0,
+  AccuracyChallenge: 1.0,
   K1: 0.9,
   K2: 0.9,
   K3: 0.9,
@@ -62,9 +83,16 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
 };
 
 const VISUAL_COVER_MODS = new Set(['HD', 'FI', 'COVER', 'CO', 'FL']);
+const RATE_ADJUST_MODS = new Set(['HT', 'DT', 'NC', 'WU', 'WD', 'AS']);
+const SUDDEN_FAIL_MODS = new Set(['SD', 'PF', 'AC']);
+const AUTOMATION_MODS = new Set(['AT', 'CN']);
 
 function isDifficultyAdjustPattern(upper: string): boolean {
   return upper === 'DA' || upper === 'DIFFICULTYADJUST' || upper.startsWith('DA:') || upper.startsWith('DA_') || upper.startsWith('DIFFICULTYADJUST:') || upper.startsWith('DIFFICULTYADJUST_');
+}
+
+function isAccuracyChallengePattern(upper: string): boolean {
+  return upper === 'AC' || upper === 'ACCURACYCHALLENGE' || upper.startsWith('AC:') || upper.startsWith('AC_') || upper.startsWith('ACCURACYCHALLENGE:') || upper.startsWith('ACCURACYCHALLENGE_');
 }
 
 function normalizeModName(upper: string): string {
@@ -76,8 +104,17 @@ function normalizeModName(upper: string): string {
   if (upper === 'NORELEASE') return 'NR';
   if (upper === 'CLASSIC') return 'CL';
   if (upper === 'DIFFICULTYADJUST') return 'DA';
+  if (upper === 'RANDOM') return 'RD';
+  if (upper === 'WINDUP') return 'WU';
+  if (upper === 'WINDDOWN') return 'WD';
+  if (upper === 'ADAPTIVESPEED') return 'AS';
+  if (upper === 'MUTED') return 'MU';
+  if (upper === 'CINEMA') return 'CN';
+  if (upper === 'ACCURACYCHALLENGE') return 'AC';
   if (upper.startsWith('DIFFICULTYADJUST:')) return `DA:${upper.substring(17)}`;
   if (upper.startsWith('DIFFICULTYADJUST_')) return `DA_${upper.substring(17)}`;
+  if (upper.startsWith('ACCURACYCHALLENGE:')) return `AC:${upper.substring(18)}`;
+  if (upper.startsWith('ACCURACYCHALLENGE_')) return `AC_${upper.substring(18)}`;
   return upper;
 }
 
@@ -88,15 +125,25 @@ export function sanitizeGameplayMods(value: unknown): string[] {
   for (const raw of value) {
     if (typeof raw !== 'string') continue;
     const upper = raw.toUpperCase();
-    if (!BASE_MODIFIERS.has(upper) && !isDifficultyAdjustPattern(upper) && !/^K(?:[1-9]|10)$/.test(upper)) continue;
+    if (!BASE_MODIFIERS.has(upper) && !isDifficultyAdjustPattern(upper) && !isAccuracyChallengePattern(upper) && !/^K(?:[1-9]|10)$/.test(upper)) continue;
     const mod = normalizeModName(upper);
+    const modBase = mod.startsWith('DA:') || mod.startsWith('DA_') ? 'DA' : (mod.startsWith('AC:') || mod.startsWith('AC_') ? 'AC' : mod);
+
     if (mods.includes(mod)) continue;
+    if (mods.some((item) => {
+      const itemBase = item.startsWith('DA:') || item.startsWith('DA_') ? 'DA' : (item.startsWith('AC:') || item.startsWith('AC_') ? 'AC' : item);
+      return itemBase === modBase;
+    })) continue;
+
     if ((mod === 'EZ' && mods.includes('HR')) || (mod === 'HR' && mods.includes('EZ'))) continue;
-    if ((mod === 'HT' && (mods.includes('DT') || mods.includes('NC'))) || ((mod === 'DT' || mod === 'NC') && mods.includes('HT'))) continue;
-    if ((mod === 'DT' && mods.includes('NC')) || (mod === 'NC' && mods.includes('DT'))) continue;
-    if ((mod === 'NF' && (mods.includes('SD') || mods.includes('PF'))) || ((mod === 'SD' || mod === 'PF') && mods.includes('NF'))) continue;
-    if ((mod === 'EZ' && (mods.includes('SD') || mods.includes('PF'))) || ((mod === 'SD' || mod === 'PF') && mods.includes('EZ'))) continue;
-    if ((mod === 'SD' && mods.includes('PF')) || (mod === 'PF' && mods.includes('SD'))) continue;
+    if (RATE_ADJUST_MODS.has(modBase) && mods.some((item) => RATE_ADJUST_MODS.has(item.startsWith('DA:') || item.startsWith('DA_') ? 'DA' : item))) continue;
+    if ((mod === 'NF' && mods.some((item) => SUDDEN_FAIL_MODS.has(item.startsWith('AC:') || item.startsWith('AC_') ? 'AC' : item))) ||
+        (SUDDEN_FAIL_MODS.has(modBase) && mods.includes('NF'))) continue;
+    if ((mod === 'EZ' && mods.some((item) => SUDDEN_FAIL_MODS.has(item.startsWith('AC:') || item.startsWith('AC_') ? 'AC' : item))) ||
+        (SUDDEN_FAIL_MODS.has(modBase) && mods.includes('EZ'))) continue;
+    if (SUDDEN_FAIL_MODS.has(modBase) && mods.some((item) => SUDDEN_FAIL_MODS.has(item.startsWith('AC:') || item.startsWith('AC_') ? 'AC' : item))) continue;
+    if (AUTOMATION_MODS.has(modBase) && mods.some((item) => AUTOMATION_MODS.has(item))) continue;
+    if ((mod === 'RD' && mods.includes('MR')) || (mod === 'MR' && mods.includes('RD'))) continue;
     if (VISUAL_COVER_MODS.has(mod.toUpperCase()) && mods.some((item) => VISUAL_COVER_MODS.has(item.toUpperCase()))) continue;
     if ((mod === 'IN' && mods.includes('HO')) || (mod === 'HO' && mods.includes('IN'))) continue;
     if ((mod === 'HO' && mods.includes('NR')) || (mod === 'NR' && mods.includes('HO'))) continue;

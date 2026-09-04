@@ -35,6 +35,7 @@ import {
 import {
   createHealthState,
   applyHealthJudgement,
+  checkAccuracyChallengeFail,
   healthToDisplayPercent,
   type HealthJudgementContext,
 } from './healthProcessor';
@@ -197,6 +198,11 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
     };
     scoreState.accuracy = computeAccuracyPercent(counts);
     const judgedCount = countTotalHits(counts);
+
+    if (checkAccuracyChallengeFail(healthState, scoreState.accuracy, judgedCount)) {
+      scoreState.hp = healthToDisplayPercent(healthState.health);
+      scoreState.failed = healthState.failed;
+    }
 
     if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
       totalJudgements = judgedCount;
