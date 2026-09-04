@@ -34,6 +34,7 @@ import { previewPlayer } from '../utils/previewPlayer';
 import { resolveStarRating } from '../utils/starRating';
 import { calculateChartStarRating, CHART_STAR_RATING_VERSION } from '../utils/chartStarRating';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
+import { computeScrollTravelTimeMs } from '../render/playfieldLayout';
 import metadata from '../../metadata.json';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
 import { computeModMultiplier } from '../ruleset/mania/scoreProcessor';
@@ -381,6 +382,51 @@ export default function SongSelect({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onOpenSettings]);
+
+  const [scrollSpeedToast, setScrollSpeedToast] = useState<string | null>(null);
+  const scrollSpeedToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // F3 / F4 and Ctrl+/- / Ctrl+= for scroll speed adjustment on song select
+  useEffect(() => {
+    const handleScrollSpeedKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      let delta = 0;
+      if (e.key === 'F3') {
+        delta = -1;
+      } else if (e.key === 'F4') {
+        delta = 1;
+      } else if (e.ctrlKey || e.metaKey) {
+        if (e.key === '-' || e.key === '_') {
+          delta = -1;
+        } else if (e.key === '=' || e.key === '+') {
+          delta = 1;
+        }
+      }
+
+      if (delta !== 0) {
+        e.preventDefault();
+        const currentSpeed = settings.scrollSpeed ?? 21;
+        const newSpeed = Math.max(SCROLL_SPEED_MIN, Math.min(SCROLL_SPEED_MAX, currentSpeed + delta));
+        if (newSpeed !== currentSpeed) {
+          updateSettings({ scrollSpeed: newSpeed });
+        }
+        const travelMs = computeScrollTravelTimeMs(newSpeed);
+        setScrollSpeedToast(`${newSpeed}x (~${travelMs}ms)`);
+        if (scrollSpeedToastTimeoutRef.current) clearTimeout(scrollSpeedToastTimeoutRef.current);
+        scrollSpeedToastTimeoutRef.current = setTimeout(() => {
+          setScrollSpeedToast(null);
+        }, 1500);
+      }
+    };
+
+    window.addEventListener('keydown', handleScrollSpeedKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleScrollSpeedKeyDown);
+      if (scrollSpeedToastTimeoutRef.current) clearTimeout(scrollSpeedToastTimeoutRef.current);
+    };
+  }, [settings.scrollSpeed, updateSettings]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [importStatus, setImportStatus] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
@@ -1626,6 +1672,19 @@ export default function SongSelect({
       {/* 1. SEAMLESS GLASS BLUR FILTER BACKGROUND OVERLAY */}
       <div className="absolute inset-0 bg-black/10 backdrop-blur-[0.5px] pointer-events-none z-0" />
 
+      {/* Floating Scroll Speed Toast */}
+      {scrollSpeedToast && (
+        <div
+          id="song-select-scroll-toast"
+          className="absolute top-6 left-1/2 -translate-x-1/2 z-55 bg-slate-950/95 border border-amber-400/60 shadow-[0_0_25px_rgba(251,191,36,0.35)] text-amber-400 font-mono text-xs font-black uppercase tracking-widest px-5 py-2.5 rounded-full flex items-center gap-3 animate-fade-in pointer-events-none"
+        >
+          <span className="animate-pulse">⚡ SCROLL SPEED</span>
+          <span className="text-white bg-slate-900 border border-slate-750 px-2.5 py-0.5 rounded-md font-bold">
+            {scrollSpeedToast}
+          </span>
+        </div>
+      )}
+
       {/* 2. OPTION / PREPLAY LOADING SCREEN ACTIVE STAGE OVERLAY */}
       {showPreplayOptions && selectedCustomMap && (
         <div 
@@ -1796,7 +1855,7 @@ export default function SongSelect({
                   <div className="flex flex-col gap-1.5">
                       <div className="flex justify-between text-[11px] font-mono tracking-wider text-slate-350 uppercase">
                         <span>Scroll Multiplier:</span>
-                        <span className="text-amber-400 font-bold">{settings.scrollSpeed}x</span>
+                        <span className="text-amber-400 font-bold">{settings.scrollSpeed}x (~{computeScrollTravelTimeMs(settings.scrollSpeed)}ms)</span>
                       </div>
                       <input 
                         type="range"
@@ -1806,6 +1865,11 @@ export default function SongSelect({
                         onChange={(e) => updateSettings({ scrollSpeed: parseInt(e.target.value) })}
                         className="w-full accent-amber-450 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                       />
+                      <div className="flex justify-between text-[9px] font-mono text-slate-500">
+                        <span>F3 / Ctrl- ({SCROLL_SPEED_MIN}x)</span>
+                        <span>Travel: ~{computeScrollTravelTimeMs(settings.scrollSpeed)}ms</span>
+                        <span>F4 / Ctrl+ ({SCROLL_SPEED_MAX}x)</span>
+                      </div>
                   </div>
 
                   <div className="flex justify-between items-center py-2 border-t border-white/[0.03]">

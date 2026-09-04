@@ -53,13 +53,17 @@ export function updateColumnsLayout(
   return existingColumns;
 }
 
+export function computeScrollTravelTimeMs(scrollSpeed?: number): number {
+  return Math.max(80, 1100 - (scrollSpeed ?? 18) * 25);
+}
+
 export function calculateScrollSpeedFactor(
   height: number,
   receptorY: number,
   settings: PlayfieldVisualSettings
 ): number {
   const travelDistance = settings.upsurfaceNoteMode ? (height - receptorY) : receptorY;
-  const scrollTimeMs = Math.max(80, 1100 - (settings.scrollSpeed ?? 18) * 25);
+  const scrollTimeMs = computeScrollTravelTimeMs(settings.scrollSpeed);
   return travelDistance / scrollTimeMs;
 }
 

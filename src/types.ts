@@ -267,6 +267,7 @@ export interface DifficultyAdjustSettings {
 
 export interface GameSettings {
   scrollSpeed: number; // multiplier or speed factor (e.g., 20)
+  lockScrollSpeedDuringPlay?: boolean; // lock scroll speed during gameplay (cannot change mid-map)
   audioOffset: number; // in milliseconds (positive means audio is delayed)
   visualOffset: number; // in milliseconds (positive means visual notes are delayed)
   hitsoundVolume: number; // 0 to 1

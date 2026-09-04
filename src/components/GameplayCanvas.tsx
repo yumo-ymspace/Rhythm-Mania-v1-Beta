@@ -88,7 +88,7 @@ import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
 import { Canvas2DRenderer } from '../render/Canvas2DRenderer';
 import { getLaneColors } from '../render/skinTheme';
-import { calculateScrollSpeedFactor, updateColumnsLayout } from '../render/playfieldLayout';
+import { calculateScrollSpeedFactor, computeScrollTravelTimeMs, updateColumnsLayout } from '../render/playfieldLayout';
 import { getColumnStyles } from '../render/laneLayout';
 import { getVisibleNotes } from '../render/noteVisibility';
 import { createScrollModel, ScrollModel } from '../render/scrollVelocity';
@@ -408,6 +408,7 @@ export default function GameplayCanvas({
   }, []);
   const animationFrameRef = useRef<number | null>(null);
   const isPrePlayRef = useRef<boolean>(true);
+  const lockedScrollSpeedRef = useRef<number>(settings.scrollSpeed);
 
   const handleExit = () => {
     if (finishTimeoutRef.current) {
@@ -510,33 +511,51 @@ export default function GameplayCanvas({
 
   const [showOffsetNotification, setShowOffsetNotification] = useState<boolean>(false);
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showLockedScrollNotification, setShowLockedScrollNotification] = useState<boolean>(false);
+  const lockedScrollNotificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Monitor real-time latency offset keys + and - during gameplay
+  // Monitor real-time latency offset keys + and - during gameplay, and intercept scroll speed hotkeys
   useEffect(() => {
     const handleOffsetKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
         return;
       }
 
-      if (e.key === '=' || e.key === '+') {
-        const nextOffset = settings.audioOffset + 5;
-        if (updateSettings) {
-          updateSettings({ audioOffset: nextOffset });
-          setShowOffsetNotification(true);
-          if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
-          notificationTimeoutRef.current = setTimeout(() => {
-            setShowOffsetNotification(false);
+      // Check for F3 / F4 or Ctrl+/- / Ctrl+= (scroll speed attempts)
+      if (e.key === 'F3' || e.key === 'F4' || ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+' || e.key === '-'))) {
+        e.preventDefault();
+        const isLocked = (isPlayingRef.current || !isPrePlayRef.current) && (settingsRef.current.lockScrollSpeedDuringPlay !== false);
+        if (isLocked) {
+          setShowLockedScrollNotification(true);
+          if (lockedScrollNotificationTimeoutRef.current) clearTimeout(lockedScrollNotificationTimeoutRef.current);
+          lockedScrollNotificationTimeoutRef.current = setTimeout(() => {
+            setShowLockedScrollNotification(false);
           }, 1800);
         }
-      } else if (e.key === '-' || e.key === '_') {
-        const nextOffset = settings.audioOffset - 5;
-        if (updateSettings) {
-          updateSettings({ audioOffset: nextOffset });
-          setShowOffsetNotification(true);
-          if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
-          notificationTimeoutRef.current = setTimeout(() => {
-            setShowOffsetNotification(false);
-          }, 1800);
+        return;
+      }
+
+      if (!e.ctrlKey && !e.metaKey) {
+        if (e.key === '=' || e.key === '+') {
+          const nextOffset = settings.audioOffset + 5;
+          if (updateSettings) {
+            updateSettings({ audioOffset: nextOffset });
+            setShowOffsetNotification(true);
+            if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+            notificationTimeoutRef.current = setTimeout(() => {
+              setShowOffsetNotification(false);
+            }, 1800);
+          }
+        } else if (e.key === '-' || e.key === '_') {
+          const nextOffset = settings.audioOffset - 5;
+          if (updateSettings) {
+            updateSettings({ audioOffset: nextOffset });
+            setShowOffsetNotification(true);
+            if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+            notificationTimeoutRef.current = setTimeout(() => {
+              setShowOffsetNotification(false);
+            }, 1800);
+          }
         }
       }
     };
@@ -545,6 +564,7 @@ export default function GameplayCanvas({
     return () => {
       window.removeEventListener('keydown', handleOffsetKeyDown);
       if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+      if (lockedScrollNotificationTimeoutRef.current) clearTimeout(lockedScrollNotificationTimeoutRef.current);
     };
   }, [settings.audioOffset, updateSettings]);
   
@@ -684,7 +704,12 @@ export default function GameplayCanvas({
   const [isPrePlay, setIsPrePlay] = useState<boolean>(true);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
-  useEffect(() => { isPrePlayRef.current = isPrePlay; }, [isPrePlay]);
+  useEffect(() => {
+    isPrePlayRef.current = isPrePlay;
+    if (isPrePlay) {
+      lockedScrollSpeedRef.current = settings.scrollSpeed;
+    }
+  }, [isPrePlay, settings.scrollSpeed]);
   useEffect(() => { showSettingsModalRef.current = showSettingsModal; }, [showSettingsModal]);
   useEffect(() => { showInfoModalRef.current = showInfoModal; }, [showInfoModal]);
 
@@ -2251,14 +2276,19 @@ export default function GameplayCanvas({
       // --- HIGH PERFORMANCE RENDERER HANDLER ---
       if (activeRendererRef.current) {
         const keyCount = beatmap.keyCount;
-        const speedFactor = calculateScrollSpeedFactor(height, receptorY, currentSettings);
+        const isScrollLocked = (isPlayingRef.current || !isPrePlayRef.current) && (currentSettings.lockScrollSpeedDuringPlay !== false);
+        const activeScrollSpeed = isScrollLocked ? lockedScrollSpeedRef.current : currentSettings.scrollSpeed;
+        const renderSettings = activeScrollSpeed === currentSettings.scrollSpeed
+          ? currentSettings
+          : { ...currentSettings, scrollSpeed: activeScrollSpeed };
+        const speedFactor = calculateScrollSpeedFactor(height, receptorY, renderSettings);
 
         // Calculate dynamic layouts
         const colsLayout = updateColumnsLayout(
           colsLayoutBufferRef.current,
           keyCount,
           width,
-          currentSettings,
+          renderSettings,
           activeColumnsRef.current,
           laneGlowRef.current
         );
@@ -2268,7 +2298,7 @@ export default function GameplayCanvas({
         // Cull and fetch visible notes
         const visibleNotes = getVisibleNotes(
           notesRef.current,
-          currentSettings,
+          renderSettings,
           height,
           receptorY,
           visualTime,
@@ -2336,7 +2366,7 @@ export default function GameplayCanvas({
           hitErrorTicks: hitErrorTicksRef.current,
           hitErrorAvgMs,
           shake: currentSettings.disableLaneShake ? 0 : screenShakeRef.current,
-          settingsSlice: currentSettings,
+          settingsSlice: renderSettings,
           showKeyLabels: true,
           keyLabels: keyLabelsMapped,
           isFocusMode: isFocusModeRef.current,
@@ -3097,12 +3127,14 @@ export default function GameplayCanvas({
     syncControllerRef.current?.destroy();
     syncControllerRef.current = null;
     mainAudio.stop();
+    lockedScrollSpeedRef.current = settingsRef.current.scrollSpeed;
     setIsPrePlay(true);
     initializeGameplay(false);
   };
 
   const handleStartGameplay = () => {
     if (!isAudioLoaded || rendererLoading) return;
+    lockedScrollSpeedRef.current = settingsRef.current.scrollSpeed;
     setIsPaused(false);
     isPausedRef.current = false;
     setIsPrePlay(false);
@@ -3324,7 +3356,9 @@ export default function GameplayCanvas({
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-slate-400">
                         <span>Scroll Speed</span>
-                        <span className="font-mono text-cyan-400 font-extrabold">{settings.scrollSpeed}x</span>
+                        <span className="font-mono text-cyan-400 font-extrabold">
+                          {settings.scrollSpeed}x (~{computeScrollTravelTimeMs(settings.scrollSpeed)}ms)
+                        </span>
                       </div>
                       <input 
                         type="range" min={SCROLL_SPEED_MIN} max={SCROLL_SPEED_MAX} step="1"
@@ -3591,6 +3625,15 @@ export default function GameplayCanvas({
             <span className="animate-pulse">● LATENCY ADJUSTED</span>
             <span className="text-white bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
               {settings.audioOffset > 0 ? `+${settings.audioOffset}` : settings.audioOffset}ms
+            </span>
+          </div>
+        )}
+
+        {showLockedScrollNotification && (
+          <div id="scroll-locked-toast" className="absolute top-20 left-1/2 -translate-x-1/2 z-25 bg-slate-950/95 border border-amber-500/65 shadow-[0_0_20px_rgba(245,158,11,0.3)] text-amber-400 font-mono text-xs font-black uppercase tracking-widest px-5 py-2.5 rounded-full flex items-center gap-3 transition-all">
+            <span className="animate-pulse">🔒 SCROLL SPEED LOCKED MID-MAP</span>
+            <span className="text-white bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
+              {lockedScrollSpeedRef.current}x (~{computeScrollTravelTimeMs(lockedScrollSpeedRef.current)}ms)
             </span>
           </div>
         )}

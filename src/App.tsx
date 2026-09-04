@@ -911,6 +911,7 @@ export default function App() {
             : (updated.squareRenderStyle === 'rhythmplus' || updated.squareRenderStyle === 'rhythmplus-dynamic') ? 1.1 : 1.05;
       const safePayload: GameSettings = {
         scrollSpeed: Number(updated.scrollSpeed !== undefined ? updated.scrollSpeed : 21),
+        lockScrollSpeedDuringPlay: updated.lockScrollSpeedDuringPlay !== false,
         audioOffset: Number(updated.audioOffset !== undefined ? updated.audioOffset : 0),
         visualOffset: Number(updated.visualOffset !== undefined ? updated.visualOffset : 0),
         hitsoundVolume: Number(updated.hitsoundVolume !== undefined ? updated.hitsoundVolume : 0.60),

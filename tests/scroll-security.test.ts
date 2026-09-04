@@ -12,6 +12,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { createScrollModel, getScrollDelta, getScrollPosition } from '../src/render/scrollVelocity';
+import { calculateScrollSpeedFactor, computeScrollTravelTimeMs } from '../src/render/playfieldLayout';
+import { sanitizeSettings } from '../src/utils/securityLimits';
+import { DEFAULT_SETTINGS } from '../src/components/settings/defaultSettings';
 import type { TimingControlPoint } from '../src/types';
 
 describe('cumulative scroll model', () => {
@@ -47,3 +50,40 @@ describe('cumulative scroll model', () => {
     expect(getScrollPosition(model, 2000)).toBe(1000);
   });
 });
+
+describe('TASK-042 scroll speed travel time and settings lock', () => {
+  it('maps scroll speed to time-to-receptor ms correctly', () => {
+    // formula: Math.max(80, 1100 - scrollSpeed * 25)
+    expect(computeScrollTravelTimeMs(21)).toBe(575);
+    expect(computeScrollTravelTimeMs(5)).toBe(975); // min speed = slowest travel
+    expect(computeScrollTravelTimeMs(40)).toBe(100);
+    expect(computeScrollTravelTimeMs(80)).toBe(80); // clamped at 80ms minimum
+    expect(computeScrollTravelTimeMs(undefined)).toBe(650); // fallback 18 -> 1100 - 450 = 650
+  });
+
+  it('calculateScrollSpeedFactor matches travelDistance / computeScrollTravelTimeMs', () => {
+    const height = 800;
+    const receptorY = 645;
+    const settings = {
+      scrollSpeed: 21,
+      upsurfaceNoteMode: false,
+    } as any;
+
+    const speedFactor = calculateScrollSpeedFactor(height, receptorY, settings);
+    const expectedTravelDistance = 645;
+    const expectedTravelMs = 575;
+    expect(speedFactor).toBeCloseTo(expectedTravelDistance / expectedTravelMs, 6);
+  });
+
+  it('sanitizes and defaults lockScrollSpeedDuringPlay to true', () => {
+    const defaulted = sanitizeSettings({}, DEFAULT_SETTINGS);
+    expect(defaulted.lockScrollSpeedDuringPlay).toBe(true);
+
+    const explicitFalse = sanitizeSettings({ lockScrollSpeedDuringPlay: false }, DEFAULT_SETTINGS);
+    expect(explicitFalse.lockScrollSpeedDuringPlay).toBe(false);
+
+    const explicitTrue = sanitizeSettings({ lockScrollSpeedDuringPlay: true }, DEFAULT_SETTINGS);
+    expect(explicitTrue.lockScrollSpeedDuringPlay).toBe(true);
+  });
+});
+

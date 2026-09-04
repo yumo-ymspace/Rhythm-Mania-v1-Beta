@@ -300,6 +300,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
 
   return {
     scrollSpeed: clamp(settings.scrollSpeed, SCROLL_SPEED_MIN, SCROLL_SPEED_MAX, defaultSettings.scrollSpeed),
+    lockScrollSpeedDuringPlay: settings.lockScrollSpeedDuringPlay !== undefined ? Boolean(settings.lockScrollSpeedDuringPlay) : (defaultSettings.lockScrollSpeedDuringPlay ?? true),
     audioOffset: clamp(settings.audioOffset, -1000, 1000, defaultSettings.audioOffset),
     visualOffset: clamp(settings.visualOffset, -1000, 1000, defaultSettings.visualOffset),
     hitsoundVolume: clamp(settings.hitsoundVolume, 0, 1, defaultSettings.hitsoundVolume),

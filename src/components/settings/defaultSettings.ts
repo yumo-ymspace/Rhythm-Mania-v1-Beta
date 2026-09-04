@@ -22,6 +22,7 @@ export const HISTORY_LIMIT_UNLIMITED = -1;
 
 export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   scrollSpeed: 21,
+  lockScrollSpeedDuringPlay: true,
   audioOffset: 0,
   visualOffset: 0,
   hitsoundVolume: 0.60,

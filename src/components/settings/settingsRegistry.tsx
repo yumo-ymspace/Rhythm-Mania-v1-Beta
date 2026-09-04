@@ -28,6 +28,7 @@ import {
   SCROLL_SPEED_MAX,
   SCROLL_SPEED_MIN,
 } from './defaultSettings';
+import { computeScrollTravelTimeMs } from '../../render/playfieldLayout';
 import BindingMatrix from './BindingMatrix';
 
 export type SectionId =
@@ -174,9 +175,23 @@ export const ROWS: RowDef[] = [
   // ── GAMEPLAY ──────────────────────────────────────────────────────────
   {
     id: 'scrollSpeed', section: 'gameplay', label: 'Scroll speed',
-    description: 'How fast notes travel down the lanes. Higher = faster.',
-    control: { kind: 'slider', min: SCROLL_SPEED_MIN, max: SCROLL_SPEED_MAX, step: 1, format: num },
+    description: 'How fast notes travel down the lanes. Higher = faster. At speed 21, notes take ~575ms to reach the receptor.',
+    control: {
+      kind: 'slider',
+      min: SCROLL_SPEED_MIN,
+      max: SCROLL_SPEED_MAX,
+      step: 1,
+      format: (v: number) => `${v} (~${computeScrollTravelTimeMs(v)}ms)`,
+    },
     defaultValue: DEFAULT_SETTINGS.scrollSpeed,
+    keywords: ['scroll', 'speed', 'velocity', 'travel', 'ms'],
+  },
+  {
+    id: 'lockScrollSpeedDuringPlay', section: 'gameplay', label: 'Lock scroll speed during play',
+    description: 'Prevent changing scroll speed while playing a beatmap (matching osu!(lazer) behavior).',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.lockScrollSpeedDuringPlay,
+    keywords: ['scroll', 'lock', 'speed', 'gameplay', 'mid-map'],
   },
   {
     id: 'upsurfaceNoteMode', section: 'gameplay', label: 'Scroll direction',
