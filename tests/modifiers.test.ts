@@ -14,7 +14,7 @@ describe('Gameplay Modifiers (TASK-034)', () => {
       expect(MOD_SCORE_MULTIPLIERS.HT).toBe(0.5);
     });
 
-    it('has 1.00x multipliers for HR, SD, PF, DT, NC, HD, FI, Cover, FL', () => {
+    it('has 1.00x multipliers for HR, SD, PF, DT, NC, HD, FI, Cover, FL, MR, IN', () => {
       expect(MOD_SCORE_MULTIPLIERS.HR).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.SD).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.PF).toBe(1.0);
@@ -24,6 +24,20 @@ describe('Gameplay Modifiers (TASK-034)', () => {
       expect(MOD_SCORE_MULTIPLIERS.FI).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.Cover).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.FL).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.MR).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.IN).toBe(1.0);
+    });
+
+    it('has 0.80x multiplier for Constant Speed (CS)', () => {
+      expect(MOD_SCORE_MULTIPLIERS.CS).toBe(0.8);
+      expect(MOD_SCORE_MULTIPLIERS.ConstantSpeed).toBe(0.8);
+    });
+
+    it('has 0.90x multipliers for Hold Off (HO) and No Release (NR)', () => {
+      expect(MOD_SCORE_MULTIPLIERS.HO).toBe(0.9);
+      expect(MOD_SCORE_MULTIPLIERS.HoldOff).toBe(0.9);
+      expect(MOD_SCORE_MULTIPLIERS.NR).toBe(0.9);
+      expect(MOD_SCORE_MULTIPLIERS.NoRelease).toBe(0.9);
     });
 
     it('has 0.90x multipliers for key conversion mods K1-K10', () => {
@@ -40,27 +54,48 @@ describe('Gameplay Modifiers (TASK-034)', () => {
       expect(computeModMultiplier(undefined)).toBe(1.0);
     });
 
-    it('returns 1.0 for 1.0x mods (SD, PF, NC, DT, HR, HD)', () => {
+    it('returns 1.0 for 1.0x mods (SD, PF, NC, DT, HR, HD, MR, IN)', () => {
       expect(computeModMultiplier(['SD'])).toBe(1.0);
       expect(computeModMultiplier(['PF'])).toBe(1.0);
       expect(computeModMultiplier(['NC'])).toBe(1.0);
-      expect(computeModMultiplier(['NC', 'HD', 'HR'])).toBe(1.0);
+      expect(computeModMultiplier(['MR'])).toBe(1.0);
+      expect(computeModMultiplier(['IN'])).toBe(1.0);
+      expect(computeModMultiplier(['NC', 'HD', 'HR', 'MR'])).toBe(1.0);
     });
 
     it('multiplies factors correctly', () => {
       expect(computeModMultiplier(['NF'])).toBe(0.5);
       expect(computeModMultiplier(['EZ'])).toBe(0.5);
+      expect(computeModMultiplier(['CS'])).toBe(0.8);
+      expect(computeModMultiplier(['HO'])).toBe(0.9);
+      expect(computeModMultiplier(['NR'])).toBe(0.9);
       expect(computeModMultiplier(['NF', 'EZ'])).toBe(0.25);
       expect(computeModMultiplier(['NF', 'K7'])).toBeCloseTo(0.45);
+      expect(computeModMultiplier(['CS', 'NR'])).toBeCloseTo(0.72);
     });
   });
 
   describe('sanitizeGameplayMods', () => {
-    it('keeps valid mods (SD, PF, NC, etc.)', () => {
+    it('keeps valid mods (SD, PF, NC, MR, CS, IN, HO, NR, etc.)', () => {
       expect(sanitizeGameplayMods(['SD'])).toEqual(['SD']);
       expect(sanitizeGameplayMods(['PF'])).toEqual(['PF']);
       expect(sanitizeGameplayMods(['NC'])).toEqual(['NC']);
-      expect(sanitizeGameplayMods(['nc', 'hr'])).toEqual(['NC', 'HR']);
+      expect(sanitizeGameplayMods(['MR'])).toEqual(['MR']);
+      expect(sanitizeGameplayMods(['CS'])).toEqual(['CS']);
+      expect(sanitizeGameplayMods(['IN'])).toEqual(['IN']);
+      expect(sanitizeGameplayMods(['HO'])).toEqual(['HO']);
+      expect(sanitizeGameplayMods(['NR'])).toEqual(['NR']);
+      expect(sanitizeGameplayMods(['mirror', 'constantspeed'])).toEqual(['MR', 'CS']);
+    });
+
+    it('enforces IN vs HO exclusivity', () => {
+      expect(sanitizeGameplayMods(['IN', 'HO'])).toEqual(['IN']);
+      expect(sanitizeGameplayMods(['HO', 'IN'])).toEqual(['HO']);
+    });
+
+    it('enforces HO vs NR exclusivity', () => {
+      expect(sanitizeGameplayMods(['HO', 'NR'])).toEqual(['HO']);
+      expect(sanitizeGameplayMods(['NR', 'HO'])).toEqual(['NR']);
     });
 
     it('enforces SD vs PF exclusivity', () => {

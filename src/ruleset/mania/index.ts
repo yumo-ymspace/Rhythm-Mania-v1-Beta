@@ -10,6 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
+export * from './beatmapMods';
 export * from './healthProcessor';
 export * from './hitWindows';
 export * from './holdNote';

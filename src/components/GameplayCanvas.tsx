@@ -14,18 +14,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, RotateCcw, ShieldAlert, Maximize, Settings, Info, Home, Sliders, X } from 'lucide-react';
 import { mainAudio } from '../audio/AudioEngine';
 import { previewPlayer } from '../utils/previewPlayer';
-import { Beatmap, GameSettings, HitObject, JudgementWindow, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
+import { Beatmap, GameSettings, HitObject, JudgementType, JudgementWindow, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
 import { initializeColumnJudgements, incrementColumnJudgement } from '../utils/performanceMetrics';
 import { VideoSyncController, computeTargetVideoTimeSec } from '../utils/videoSyncController';
 import { executeTeardown } from '../utils/gameplayTeardown';
 import {
+  autoReleaseHoldTail,
   createHoldNoteState,
   getDifficultyMultiplier,
   getHoldTailJudgement,
   getJudgementWindows,
   getSpeedMultiplier,
   HoldNoteState,
+  isConstantSpeedMod,
   isHoldGraceActive,
+  isNoReleaseMod,
   LAZER_HOLD_RULES_VERSION,
   missHoldHead,
   missHoldTail,
@@ -110,7 +113,10 @@ export function checkNotesAutonomousMisses(
   currentTime: number,
   missBound: number,
   onMiss: (n: HitObject, isDoubleMiss: boolean) => void,
-  keysPressed?: boolean[]
+  keysPressed?: boolean[],
+  isNoRelease: boolean = false,
+  judgementWindows?: JudgementWindow[],
+  onTailHit?: (n: HitObject, judgement: JudgementType, errorMs: number) => void
 ) {
   notes.forEach((n) => {
     // 0. Lazer hold rules (version 3)
@@ -121,6 +127,19 @@ export function checkNotesAutonomousMisses(
           missHoldHead(n.holdState, n.time + missBound);
           n.isMissed = true;
           onMiss(n, false);
+        }
+        // No Release mod auto-release check
+        if (isNoRelease && n.holdState.isHolding && !n.holdState.isTailJudged && n.endTime !== undefined && currentTime >= n.endTime && judgementWindows) {
+          const action = autoReleaseHoldTail(n.holdState, judgementWindows);
+          if (action && action.kind === 'tail_hit') {
+            n.isReleased = true;
+            n.releaseTime = n.endTime;
+            n.isReleaseHit = true;
+            n.isReleaseMissed = false;
+            if (onTailHit) {
+              onTailHit(n, action.judgement, action.effectiveErrorMs);
+            }
+          }
         }
         // Tail timeout check (1.5x lenience)
         if (!n.holdState.isTailJudged && n.holdState.isHeadJudged && n.endTime !== undefined) {
@@ -319,9 +338,9 @@ export default function GameplayCanvas({
 
   const scrollModelRef = useRef<ScrollModel | null>(null);
   useEffect(() => {
-    const enableMapSV = settings.enableMapSV !== false;
+    const enableMapSV = settings.enableMapSV !== false && !isConstantSpeedMod(settings.selectedMods);
     scrollModelRef.current = createScrollModel(beatmap, enableMapSV);
-  }, [beatmap, settings.enableMapSV]);
+  }, [beatmap, settings.enableMapSV, settings.selectedMods]);
 
   const updateSettingsRef = useRef(updateSettings);
   useEffect(() => {
@@ -606,6 +625,8 @@ export default function GameplayCanvas({
   const countdownStartTimeRef = useRef<number | null>(null);
   const isReplayMode = !!replayRecord;
   const isAutoplay = !isReplayMode && (settings.selectedMods || []).includes('AT');
+  const isNoRelease = isNoReleaseMod(settings.selectedMods);
+  const isConstantSpeed = isConstantSpeedMod(settings.selectedMods);
   const finishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uiJudgementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const comboBurstTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1930,7 +1951,16 @@ export default function GameplayCanvas({
             applyJudgement(missJudg, n.column);
           }
         },
-        keysPressedRef.current
+        keysPressedRef.current,
+        isNoRelease,
+        judgementWindows,
+        (n, judgType, errorMs) => {
+          const tailJudg = judgementWindows.find(w => w.type === judgType) || missJudg;
+          applyJudgement(tailJudg, n.column, 'hold_tail');
+          recordHitErrorSample(errorMs);
+          mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
+          spawnParticles(n.column, tailJudg.color);
+        }
       );
     };
 

@@ -442,3 +442,20 @@ export function updateHoldNoteTime(
 
   return actions;
 }
+
+/**
+ * Auto-releases a hold tail at endTime when No Release (NR) mod is active.
+ * When the key is held, the tail automatically registers as a hit with 0 error.
+ */
+export function autoReleaseHoldTail(
+  state: HoldNoteState,
+  windows: JudgementWindow[],
+): HoldActionResult | null {
+  if (!state.isHolding || state.isTailJudged) {
+    return null;
+  }
+  const result = judgeHoldTail(state, state.endTime, windows);
+  state.isHolding = false;
+  return result;
+}
+

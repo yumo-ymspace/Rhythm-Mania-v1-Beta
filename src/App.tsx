@@ -44,6 +44,7 @@ import { sanitizeSettings, sanitizeHistoryRecord, sanitizeCssUrl, MAX_COMPRESSED
 import { createPlayHistoryRecord, migrateAndNormalizeBeatmaps, computeBeatmapHash, findMatchingBeatmap } from './utils/replayManager';
 import { HOLD_TICK_RULES_VERSION, holdTickIntervalMs } from './utils/holdTickRules';
 import { LAZER_HOLD_RULES_VERSION } from './ruleset/mania/holdNote';
+import { applyBeatmapMods } from './ruleset/mania/beatmapMods';
 import { extractZipEntry } from './utils/zipResolver';
 import { AssetLifecycleManager } from './utils/assetLifecycle';
 import { computeChecksum, inferChecksumAlgorithm } from './utils/checksum';
@@ -324,15 +325,8 @@ export default function App() {
     const activeMods = activeReplayRecord
       ? (activeReplayRecord.mods || activeReplayRecord.recordedSettings?.selectedMods || [])
       : (settings.selectedMods || []);
-    const activeKeyChangeMod = activeMods.find(m => /^K(?:[1-9]|10)$/.test(m));
     
-    if (activeKeyChangeMod) {
-      const targetKeys = parseInt(activeKeyChangeMod.substring(1), 10);
-      if (targetKeys >= 1 && targetKeys <= 10 && targetKeys !== selectedBeatmap.keyCount) {
-        return convertBeatmapKeyCount(selectedBeatmap, targetKeys);
-      }
-    }
-    return selectedBeatmap;
+    return applyBeatmapMods(selectedBeatmap, activeMods);
   }, [selectedBeatmap, settings.selectedMods, activeReplayRecord]);
 
   // Preload default backgrounds for instant, low-latency visual performance

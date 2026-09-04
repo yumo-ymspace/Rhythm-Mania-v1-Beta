@@ -19,7 +19,7 @@ import {
   ChevronDown, Star, Check, SlidersHorizontal, Shuffle,
   Clock, Heart, Award, X, Infinity as InfinityIcon,
   SquareSlash, Eye, Layers, Flashlight, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles,
-  Skull, Zap
+  Skull, Zap, FlipHorizontal, Gauge, ArrowUpDown, Ban, MousePointerClick
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
@@ -161,6 +161,51 @@ const MODIFIER_TILES = [
     icon: Zap,
     activeClass: 'bg-pink-500/25 text-pink-300 shadow-[0_8px_24px_rgba(236,72,153,0.18)]',
     exclusiveWith: ['HT', 'DT']
+  },
+  {
+    id: 'MR',
+    name: 'Mirror',
+    title: 'Mirror (MR)',
+    multiplier: '1.00x',
+    icon: FlipHorizontal,
+    activeClass: 'bg-cyan-500/25 text-cyan-300 shadow-[0_8px_24px_rgba(6,182,212,0.18)]',
+    exclusiveWith: undefined
+  },
+  {
+    id: 'CS',
+    name: 'Constant Speed',
+    title: 'Constant Speed (CS)',
+    multiplier: '0.80x',
+    icon: Gauge,
+    activeClass: 'bg-blue-500/25 text-blue-300 shadow-[0_8px_24px_rgba(59,130,246,0.18)]',
+    exclusiveWith: undefined
+  },
+  {
+    id: 'IN',
+    name: 'Invert',
+    title: 'Invert (IN)',
+    multiplier: '1.00x',
+    icon: ArrowUpDown,
+    activeClass: 'bg-fuchsia-500/25 text-fuchsia-300 shadow-[0_8px_24px_rgba(217,70,239,0.18)]',
+    exclusiveWith: ['HO']
+  },
+  {
+    id: 'HO',
+    name: 'Hold Off',
+    title: 'Hold Off (HO)',
+    multiplier: '0.90x',
+    icon: Ban,
+    activeClass: 'bg-orange-500/25 text-orange-300 shadow-[0_8px_24px_rgba(249,115,22,0.18)]',
+    exclusiveWith: ['IN', 'NR']
+  },
+  {
+    id: 'NR',
+    name: 'No Release',
+    title: 'No Release (NR)',
+    multiplier: '0.90x',
+    icon: MousePointerClick,
+    activeClass: 'bg-teal-500/25 text-teal-300 shadow-[0_8px_24px_rgba(20,184,166,0.18)]',
+    exclusiveWith: ['HO']
   },
   {
     id: 'AT',
@@ -2335,6 +2380,13 @@ export default function SongSelect({
                           activeBg: 'bg-teal-500/20 border-teal-500/60 text-teal-400',
                           mult: '0.50x',
                           exclusiveWith: ['DT', 'NC']
+                        },
+                        {
+                          id: 'NR',
+                          title: 'NoRelease (NR)',
+                          activeBg: 'bg-teal-500/20 border-teal-500/60 text-teal-400',
+                          mult: '0.90x',
+                          exclusiveWith: ['HO']
                         }
                       ].map((mod) => {
                         const isActive = (settings.selectedMods || []).includes(mod.id);
@@ -2481,6 +2533,79 @@ export default function SongSelect({
                               </span>
                               <span className={`max-w-[112px] text-xs font-semibold leading-tight ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white/85'}`}>{tile?.name || mod.title}</span>
                            </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* CONVERSION MODS */}
+                  <div className="contents">
+                    <span className="sr-only">Conversion mods</span>
+                    <div className="contents">
+                      {[
+                        {
+                          id: 'MR',
+                          title: 'Mirror (MR)',
+                          activeBg: 'bg-cyan-500/20 border-cyan-500/60 text-cyan-400',
+                          mult: '1.00x',
+                          exclusiveWith: undefined
+                        },
+                        {
+                          id: 'CS',
+                          title: 'ConstantSpeed (CS)',
+                          activeBg: 'bg-blue-500/20 border-blue-500/60 text-blue-400',
+                          mult: '0.80x',
+                          exclusiveWith: undefined
+                        },
+                        {
+                          id: 'IN',
+                          title: 'Invert (IN)',
+                          activeBg: 'bg-fuchsia-500/20 border-fuchsia-500/60 text-fuchsia-400',
+                          mult: '1.00x',
+                          exclusiveWith: ['HO']
+                        },
+                        {
+                          id: 'HO',
+                          title: 'HoldOff (HO)',
+                          activeBg: 'bg-orange-500/20 border-orange-500/60 text-orange-400',
+                          mult: '0.90x',
+                          exclusiveWith: ['IN', 'NR']
+                        }
+                      ].map((mod) => {
+                        const isActive = (settings.selectedMods || []).includes(mod.id);
+                        const tile = MODIFIER_TILES.find((item) => item.id === mod.id);
+                        const Icon = tile?.icon || Sparkles;
+                        return (
+                          <button
+                            type="button"
+                            key={mod.id}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              let mods = [...(settings.selectedMods || [])];
+                              if (isActive) {
+                                mods = mods.filter(m => m !== mod.id);
+                              } else {
+                                const exclusiveList = Array.isArray(mod.exclusiveWith)
+                                  ? mod.exclusiveWith
+                                  : mod.exclusiveWith ? [mod.exclusiveWith] : [];
+                                if (exclusiveList.length > 0) {
+                                  mods = mods.filter(m => !exclusiveList.includes(m));
+                                }
+                                mods.push(mod.id);
+                              }
+                              updateSettings({ selectedMods: mods });
+                            }}
+                            title={mod.title}
+                            className="group flex min-w-0 flex-col items-center gap-2 text-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#28292d]"
+                          >
+                            <span className={`relative flex h-[104px] w-[104px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-150 group-hover:-translate-y-0.5 group-hover:bg-white/[.14] group-active:scale-95 ${isActive ? tile?.activeClass || 'bg-white/20 text-white' : 'bg-white/[.08] text-white/80'}`}>
+                              <span className="absolute inset-x-0 top-2 text-center text-[10px] font-black tracking-wide text-white/70">{mod.mult}</span>
+                              <Icon className="h-10 w-10 stroke-[2.25] transition-transform duration-150 group-hover:scale-110" />
+                              {isActive && <span className="absolute bottom-2 h-1 w-1 rounded-full bg-current" />}
+                            </span>
+                            <span className={`max-w-[112px] text-xs font-semibold leading-tight ${isActive ? 'text-white' : 'text-white/60 group-hover:text-white/85'}`}>{tile?.name || mod.title}</span>
+                          </button>
                         );
                       })}
                     </div>

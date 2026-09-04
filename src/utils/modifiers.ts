@@ -10,7 +10,14 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-const BASE_MODIFIERS = new Set(['NF', 'EZ', 'HR', 'HT', 'DT', 'NC', 'SD', 'PF', 'HD', 'FI', 'COVER', 'CO', 'FL', 'AT']);
+const BASE_MODIFIERS = new Set([
+  'NF', 'EZ', 'HR', 'HT', 'DT', 'NC', 'SD', 'PF', 'HD', 'FI', 'COVER', 'CO', 'FL', 'AT',
+  'MR', 'MIRROR',
+  'CS', 'CONSTANTSPEED',
+  'IN', 'INVERT',
+  'HO', 'HOLDOFF',
+  'NR', 'NORELEASE'
+]);
  
 export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   NF: 0.5,
@@ -26,6 +33,16 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   FL: 1.0,
   DT: 1.0,
   NC: 1.0,
+  MR: 1.0,
+  Mirror: 1.0,
+  CS: 0.8,
+  ConstantSpeed: 0.8,
+  IN: 1.0,
+  Invert: 1.0,
+  HO: 0.9,
+  HoldOff: 0.9,
+  NR: 0.9,
+  NoRelease: 0.9,
   K1: 0.9,
   K2: 0.9,
   K3: 0.9,
@@ -40,6 +57,16 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
 
 const VISUAL_COVER_MODS = new Set(['HD', 'FI', 'COVER', 'CO', 'FL']);
 
+function normalizeModName(upper: string): string {
+  if (upper === 'COVER' || upper === 'CO') return 'Cover';
+  if (upper === 'MIRROR') return 'MR';
+  if (upper === 'CONSTANTSPEED') return 'CS';
+  if (upper === 'INVERT') return 'IN';
+  if (upper === 'HOLDOFF') return 'HO';
+  if (upper === 'NORELEASE') return 'NR';
+  return upper;
+}
+
 export function sanitizeGameplayMods(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
 
@@ -48,7 +75,7 @@ export function sanitizeGameplayMods(value: unknown): string[] {
     if (typeof raw !== 'string') continue;
     const upper = raw.toUpperCase();
     if (!BASE_MODIFIERS.has(upper) && !/^K(?:[1-9]|10)$/.test(upper)) continue;
-    const mod = upper === 'COVER' ? 'Cover' : upper === 'CO' ? 'Cover' : upper;
+    const mod = normalizeModName(upper);
     if (mods.includes(mod)) continue;
     if ((mod === 'EZ' && mods.includes('HR')) || (mod === 'HR' && mods.includes('EZ'))) continue;
     if ((mod === 'HT' && (mods.includes('DT') || mods.includes('NC'))) || ((mod === 'DT' || mod === 'NC') && mods.includes('HT'))) continue;
@@ -57,6 +84,8 @@ export function sanitizeGameplayMods(value: unknown): string[] {
     if ((mod === 'EZ' && (mods.includes('SD') || mods.includes('PF'))) || ((mod === 'SD' || mod === 'PF') && mods.includes('EZ'))) continue;
     if ((mod === 'SD' && mods.includes('PF')) || (mod === 'PF' && mods.includes('SD'))) continue;
     if (VISUAL_COVER_MODS.has(mod.toUpperCase()) && mods.some((item) => VISUAL_COVER_MODS.has(item.toUpperCase()))) continue;
+    if ((mod === 'IN' && mods.includes('HO')) || (mod === 'HO' && mods.includes('IN'))) continue;
+    if ((mod === 'HO' && mods.includes('NR')) || (mod === 'NR' && mods.includes('HO'))) continue;
     if (/^K(?:[1-9]|10)$/.test(mod) && mods.some((item) => /^K(?:[1-9]|10)$/.test(item))) continue;
     mods.push(mod);
   }

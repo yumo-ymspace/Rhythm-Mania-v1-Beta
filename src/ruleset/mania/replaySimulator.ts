@@ -19,8 +19,10 @@ import {
   missHoldTail,
   onHoldKeyPress,
   onHoldKeyRelease,
+  autoReleaseHoldTail,
   TAIL_RELEASE_WINDOW_LENIENCE,
 } from './holdNote';
+import { applyBeatmapMods, isNoReleaseMod } from './beatmapMods';
 import {
   computeAccuracyPercent,
   computeMaxComboPortion,
@@ -79,13 +81,15 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
     selectedMods = [],
   } = options;
 
-  const keyCount = beatmap.keyCount || 4;
+  const activeBeatmap = applyBeatmapMods(beatmap, selectedMods);
+  const isNoRelease = isNoReleaseMod(selectedMods);
+  const keyCount = activeBeatmap.keyCount || 4;
   const activeHoldTickIntervalMs = holdRulesVersion === HOLD_TICK_RULES_VERSION
     ? resolveHoldTickInterval(rawInterval)
     : undefined;
 
-  const od = beatmap.overallDifficulty ?? 8;
-  const hpDrainRate = beatmap.hpDrainRate ?? 5;
+  const od = activeBeatmap.overallDifficulty ?? 8;
+  const hpDrainRate = activeBeatmap.hpDrainRate ?? 5;
   const difficultyMultiplier = getDifficultyMultiplier(selectedMods);
   const speedMultiplier = getSpeedMultiplier(selectedMods);
   const judgementWindows = getJudgementWindows(od, difficultyMultiplier, speedMultiplier);
@@ -95,7 +99,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
   const missJudg = judgementWindows.find((w) => w.type === 'miss') || judgementWindows[judgementWindows.length - 1];
 
   // Initialize notes
-  const notes: HitObject[] = (beatmap.notes || []).map((note) => {
+  const notes: HitObject[] = (activeBeatmap.notes || []).map((note) => {
     const playNote: HitObject = {
       ...note,
       isHit: false,
@@ -230,6 +234,18 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
             missHoldHead(n.holdState, n.time + missJudg.windowMs);
             n.isMissed = true;
             applyJudgement(missJudg, n.column, 'hold_head');
+          }
+          if (isNoRelease && n.holdState.isHolding && !n.holdState.isTailJudged && n.endTime !== undefined && currentTime >= n.endTime) {
+            const action = autoReleaseHoldTail(n.holdState, judgementWindows);
+            if (action && action.kind === 'tail_hit') {
+              n.isReleased = true;
+              n.releaseTime = n.endTime;
+              n.isReleaseHit = true;
+              n.isReleaseMissed = false;
+              const tailJudg = judgementWindows.find((w) => w.type === action.judgement) || missJudg;
+              applyJudgement(tailJudg, n.column, 'hold_tail');
+              hitErrorSamples.push(action.effectiveErrorMs);
+            }
           }
           if (!n.holdState.isTailJudged && n.holdState.isHeadJudged && n.endTime !== undefined) {
             const maxExpiry = n.endTime + missJudg.windowMs * TAIL_RELEASE_WINDOW_LENIENCE;

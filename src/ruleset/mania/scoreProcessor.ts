@@ -41,31 +41,8 @@ export const MAX_ACCURACY_BASE = ACCURACY_BASE_SCORE.marvelous;
 export const COMBO_LOG_BASE = 4;
 export const COMBO_LOG_CAP = Math.log(400) / Math.log(COMBO_LOG_BASE);
 
-export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
-  NF: 0.5,
-  EZ: 0.5,
-  HT: 0.5,
-  HR: 1.0,
-  SD: 1.0,
-  PF: 1.0,
-  HD: 1.0,
-  FI: 1.0,
-  Cover: 1.0,
-  CO: 1.0,
-  FL: 1.0,
-  DT: 1.0,
-  NC: 1.0,
-  K1: 0.9,
-  K2: 0.9,
-  K3: 0.9,
-  K4: 0.9,
-  K5: 0.9,
-  K6: 0.9,
-  K7: 0.9,
-  K8: 0.9,
-  K9: 0.9,
-  K10: 0.9,
-};
+export { MOD_SCORE_MULTIPLIERS } from '../../utils/modifiers';
+import { MOD_SCORE_MULTIPLIERS } from '../../utils/modifiers';
 
 export function getHpDrainMultiplier(hpDrainRate: number, mods: readonly string[] = []): number {
   const baseMultiplier = hpDrainRate > 5 ? 0.8 : 1.2;
