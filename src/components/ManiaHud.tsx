@@ -11,12 +11,16 @@
  */
 
 import React from 'react';
+import type { PenarBreakdown } from '../types';
+import { formatPenar } from '../utils/penar';
 
 export interface ManiaHudProps {
   score: number;
   hp: number; // 0..100
   accuracy?: number; // 0..100
   combo?: number;
+  penar?: PenarBreakdown | null;
+  showPenar?: boolean;
   keyCount?: number;
   keyLabels?: string[];
   playfieldWidthPercent?: number;
@@ -233,6 +237,35 @@ export const ArgonAccuracyCounter: React.FC<{ accuracy?: number; className?: str
 };
 
 /**
+ * ArgonPenarCounter component
+ * Recreates the Argon PP / PENAR counter slot under the accuracy display.
+ * Positioned directly under accuracy, scale ~0.8 relative to accuracy.
+ * Never labelled "pp"; explicitly labelled "PENAR" with tooltip.
+ */
+export const ArgonPenarCounter: React.FC<{
+  penar?: PenarBreakdown | null;
+  className?: string;
+}> = ({ penar, className = '' }) => {
+  const valueStr = formatPenar(penar);
+
+  return (
+    <div
+      id="argon-penar-counter"
+      title="Performance Evaluation & Numerical Achievement Rating"
+      className={`font-mono font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white/90 ${className}`}
+      aria-label={`PENAR: ${valueStr}`}
+    >
+      <span className="text-xl sm:text-2xl md:text-3xl tracking-tight tabular-nums font-black">
+        {valueStr}
+      </span>
+      <span className="text-[10px] sm:text-xs md:text-sm font-black tracking-wider text-cyan-400 opacity-90 ml-1 uppercase">
+        PENAR
+      </span>
+    </div>
+  );
+};
+
+/**
  * ArgonComboCounter component
  * Recreates the large combo counter from osu!(lazer) Argon skin.
  * Positioned bottom-left, scale ~1.3, bumping on combo increase.
@@ -423,6 +456,8 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
   hp,
   accuracy = 100,
   combo = 0,
+  penar,
+  showPenar = true,
   keyCount = 4,
   keyLabels = [],
   playfieldWidthPercent = 40,
@@ -471,9 +506,12 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
         )}
       </div>
 
-      {/* TOP-RIGHT CLUSTER: Accuracy */}
-      <div className="absolute top-3 sm:top-5 right-4 sm:right-[30px] flex flex-col items-end">
+      {/* TOP-RIGHT CLUSTER: Accuracy and PENAR */}
+      <div className="absolute top-3 sm:top-5 right-4 sm:right-[30px] flex flex-col items-end gap-1 sm:gap-1.5">
         <ArgonAccuracyCounter accuracy={accuracy} />
+        {showPenar && (
+          <ArgonPenarCounter penar={penar} />
+        )}
       </div>
 
       {/* DUAL HIT-ERROR BARS (Flanking the Playfield) */}

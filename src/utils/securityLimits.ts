@@ -348,6 +348,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
      enableMapSV: settings.enableMapSV !== undefined ? Boolean(settings.enableMapSV) : true,
     enableSongPreview: settings.enableSongPreview !== undefined ? Boolean(settings.enableSongPreview) : true,
     showFpsCounter: Boolean(settings.showFpsCounter),
+    showPenarDuringPlay: settings.showPenarDuringPlay !== undefined ? Boolean(settings.showPenarDuringPlay) : (defaultSettings.showPenarDuringPlay ?? true),
     localDisplayName: sanitizeString(settings.localDisplayName, '', 32),
     difficultyAdjust: isRecord(settings.difficultyAdjust)
       ? {
@@ -437,6 +438,23 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
 
   if (scoreInput.isAutoplay !== undefined) {
     scoreState.isAutoplay = Boolean(scoreInput.isAutoplay);
+  }
+
+  if (isRecord(scoreInput.penar)) {
+    const rawPenar = scoreInput.penar;
+    scoreState.penar = {
+      total: typeof rawPenar.total === 'number' && Number.isFinite(rawPenar.total) ? clamp(rawPenar.total, 0, 100000, 0) : null,
+      version: sanitizeString(rawPenar.version, 50) || 'penar-stub-0',
+      starRating: typeof rawPenar.starRating === 'number' && Number.isFinite(rawPenar.starRating) ? clamp(rawPenar.starRating, 0, 50, 0) : null,
+      accuracy: clamp(rawPenar.accuracy, 0, 100, 0),
+      maxCombo: clamp(rawPenar.maxCombo, 0, 100000, 0),
+      missCount: clamp(rawPenar.missCount, 0, 100000, 0),
+      mods: Array.isArray(rawPenar.mods)
+        ? rawPenar.mods.filter((m): m is string => typeof m === 'string').map(m => sanitizeString(m, 10)).slice(0, 20)
+        : [],
+    };
+  } else if (scoreInput.penar === null) {
+    scoreState.penar = null;
   }
 
   const replayFrames: ReplayFrame[] = [];

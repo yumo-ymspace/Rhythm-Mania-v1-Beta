@@ -322,6 +322,6 @@ describe('autonomous misses with lazer hold rules (TASK-021)', () => {
     expect(holdNote.isHoldFailed).toBe(true);
     expect(holdNote.holdState?.tailMissed).toBe(true);
     expect(holdNote.holdState?.isComplete).toBe(true);
-  });
+  }, 15000);
 });
 

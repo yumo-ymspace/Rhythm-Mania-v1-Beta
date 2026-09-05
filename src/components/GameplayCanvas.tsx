@@ -85,6 +85,7 @@ import {
 } from '../ruleset/mania/healthProcessor';
 import metadata from '../../metadata.json';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
+import { computePenar } from '../utils/penar';
 
 // HIGH PERFORMANCE INTEGRATED RENDERER IMPORTS
 import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
@@ -529,6 +530,13 @@ export default function GameplayCanvas({
     // If they failed or are at 0 HP, submit as finished fail record so they see performance telemetry and replay
     if (scoreStateRef.current.failed) {
       if (isMountedRef.current) {
+        scoreStateRef.current.penar = computePenar({
+          starRating: beatmap.starRating ?? null,
+          accuracy: scoreStateRef.current.accuracy,
+          maxCombo: scoreStateRef.current.maxCombo,
+          missCount: scoreStateRef.current.missCount,
+          mods: settings.selectedMods,
+        });
         onFinishRef.current(scoreStateRef.current, replayFramesRef.current, hitErrorSamplesRef.current);
       }
     } else {
@@ -1994,6 +2002,14 @@ export default function GameplayCanvas({
       modMultiplier,
     });
 
+    state.penar = computePenar({
+      starRating: beatmap.starRating ?? null,
+      accuracy: state.accuracy,
+      maxCombo: state.maxCombo,
+      missCount: state.missCount,
+      mods: settings.selectedMods,
+    });
+
     // Muted (MU) mod: fade audio as combo builds, restore on break/miss
     if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
       const muteFactor = Math.max(0, 1 - state.combo / 30);
@@ -2621,6 +2637,13 @@ export default function GameplayCanvas({
         finishTimeoutRef.current = setTimeout(() => {
           finishTimeoutRef.current = null;
           if (isMountedRef.current) {
+            scoreStateRef.current.penar = computePenar({
+              starRating: beatmap.starRating ?? null,
+              accuracy: scoreStateRef.current.accuracy,
+              maxCombo: scoreStateRef.current.maxCombo,
+              missCount: scoreStateRef.current.missCount,
+              mods: settings.selectedMods,
+            });
             onFinishRef.current(scoreStateRef.current, replayFramesRef.current, hitErrorSamplesRef.current);
           }
         }, 1200);
@@ -2857,6 +2880,14 @@ export default function GameplayCanvas({
         judgedCount,
         totalJudgements: totalJudgementsRef.current,
         modMultiplier,
+      });
+
+      state.penar = computePenar({
+        starRating: beatmap.starRating ?? null,
+        accuracy: state.accuracy,
+        maxCombo: state.maxCombo,
+        missCount: state.missCount,
+        mods: settings.selectedMods,
       });
     };
 
@@ -3850,12 +3881,14 @@ export default function GameplayCanvas({
           </div>
         )}
 
-        {/* ARGON MANIA HUD (TASK-052/053: Complete Argon HUD layout) */}
+        {/* ARGON MANIA HUD (TASK-052/053/054: Complete Argon HUD layout with PENAR) */}
         {!isPrePlay && (
           <ManiaHud
             score={uiScore}
             hp={uiHp}
             accuracy={scoreStateRef.current.accuracy}
+            penar={scoreStateRef.current.penar}
+            showPenar={settings.showPenarDuringPlay !== false}
             combo={uiCombo}
             keyCount={beatmap.keyCount}
             keyLabels={settings.bindings[beatmap.keyCount] || []}

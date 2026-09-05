@@ -194,6 +194,13 @@ export const ROWS: RowDef[] = [
     keywords: ['scroll', 'lock', 'speed', 'gameplay', 'mid-map'],
   },
   {
+    id: 'showPenarDuringPlay', section: 'gameplay', label: 'Show PENAR during play',
+    description: 'Display the PENAR (Performance Evaluation & Numerical Achievement Rating) counter below accuracy during gameplay.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.showPenarDuringPlay,
+    keywords: ['penar', 'pp', 'counter', 'performance', 'rating'],
+  },
+  {
     id: 'upsurfaceNoteMode', section: 'gameplay', label: 'Scroll direction',
     description: 'If on, notes move up from below instead of falling from above. Disabled when Babylon.js 3D is the active renderer.',
     control: { kind: 'select', options: [

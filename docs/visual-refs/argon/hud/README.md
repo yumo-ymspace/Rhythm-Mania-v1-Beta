@@ -26,12 +26,12 @@ Layout numbers from `ArgonSkin.cs` (2026-08-30 master), not from the 2022 still:
 
 ## Comparison checklist (TASK-052–054)
 
-- [ ] Health is a short horizontal bar **top-left**, not a side drain
-- [ ] Score sits on stacked **wedges**, tabular digits, no “Score” caption
-- [ ] Accuracy **top-right**; PENAR directly under it; never labelled “pp”
-- [ ] Combo **bottom-left**, large
-- [ ] Hit-error: **two** vertical bars, left and right of the stage
-- [ ] Progress bar full-width bottom; density optional
-- [ ] Key counter bottom-right
-- [ ] Judgement pop ~180px above receptor, ~25px type (`DefaultManiaJudgementPiece`)
-- [ ] No Home/Fullscreen/Pause cluster on the playfield (Esc + overlay)
+- [x] Health is a short horizontal bar **top-left**, not a side drain
+- [x] Score sits on stacked **wedges**, tabular digits, no “Score” caption
+- [x] Accuracy **top-right**; PENAR directly under it; never labelled “pp”
+- [x] Combo **bottom-left**, large
+- [x] Hit-error: **two** vertical bars, left and right of the stage
+- [x] Progress bar full-width bottom; density optional
+- [x] Key counter bottom-right
+- [x] Judgement pop ~180px above receptor, ~25px type (`DefaultManiaJudgementPiece`)
+- [x] No Home/Fullscreen/Pause cluster on the playfield (Esc + overlay)

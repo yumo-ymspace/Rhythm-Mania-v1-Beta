@@ -164,6 +164,16 @@ export interface JudgementWindow {
   glowColor: string;
 }
 
+export interface PenarBreakdown {
+  total: number | null; // null = not yet computed
+  version: string; // e.g. 'penar-stub-0'
+  starRating: number | null;
+  accuracy: number;
+  maxCombo: number;
+  missCount: number;
+  mods: string[];
+}
+
 export interface ScoreState {
   score: number;
   combo: number;
@@ -184,6 +194,7 @@ export interface ScoreState {
   comboBreakCount?: number;
   columnJudgements: ColumnJudgementCounts[];
   isAutoplay?: boolean;
+  penar?: PenarBreakdown | null;
 }
 
 export interface ReplayFrame {
@@ -311,6 +322,7 @@ export interface GameSettings {
   disableLaneShake?: boolean;
   enableSongPreview?: boolean; // play an audio preview of the selected map on Song Select
   showFpsCounter?: boolean; // render a small FPS readout during gameplay
+  showPenarDuringPlay?: boolean; // display PENAR slot below accuracy during gameplay
   localDisplayName?: string; // optional device-local player name; not an account
   difficultyAdjust?: DifficultyAdjustSettings; // Difficulty Adjust (DA) mod overrides
 }

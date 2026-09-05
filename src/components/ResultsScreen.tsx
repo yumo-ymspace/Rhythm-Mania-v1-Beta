@@ -18,6 +18,7 @@ import { downloadReplayExport } from '../utils/replayTransfer';
 import { computeGradeFromScoreState } from '../ruleset/mania/scoreProcessor';
 import HitErrorGraph from './HitErrorGraph';
 import { resolveStarRating } from '../utils/starRating';
+import { formatPenar } from '../utils/penar';
 
 interface ResultsScreenProps {
   scoreState: ScoreState;
@@ -296,11 +297,15 @@ export default function ResultsScreen({
                 {score.toLocaleString()}
               </h1>
 
-              {/* Max Combo underneath */}
+              {/* Max Combo & PENAR underneath */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-400 font-sans font-bold text-sm uppercase tracking-wide mt-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-slate-500">Max Combo:</span>
                   <span className="text-white font-black">{maxCombo.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">PENAR:</span>
+                  <span id="results-penar-value" className="text-white font-black">{formatPenar(activeScoreState.penar)}</span>
                 </div>
               </div>
 

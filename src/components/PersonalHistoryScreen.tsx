@@ -31,6 +31,7 @@ import { resolveStarRating } from '../utils/starRating';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
 import { hasOsuConnection } from '../utils/osuTokenManager';
 import { findMatchingBeatmap } from '../utils/replayManager';
+import { formatPenar } from '../utils/penar';
 
 interface PersonalHistoryScreenProps {
   history: PlayHistoryRecord[];
@@ -464,7 +465,7 @@ export default function PersonalHistoryScreen({
                   {selectedRecord.beatmapTitle || 'Unknown Title'}
                 </h2>
                 <span className="text-[10px] text-slate-400 font-mono uppercase mt-0.5 tracking-wide">
-                  {selectedRecord.beatmapDifficulty || 'Normal'} • {selectedRecord.accuracy.toFixed(2)}%
+                  {selectedRecord.beatmapDifficulty || 'Normal'} • {selectedRecord.accuracy.toFixed(2)}% • PENAR: {formatPenar(selectedRecord.scoreState?.penar)}
                 </span>
               </div>
             </div>
@@ -625,6 +626,7 @@ export default function PersonalHistoryScreen({
                   <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${getDifficultyColor(selectedRecord.starRating)}`}>★ {selectedRecord.starRating.toFixed(2)}</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-white/5 border border-white/10 text-slate-300">{selectedRecord.difficultyName}</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-white/5 border border-white/10 text-slate-300">{selectedRecord.keyCount}K</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-white/5 border border-white/10 text-slate-300">PENAR: {formatPenar(selectedRecord.scoreState?.penar)}</span>
                   {selectedRecord.mods && selectedRecord.mods.length > 0 && <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-pink-500/20 text-pink-300 border border-pink-500/30">+{selectedRecord.mods.join('')}</span>}
                 </div>
               </div>
@@ -765,7 +767,7 @@ export default function PersonalHistoryScreen({
                           <h4 className="font-extrabold font-sans text-lg lg:text-xl text-white tracking-tight truncate leading-tight">{rec.beatmapTitle}</h4>
                           <span className="text-[10px] text-slate-400 font-mono mt-1 uppercase font-black tracking-normal truncate">{rec.difficultyName} • {rec.keyCount}K • {getRelativeTime(rec.timestamp)}</span>
                           <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-mono flex-wrap">
-                            <span className="text-slate-200 font-semibold tabular-nums">{rec.score.toLocaleString()}</span><span className="text-slate-500">•</span><span className="text-cyan-300 font-bold tabular-nums">{rec.accuracy.toFixed(2)}%</span><span className="text-slate-500">•</span><span className="text-slate-400">{rec.maxCombo}x</span>
+                            <span className="text-slate-200 font-semibold tabular-nums">{rec.score.toLocaleString()}</span><span className="text-slate-500">•</span><span className="text-cyan-300 font-bold tabular-nums">{rec.accuracy.toFixed(2)}%</span><span className="text-slate-500">•</span><span className="text-slate-400">{rec.maxCombo}x</span><span className="text-slate-500">•</span><span className="text-slate-400 font-mono">PENAR: {formatPenar(rec.scoreState?.penar)}</span>
                             {rec.mods && rec.mods.length > 0 && <span className="text-pink-400 font-sans font-bold text-[10px]">+{rec.mods.join('')}</span>}
                             {isItemDownloading && (
                               <span className="inline-flex items-center gap-1 text-[9px] font-mono text-cyan-300 bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-500/30 animate-pulse">

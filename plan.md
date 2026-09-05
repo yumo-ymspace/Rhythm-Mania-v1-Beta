@@ -755,7 +755,7 @@ Status starts as pending. Dependencies must be completed first.
 | **TASK-051** | Hold body masking while held **(done)** | renderer + note state | Playwright LN hold |
 | **TASK-052** | Argon HUD: wedges, health top-left, score on wedges **(done)** | `ManiaHud` | Playwright vs `hud` ref |
 | **TASK-053** | Accuracy top-right, dual hit-error bars, combo bottom-left, progress, key counter **(done)** | `ManiaHud` | Playwright vs `hud` ref |
-| **TASK-054** | PENAR slot under accuracy; stub `computePenar`; settings toggle; results/history `—` | `penar.ts`, HUD, Results, types | Playwright: label is PENAR not PP |
+| **TASK-054** | PENAR slot under accuracy; stub `computePenar`; settings toggle; results/history `—` **(done)** | `penar.ts`, HUD, Results, types | Playwright: label is PENAR not PP |
 
 ### Menus
 
