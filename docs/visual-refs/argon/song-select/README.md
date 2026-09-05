@@ -24,12 +24,12 @@ All stills in this folder are captured from the **lazer client** (2025.60x-lazer
 
 ## Comparison checklist (TASK-060–062)
 
-- [ ] Full-bleed cover with light blur behind UI
-- [ ] Wedge with mania stats (Notes / Hold Notes / Key Count), not stable's metadata block
-- [ ] Carousel of sets; selected set expands to difficulty pills with stars
-- [ ] Ranking panel is **Local** (this device's scores, score desc). No Global / Country / RM tabs
-- [ ] Empty state when the chart has no local plays
-- [ ] Bottom: **Back / Mods / Random / Options**
-- [ ] Mod overlay: categories, incompatibility, live multiplier
-- [ ] No Google/account chip required to browse or play local maps
-- [ ] No stable Default-skin panels, pink cookie art, or stable footer chrome
+- [x] Full-bleed cover with light blur behind UI
+- [x] Wedge with mania stats (Notes / Hold Notes / Key Count / Approach Rate / Accuracy / HP Drain), not stable's metadata block
+- [x] Carousel of sets; selected set expands to difficulty pills with stars
+- [x] Ranking panel is **Local** (this device's scores, score desc). No Global / Country / RM tabs
+- [x] Empty state when the chart has no local plays
+- [x] Bottom: **Back / Mods / Random / Options**
+- [x] Mod overlay: categories, incompatibility, live multiplier (TASK-061)
+- [x] No Google/account chip required to browse or play local maps
+- [x] No stable Default-skin panels, pink cookie art, or stable footer chrome

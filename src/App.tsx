@@ -47,7 +47,7 @@ import { LAZER_HOLD_RULES_VERSION } from './ruleset/mania/holdNote';
 import { applyBeatmapMods } from './ruleset/mania/beatmapMods';
 import { extractZipEntry } from './utils/zipResolver';
 import { AssetLifecycleManager } from './utils/assetLifecycle';
-import { computeChecksum, inferChecksumAlgorithm } from './utils/checksum';
+import { computeChecksum } from './utils/checksum';
 import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
@@ -639,27 +639,10 @@ export default function App() {
     }
 
     // Auto-download missing osu! mirror beatmaps for replay playback (browser → Catboy/osudl).
+    // Catalog chart/set APIs were removed in the offline cut (TASK-009).
     const catalogSetId = record.catalogSetId;
     const chartRevisionId = record.chartRevisionId;
-    let catalogEntry: any = null;
     let sourceSetId = extractRecordSourceSetId(record);
-
-    if (chartRevisionId) {
-      try {
-        const res = await fetch(`/api/catalog/chart?chartRevisionId=${encodeURIComponent(chartRevisionId)}`, { credentials: 'include' });
-        if (!isCurrentOperation()) return { success: false, error: 'Replay loading was superseded.' };
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-            catalogEntry = json.data;
-            const sid = Number(json.data.sourceSetId);
-            if (Number.isInteger(sid) && sid > 0) sourceSetId = sid;
-          }
-        }
-      } catch (err) {
-        console.warn('Error querying catalog for replay auto-download:', err);
-      }
-    }
 
     if (!sourceSetId && record.beatmapTitle) {
       try {
@@ -697,17 +680,9 @@ export default function App() {
       if (osuFiles.length === 0) throw new Error('No .osu files in beatmap package');
 
       const importedMaps: Beatmap[] = [];
-      const pkgId = catalogEntry?.cloudSetId || catalogSetId || (sourceSetId ? `osuapi_${sourceSetId}` : null) || (chartRevisionId && /^osuapi_\d+/.test(chartRevisionId) ? chartRevisionId.split('_').slice(0, 2).join('_') : null);
+      const pkgId = catalogSetId || (sourceSetId ? `osuapi_${sourceSetId}` : null) || (chartRevisionId && /^osuapi_\d+/.test(chartRevisionId) ? chartRevisionId.split('_').slice(0, 2).join('_') : null);
       if (!pkgId) throw new Error('Replay has no verified cloud set identity');
-      const targetChecksum = typeof catalogEntry?.checksum === 'string'
-        ? catalogEntry.checksum.toLowerCase()
-        : typeof record.checksum === 'string' ? record.checksum.toLowerCase() : null;
-      const targetChecksumAlgorithm = catalogEntry?.checksumAlgorithm === 'sha256' || catalogEntry?.checksumAlgorithm === 'md5'
-        ? catalogEntry.checksumAlgorithm
-        : record.checksumAlgorithm || (targetChecksum ? inferChecksumAlgorithm(targetChecksum) : null);
-      const targetFilename = typeof catalogEntry?.originalOsuFilename === 'string'
-        ? catalogEntry.originalOsuFilename.replace(/\\/g, '/').split('/').pop()?.toLowerCase()
-        : null;
+      const targetChecksum = typeof record.checksum === 'string' ? record.checksum.toLowerCase() : null;
 
       for (const fileKey of osuFiles) {
         const rawContent = await extractZipEntry(zip.files[fileKey], fileKey, extractionBudget);
@@ -720,10 +695,8 @@ export default function App() {
           computeChecksum(rawContent, 'sha256'),
         ]);
 
-        const normalizedFileName = fileKey.replace(/\\/g, '/').split('/').pop()?.toLowerCase();
         const isTarget = Boolean(
           (targetChecksum && (md5.toLowerCase() === targetChecksum || sha256.toLowerCase() === targetChecksum)) ||
-          (targetFilename && normalizedFileName === targetFilename) ||
           (chartRevisionId && (chartRevisionId.includes(md5) || chartRevisionId.includes(sha256))) ||
           (record.beatmapDifficulty && parsed.difficulty?.toLowerCase() === record.beatmapDifficulty.toLowerCase() && parsed.keyCount === record.keyCount)
         );
@@ -742,7 +715,7 @@ export default function App() {
           chartRevisionId: isTarget ? (chartRevisionId || mapChartRevisionId) : mapChartRevisionId,
           checksum: md5,
           checksumAlgorithm: 'md5',
-          isServerMap: Boolean(catalogEntry?.isActive || isTarget),
+          isServerMap: Boolean(isTarget),
           packageId: pkgId,
           parentPackageId: pkgId,
           sourceSetId: sourceSetId || parsed.sourceSetId,
@@ -757,7 +730,7 @@ export default function App() {
 
       if (importedMaps.length === 0) throw new Error('Failed to parse beatmap files');
 
-      await storageManager.savePackageWithBeatmaps(pkgId, catalogEntry?.title || importedMaps[0]?.title || 'Downloaded Beatmap', new Blob([arrayBuffer]), importedMaps);
+      await storageManager.savePackageWithBeatmaps(pkgId, importedMaps[0]?.title || 'Downloaded Beatmap', new Blob([arrayBuffer]), importedMaps);
       if (!isCurrentOperation()) return { success: false, error: 'Replay loading was superseded.' };
 
       setCustomMaps(prev => {

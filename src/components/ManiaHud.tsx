@@ -284,10 +284,7 @@ export const ArgonComboCounter: React.FC<{ combo?: number; className?: string }>
       aria-label={`Combo: ${combo}`}
     >
       <div className="text-5xl sm:text-6xl font-[900] tracking-tighter text-white">
-        {combo}
-      </div>
-      <div className="text-[10px] sm:text-[11px] font-black tracking-[0.25em] text-cyan-400 uppercase mt-0.5">
-        COMBO
+        {combo}x
       </div>
     </div>
   );
@@ -360,11 +357,12 @@ export const ArgonDualHitErrorMeters: React.FC<{
       {/* Left Hit Error Meter */}
       <div
         id="argon-hit-error-left"
-        className="absolute top-1/2 -translate-y-1/2 z-25 flex items-center"
+        className="absolute top-1/2 -translate-y-1/2 z-25 flex flex-col items-center gap-1"
         style={{
           right: `calc(50% + ${halfPercent}% + 12px)`,
         }}
       >
+        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Early</span>
         <canvas
           ref={leftCanvasRef}
           width={24}
@@ -372,23 +370,26 @@ export const ArgonDualHitErrorMeters: React.FC<{
           className="w-[24px] h-[200px]"
           aria-hidden="true"
         />
+        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Late</span>
       </div>
 
-      {/* Right Hit Error Meter (X-Flipped) */}
+      {/* Right Hit Error Meter (X-Flipped canvas only; labels stay readable) */}
       <div
         id="argon-hit-error-right"
-        className="absolute top-1/2 -translate-y-1/2 z-25 flex items-center scale-x-[-1]"
+        className="absolute top-1/2 -translate-y-1/2 z-25 flex flex-col items-center gap-1"
         style={{
           left: `calc(50% + ${halfPercent}% + 12px)`,
         }}
       >
+        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Early</span>
         <canvas
           ref={rightCanvasRef}
           width={24}
           height={200}
-          className="w-[24px] h-[200px]"
+          className="w-[24px] h-[200px] scale-x-[-1]"
           aria-hidden="true"
         />
+        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Late</span>
       </div>
     </div>
   );

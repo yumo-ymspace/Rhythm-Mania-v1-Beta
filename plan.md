@@ -695,7 +695,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-001** | Declare Canvas2D Argon as reference renderer; Babylon remains optional skin; add `skinId: 'argon'` to types/defaults without drawing Argon yet | `types.ts`, `defaultSettings.ts`, `SkinScreen.tsx` (list entry only) | `npm run lint`; settings still load |
+| **TASK-001** | Declare Canvas2D Argon as reference renderer; Babylon remains optional skin; add `skinId: 'argon'` to types/defaults without drawing Argon yet **(done)** | `types.ts`, `defaultSettings.ts`, `SkinScreen.tsx` (list entry only) | `npm run lint`; settings still load |
 | **TASK-002** | Extract `src/ruleset/mania/` and move existing window/score helpers unchanged **(done)** | `scoreCalculator.ts` → `scoreProcessor.ts`, `judgementTiming.ts`, new folder | tests still pass (behaviour freeze) |
 | **TASK-003** | Create `docs/visual-refs/argon/README.md` + slot files (hud, playfield-4k, song-select, results, pause). Download/save public **lazer-client** screenshots with source URLs + client versions. **Do not import into `public/`.** Refreshed 2026-09-05: purged all stable wiki stills; song-select is lazer V1/V2 captures, playfield has a lazer gameplay still, results links lazer videos + redesign Figma pending an `F12` still. **(done)** | `docs/visual-refs/argon/*` | README lists each ref and comparison checklist |
 | **TASK-004** | Canvas2D context: `{ alpha: false, desynchronized: true }` with feature-detect fallback; `AudioContext({ latencyHint: 'interactive' })` if not already **(done)** | `Canvas2DRenderer.ts`, `AudioEngine.ts` | play one map; no visual regression; lint |
@@ -763,7 +763,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-060** | Song select carousel + wedge + bottom Mods/Random/Options + **local ranking panel** (no global) **(done)** | `SongSelect.tsx` | Playwright vs `song-select` ref |
+| **TASK-060** | Song select carousel + wedge + bottom Mods/Random/Options + **local ranking panel** (no global). Wedge uses lazer V2 mania stats (Notes / Hold Notes / Key Count / AR / Accuracy / HP Drain) + Details/Ranking tabs + Local scope. **(done)** | `SongSelect.tsx` | Playwright vs `song-select` ref |
 | **TASK-061** | Mod overlay visual (categories, hex-ish buttons, incompat) **(done)** | SongSelect | Playwright |
 | **TASK-062** | Catalog overlay Argon tokens; search + catboy download only (TASK-009 already removed DB activation) | `OnlineBeatmapCatalog.tsx` | Playwright search → download |
 | **TASK-070** | Results grade-hero + judgement names + PENAR + local score list only | `ResultsScreen.tsx` | Playwright vs `results` ref |

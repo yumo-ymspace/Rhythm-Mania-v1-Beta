@@ -85,6 +85,8 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
   let hasExplicitKeyCount = false;
   let overallDifficulty = 8;
   let hpDrainRate = 8;
+  let approachRate = 5;
+  let hasExplicitApproachRate = false;
   let previewTime: number | undefined = undefined;
   let sliderMultiplier = 1.4; // Base map multiplier defined in [Difficulty]
   let sourceSetId: number | undefined = undefined;
@@ -173,6 +175,13 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
              const parsed = Number(value);
              if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) throw new Error('Invalid HPDrainRate value.');
              hpDrainRate = parsed;
+             break;
+           }
+           case 'approachrate': {
+             const parsed = Number(value);
+             if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) throw new Error('Invalid ApproachRate value.');
+             approachRate = parsed;
+             hasExplicitApproachRate = true;
              break;
            }
             case 'mode':
@@ -436,6 +445,7 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
     notes,
     hpDrainRate,
     overallDifficulty,
+    approachRate: hasExplicitApproachRate ? approachRate : overallDifficulty,
     videoStartTime: media.videoStartTime,
     previewTime,
     mode,

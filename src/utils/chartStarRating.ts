@@ -37,7 +37,7 @@ export function calculateChartStarRating(
   const declaredDurationMs = Number.isFinite(map.duration) && map.duration > 0 ? map.duration * 1000 : 0;
   const activeDurationMs = Math.max(MIN_ACTIVE_DURATION_MS, lastTime - firstTime, declaredDurationMs);
   const activeSeconds = activeDurationMs / 1000;
-  const keyCount = clamp(Number.isInteger(map.keyCount) ? map.keyCount : 4, 2, 9);
+  const keyCount = clamp(Number.isInteger(map.keyCount) ? map.keyCount : 4, 1, 10);
 
   const chordSizes: number[] = [];
   const columnLastTime = new Map<number, number>();

@@ -356,26 +356,6 @@ export function renderArgonPlayfield(
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    const keyBottom = upscroll ? 36 : height - 36;
-    const dotR = 4;
-    const clusterY = keyBottom;
-    const dots = [
-      { dx: 0, dy: upscroll ? 6 : -6 },
-      { dx: -7, dy: upscroll ? -2 : 2 },
-      { dx: 7, dy: upscroll ? -2 : 2 },
-    ];
-    ctx.fillStyle = pressed ? '#ffffff' : color;
-    if (pressed) {
-      ctx.shadowColor = hexToRgba(color, 0.5);
-      ctx.shadowBlur = 16;
-    }
-    for (const dot of dots) {
-      ctx.beginPath();
-      ctx.arc(inset.x + inset.width / 2 + dot.dx, clusterY + dot.dy, dotR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-
     if (showKeyLabels && keyLabels[i]) {
       ctx.font = '900 18px system-ui, -apple-system, sans-serif';
       ctx.fillStyle = pressed ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.28)';

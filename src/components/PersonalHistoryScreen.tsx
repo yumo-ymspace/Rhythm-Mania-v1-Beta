@@ -680,6 +680,24 @@ export default function PersonalHistoryScreen({
                 <Upload className="h-4 w-4 text-slate-500 mb-1" /><span className="text-[8px] font-mono font-bold text-slate-400 uppercase tracking-widest">DRAG & DROP RMR / JSON TO IMPORT</span>
               </button>
 
+              {selectedRecord.scoreState && (
+                <div className="rounded-xl border border-white/10 bg-black/50 p-3 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { label: 'Perfect', value: selectedRecord.scoreState.marvelousCount, color: 'text-cyan-300' },
+                    { label: 'Great', value: selectedRecord.scoreState.perfectCount, color: 'text-amber-300' },
+                    { label: 'Good', value: selectedRecord.scoreState.greatCount, color: 'text-emerald-300' },
+                    { label: 'Ok', value: selectedRecord.scoreState.goodCount, color: 'text-blue-300' },
+                    { label: 'Meh', value: selectedRecord.scoreState.badCount, color: 'text-pink-300' },
+                    { label: 'Miss', value: selectedRecord.scoreState.missCount, color: 'text-rose-300' },
+                  ].map((row) => (
+                    <div key={row.label} className="rounded-lg bg-white/[0.03] border border-white/5 px-2 py-2">
+                      <div className={`text-sm font-mono font-black tabular-nums ${row.color}`}>{row.value ?? 0}</div>
+                      <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 mt-0.5">{row.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="relative" ref={menuRef}>
                 <button type="button" onClick={() => setShowSettingsMenu(!showSettingsMenu)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 text-xs font-medium text-slate-300 hover:text-white transition-all">
                   <MoreHorizontal className="h-4 w-4" /> History Options

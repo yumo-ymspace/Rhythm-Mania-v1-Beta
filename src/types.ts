@@ -136,6 +136,7 @@ export interface Beatmap extends BeatmapMetadata {
   notes: HitObject[];
   hpDrainRate: number; // 0-10
   overallDifficulty: number; // 0-10 (affects judgement window)
+  approachRate?: number; // 0-10 (display / DA; mania still ships AR in .osu)
   timingPoints: TimingControlPoint[];
   sliderMultiplier: number;
   baseBeatLength?: number;

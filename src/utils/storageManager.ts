@@ -147,15 +147,18 @@ function sanitizeHitObject(value: unknown, index: number, keyCount: number): Hit
 /** Runtime guard for records read from IndexedDB or legacy localStorage. */
 export function sanitizeSavedBeatmap(raw: unknown): SavedBeatmap | null {
   if (!isRecord(raw)) return null;
-  const keyCount = finiteNumber(raw.keyCount, 2, 9);
+  const keyCount = finiteNumber(raw.keyCount, 1, 10);
   const duration = finiteNumber(raw.duration, 0, 10000000);
   const bpm = finiteNumber(raw.bpm, 0.01, 10000);
   const hpDrainRate = finiteNumber(raw.hpDrainRate, 0, 10);
   const overallDifficulty = finiteNumber(raw.overallDifficulty, 0, 10);
+  const approachRateParsed = raw.approachRate === undefined ? undefined : finiteNumber(raw.approachRate, 0, 10);
+  if (raw.approachRate !== undefined && approachRateParsed === null) return null;
   const sliderMultiplier = finiteNumber(raw.sliderMultiplier, 0.001, 10);
   if (keyCount === null || duration === null || bpm === null || hpDrainRate === null || overallDifficulty === null || sliderMultiplier === null ||
       !Number.isInteger(keyCount) || !Array.isArray(raw.notes) || raw.notes.length > MAX_BEATMAP_NOTES ||
       !Array.isArray(raw.timingPoints) || raw.timingPoints.length > MAX_BEATMAP_TIMING_POINTS) return null;
+  const approachRate = approachRateParsed ?? overallDifficulty;
 
   const notes: HitObject[] = [];
   for (let i = 0; i < raw.notes.length; i++) {
@@ -230,6 +233,7 @@ export function sanitizeSavedBeatmap(raw: unknown): SavedBeatmap | null {
     notes,
     hpDrainRate,
     overallDifficulty,
+    approachRate,
     timingPoints,
     sliderMultiplier,
     baseBeatLength: baseBeatLength ?? undefined,
