@@ -22,6 +22,7 @@ import { getScrollYPosition, computeCoverRatio, getCoverOpacityForY } from './pl
 import { ScrollModel } from './scrollVelocity';
 import { isHoldBodyAnchored } from './noteState';
 import { HOLD_TICK_RULES_VERSION } from '../utils/holdTickRules';
+import { LAZER_HOLD_RULES_VERSION } from '../ruleset/mania/holdNote';
 
 function mergeTailIntervals(
   intervals: Array<{ startTime: number; endTime: number }>,
@@ -71,7 +72,19 @@ export function getVisibleNotes(
     const usesTailTicks = n.holdRulesVersion === HOLD_TICK_RULES_VERSION;
     const isHoldBodyActive = n.type === 'hold' && n.endTime !== undefined;
     const isEndPassed = isHoldBodyActive && n.endTime !== undefined && visualTime > n.endTime;
-    const isHoldBodyGrounded = isHoldBodyActive && isHoldBodyAnchored({
+    const isHolding = n.type === 'hold' && (
+      n.holdRulesVersion === LAZER_HOLD_RULES_VERSION && n.holdState
+        ? n.holdState.isHolding
+        : (n.isHit && !n.isReleased && !n.isHoldFailed && (n.earlyReleaseTime === undefined || n.tailResumedTime !== undefined))
+    );
+
+    const y = getScrollYPosition(n.time, visualTime, receptorY, speedFactor, up, scrollModel);
+    const endY = n.endTime !== undefined
+      ? getScrollYPosition(n.endTime, visualTime, receptorY, speedFactor, up, scrollModel)
+      : undefined;
+
+    const isHeadAtOrPastReceptor = up ? y <= receptorY : y >= receptorY;
+    const isHoldBodyGrounded = isHoldBodyActive && isHolding && isHeadAtOrPastReceptor && isHoldBodyAnchored({
       type: n.type,
       isHit: n.isHit,
       isMissed: n.isMissed,
@@ -80,20 +93,20 @@ export function getVisibleNotes(
       isEndPassed,
       earlyReleaseTime: n.earlyReleaseTime,
       tailResumedTime: n.tailResumedTime,
+      isHolding,
+      holdRulesVersion: n.holdRulesVersion,
     });
     const shouldDrawHead = (n.type === 'normal' && !n.isHit && !n.isMissed) ||
-      (n.type === 'hold' && (n.isMissed || (!n.isHit && !n.isHoldFailed)));
+      (n.type === 'hold' && (n.isMissed || (!n.isHit && !n.isHoldFailed) || (n.isHit && !isHeadAtOrPastReceptor)));
     const shouldDrawEnd = n.type === 'hold' && n.endTime !== undefined && (!usesTailTicks || !n.isReleaseHit);
 
     if (!isHoldBodyActive && !shouldDrawHead && !shouldDrawEnd) continue;
 
-    const y = getScrollYPosition(n.time, visualTime, receptorY, speedFactor, up, scrollModel);
-    const endY = n.endTime !== undefined
-      ? getScrollYPosition(n.endTime, visualTime, receptorY, speedFactor, up, scrollModel)
-      : undefined;
     const bodyStartY = isHoldBodyGrounded && !usesTailTicks
       ? receptorY
-      : y;
+      : (n.isHit && n.earlyReleaseTime !== undefined && n.earlyReleaseTime > n.time && !usesTailTicks)
+        ? getScrollYPosition(n.earlyReleaseTime, visualTime, receptorY, speedFactor, up, scrollModel)
+        : y;
     const hitSegmentStartY = n.type === 'hold' && n.isHoldFailed && n.isReleased &&
       n.hitTime !== undefined && n.releaseTime !== undefined && n.releaseTime > n.hitTime
       ? getScrollYPosition(n.hitTime, visualTime, receptorY, speedFactor, up, scrollModel)
@@ -287,6 +300,7 @@ export function getVisibleNotes(
       isHoldFailed: n.isHoldFailed,
       isReleaseMissed: n.isReleaseMissed,
       isReleaseHit: n.isReleaseHit,
+      isHolding,
       isEndPassed,
       earlyReleaseTime: n.earlyReleaseTime,
       tailResumedTime: n.tailResumedTime,

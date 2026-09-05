@@ -13,6 +13,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, Maximize, Settings, Info, Home, Sliders, X } from 'lucide-react';
 import PauseOverlay from './PauseOverlay';
+import ManiaHud from './ManiaHud';
 import { mainAudio } from '../audio/AudioEngine';
 import { previewPlayer } from '../utils/previewPlayer';
 import { Beatmap, GameSettings, HitObject, JudgementType, JudgementWindow, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
@@ -1630,6 +1631,8 @@ export default function GameplayCanvas({
 
       if (action.kind === 'body_break') {
         holdNote.isHoldFailed = true;
+        holdNote.releaseTime = playTime;
+        holdNote.earlyReleaseTime = playTime;
         scoreStateRef.current.combo = 0;
         if (scoreStateRef.current.comboBreakCount !== undefined) {
           scoreStateRef.current.comboBreakCount++;
@@ -2867,6 +2870,8 @@ export default function GameplayCanvas({
 
         if (action.kind === 'body_break') {
           holdNote.isHoldFailed = true;
+          holdNote.releaseTime = frameTime;
+          holdNote.earlyReleaseTime = frameTime;
           scoreStateRef.current.combo = 0;
           if (scoreStateRef.current.comboBreakCount !== undefined) {
             scoreStateRef.current.comboBreakCount++;
@@ -3709,47 +3714,13 @@ export default function GameplayCanvas({
           </div>
         )}
 
-        {/* TOP STATUS BAR: DYNAMIC HIGH-CONTRAST FLOATING CONTROLS (z-40 overlay) */}
-        {!isPrePlay && !isPaused && !isFailed && (
-          <div className="absolute top-5 left-6 z-40 flex items-center gap-2 pointer-events-auto select-none">
-            {/* Quit/Exit button */}
-            <button
-              onClick={handleExit}
-              className="flex items-center justify-center p-2.5 bg-slate-900/80 hover:bg-rose-950/20 text-slate-400 hover:text-rose-400 rounded-xl border border-white/5 hover:border-rose-500/10 transition active:scale-95 cursor-pointer shadow-lg"
-              title="Quit Performance"
-            >
-              <Home className="h-4 w-4" />
-            </button>
-
-            {/* Fullscreen button */}
-            <button
-              onClick={handleToggleFocus}
-              className="flex items-center justify-center p-2.5 bg-slate-900/80 hover:bg-cyan-950/15 text-slate-400 hover:text-cyan-400 rounded-xl border border-white/5 hover:border-cyan-500/10 transition active:scale-95 cursor-pointer shadow-lg"
-              title="Toggle Fullscreen"
-            >
-              <Maximize className="h-4 w-4" />
-            </button>
-
-            {/* Pause button */}
-            <button
-              onClick={togglePause}
-              disabled={unpauseCountdown > 0}
-              className={`flex items-center justify-center p-2.5 bg-slate-900/80 hover:bg-slate-800/80 text-slate-400 hover:text-white rounded-xl border border-white/5 transition active:scale-95 cursor-pointer shadow-lg ${
-                unpauseCountdown > 0 ? 'opacity-50 pointer-events-none' : ''
-              }`}
-              title={isPaused ? "Resume" : "Pause"}
-            >
-              {isPaused ? <Play className="h-4 w-4 fill-current animate-pulse" /> : <Pause className="h-4 w-4 fill-current" />}
-            </button>
-
-            {/* Replay Cinematic indicator */}
-            {isReplayMode && (
-              <div className="ml-3 flex items-center gap-2 bg-cyan-950/70 border border-cyan-400/40 text-cyan-400 px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.25)] text-[10px] font-extrabold uppercase tracking-[0.2em]">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                <span>REPLAY</span>
-              </div>
-            )}
-          </div>
+        {/* ARGON MANIA HUD (TASK-052: Health top-left, Wedges, Score on wedges) */}
+        {!isPrePlay && (
+          <ManiaHud
+            score={uiScore}
+            hp={uiHp}
+            isReplayMode={isReplayMode}
+          />
         )}
 
         {!isReplayMode && !isAutoplay && unpauseCountdown > 0 && (
@@ -3924,16 +3895,12 @@ export default function GameplayCanvas({
           </div>
         )}
 
-        {/* FLOATING ACCURACY AND SCORE (Bottom Left) */}
+        {/* FLOATING ACCURACY (Bottom Left - TASK-053 will move to top-right) */}
         {!isPrePlay && (
           <div className={`absolute left-4 sm:left-6 ${(isReplayMode || isAutoplay) ? 'bottom-28' : 'bottom-[max(1.5rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))]'} z-30 flex flex-col items-start select-none font-sans pointer-events-none text-left drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]`}>
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">ACCURACY</span>
             <span className="text-2xl md:text-3xl font-black text-cyan-400 font-mono tracking-tight leading-none mb-1">
               {scoreStateRef.current.accuracy.toFixed(2)}%
-            </span>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2">SCORE</span>
-            <span className="text-3xl md:text-4xl font-extrabold text-white font-mono tracking-tighter leading-none mb-1">
-              {uiScore.toLocaleString('en-US', { minimumIntegerDigits: 7, useGrouping: false })}
             </span>
           </div>
         )}
@@ -4041,19 +4008,7 @@ export default function GameplayCanvas({
               maxWidth: '100%'
             }}
           >
-            {/* DECOUPLED RIGHT SIDE HIGH-PERFORMANCE HEALTH RECEPTACLE (z-index: 30) */}
-            <div 
-              id="right-gut-health" 
-              className="absolute top-24 bottom-24 z-30 w-3 bg-slate-900/60 rounded-full overflow-hidden border border-slate-800 flex flex-col justify-end shadow-inner"
-              style={{ left: 'calc(100% + 16px)' }}
-            >
-              <div 
-                className={`w-full transition-all duration-100 rounded-full shadow-[0_0_12px_rgba(34,211,238,0.6)] ${
-                  uiHp > 35 ? 'bg-gradient-to-t from-cyan-500 to-blue-400' : 'bg-gradient-to-t from-red-600 to-rose-400'
-                }`}
-                style={{ height: `${uiHp}%` }}
-              />
-            </div>
+
 
             {/* PIANO TILES ACTIVE TOUCH ZONE BOUNDARY INDICATOR (Invisible / Logical Only) */}
 

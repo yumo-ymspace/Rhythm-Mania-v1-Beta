@@ -551,4 +551,108 @@ describe('Hidden, Fade In, and Cover modifiers', () => {
     // In break, coverage retracts and notes are visible
     expect(noteInBreak.opacity).toBe(1.0);
   });
+
+  describe('TASK-051: lazer v3 hold body masking while held', () => {
+    it('anchors hold body to receptorY while actively held at or past receptor', () => {
+      const v3Hold = hold({
+        holdRulesVersion: 3,
+        isHit: true,
+        holdState: {
+          startTime: 1000,
+          endTime: 3000,
+          column: 0,
+          isHeadJudged: true,
+          headJudgement: 'marvelous',
+          headMissed: false,
+          isHolding: true,
+          hasHoldBreak: false,
+          bodyJudged: false,
+          isTailJudged: false,
+          tailJudgement: null,
+          tailMissed: false,
+          isTailCapped: false,
+          isComplete: false,
+        },
+      });
+
+      const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 2000, 0.2);
+      expect(note.isHolding).toBe(true);
+      expect(note.bodyStartY).toBe(600); // grounded to receptorY
+      expect(note.endY).toBe(400); // tail still approaching
+      expect(isHoldBodyAnchored(note)).toBe(true);
+    });
+
+    it('does not anchor hold body to receptorY before head reaches receptor (early hit)', () => {
+      const v3Hold = hold({
+        holdRulesVersion: 3,
+        isHit: true,
+        holdState: {
+          startTime: 1000,
+          endTime: 3000,
+          column: 0,
+          isHeadJudged: true,
+          headJudgement: 'marvelous',
+          headMissed: false,
+          isHolding: true,
+          hasHoldBreak: false,
+          bodyJudged: false,
+          isTailJudged: false,
+          tailJudgement: null,
+          tailMissed: false,
+          isTailCapped: false,
+          isComplete: false,
+        },
+      });
+
+      // visualTime = 950: head at y = 600 - (1000 - 950)*0.2 = 590 (above receptor 600)
+      const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 950, 0.2);
+      expect(note.isHolding).toBe(true);
+      expect(note.bodyStartY).toBe(590); // starts at head position, not 600
+    });
+
+    it('starts unconsumed body at earlyReleaseTime after an early release break', () => {
+      const v3Hold = hold({
+        holdRulesVersion: 3,
+        isHit: true,
+        isHoldFailed: true,
+        earlyReleaseTime: 1800,
+        holdState: {
+          startTime: 1000,
+          endTime: 3000,
+          column: 0,
+          isHeadJudged: true,
+          headJudgement: 'marvelous',
+          headMissed: false,
+          isHolding: false,
+          hasHoldBreak: true,
+          bodyJudged: true,
+          isTailJudged: false,
+          tailJudgement: null,
+          tailMissed: false,
+          isTailCapped: true,
+          isComplete: false,
+        },
+      });
+
+      // visualTime = 2200: release point at y = 600 - (1800 - 2200)*0.2 = 680
+      const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 2200, 0.2);
+      expect(note.isHolding).toBe(false);
+      expect(note.bodyStartY).toBe(680); // consumed portion before 1800 is not drawn
+      expect(note.endY).toBe(440); // 600 - (3000 - 2200)*0.2 = 440
+      expect(isHoldBodyAnchored(note)).toBe(false);
+    });
+
+    it('leaves missed hold note ungrounded scrolling past receptor', () => {
+      const v3Hold = hold({
+        holdRulesVersion: 3,
+        isHit: false,
+        isMissed: true,
+      });
+
+      const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 2000, 0.2);
+      expect(note.isHolding).toBe(false);
+      expect(note.bodyStartY).toBe(800); // 600 - (1000 - 2000)*0.2 = 800
+      expect(isHoldBodyAnchored(note)).toBe(false);
+    });
+  });
 });

@@ -34,6 +34,7 @@ export interface VisibleNote {
   releaseGraceUntil?: number;
   isReleaseMissed?: boolean;
   isReleaseHit?: boolean;
+  isHolding?: boolean;
   isEndPassed?: boolean;
   earlyReleaseTime?: number;
   tailResumedTime?: number;

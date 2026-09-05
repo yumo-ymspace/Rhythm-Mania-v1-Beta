@@ -462,6 +462,8 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
 
       if (action.kind === 'body_break') {
         holdNote.isHoldFailed = true;
+        holdNote.releaseTime = frameTime;
+        holdNote.earlyReleaseTime = frameTime;
         scoreState.combo = 0;
         if (scoreState.comboBreakCount !== undefined) {
           scoreState.comboBreakCount++;

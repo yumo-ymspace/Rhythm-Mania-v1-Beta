@@ -131,17 +131,28 @@ function drawArgonHoldBody(
   opacity: number,
   isHitting: boolean,
   isFailed: boolean,
+  isMaskedAtReceptor: boolean = false,
+  upscroll: boolean = false,
+  visualTime: number = 0,
 ): void {
   if (height <= 0.5) return;
   ctx.save();
   ctx.globalAlpha = opacity * (isFailed ? 0.45 : 1);
   ctx.beginPath();
-  ctx.roundRect(x, y, width, height, ARGON_CORNER_RADIUS);
+  if (isMaskedAtReceptor) {
+    const radii: [number, number, number, number] = upscroll
+      ? [0, 0, ARGON_CORNER_RADIUS, ARGON_CORNER_RADIUS]
+      : [ARGON_CORNER_RADIUS, ARGON_CORNER_RADIUS, 0, 0];
+    ctx.roundRect(x, y, width, height, radii);
+  } else {
+    ctx.roundRect(x, y, width, height, ARGON_CORNER_RADIUS);
+  }
   ctx.fillStyle = isFailed ? 'rgb(48,52,64)' : argonDarken(color, 0.6);
   ctx.fill();
   if (isHitting && !isFailed) {
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = hexToRgba(argonLighten(color, 0.2), 0.3);
+    const pulse = 0.75 + 0.25 * Math.sin((visualTime / 160) * Math.PI * 2);
+    ctx.fillStyle = hexToRgba(argonLighten(color, 0.2), 0.3 * pulse);
     ctx.fill();
   }
   ctx.restore();
@@ -201,8 +212,11 @@ export function renderArgonPlayfield(
     const rw = inset.width * noteScale;
     const rx = inset.x + (inset.width - rw) / 2;
 
+    const isHeadAtOrPastReceptor = upscroll ? n.y <= receptorY : n.y >= receptorY;
+    const isAnchored = isHoldBodyAnchored(n) && isHeadAtOrPastReceptor;
+
     let visualStartY = getNoteVisualY(n.bodyStartY ?? n.y, col.width, settingsSlice);
-    if (isHoldBodyAnchored(n)) visualStartY = receptorY;
+    if (isAnchored) visualStartY = receptorY;
     const visualEndY = getNoteVisualY(n.endY, col.width, settingsSlice);
 
     const bodySegments = n.tailSegments?.length
@@ -212,12 +226,27 @@ export function renderArgonPlayfield(
       ? mergeVisibleTailSegments([...bodySegments, ...(n.missedTailSegments || [])])
       : bodySegments;
 
-    const hitting = n.isHit && !n.isReleased && !n.isHoldFailed;
+    const hitting = n.isHolding !== undefined
+      ? n.isHolding
+      : (n.isHit && !n.isReleased && !n.isHoldFailed);
     const opacity = n.opacity;
     for (const segment of renderSegments) {
       const top = Math.min(segment.startY, segment.endY);
       const bottom = Math.max(segment.startY, segment.endY);
-      drawArgonHoldBody(ctx, rx, top, rw, bottom - top, col.color, opacity, hitting, !!n.isHoldFailed);
+      drawArgonHoldBody(
+        ctx,
+        rx,
+        top,
+        rw,
+        bottom - top,
+        col.color,
+        opacity,
+        hitting,
+        !!n.isHoldFailed,
+        isAnchored,
+        upscroll,
+        frame.timeMs,
+      );
     }
 
     if (n.hitSegmentStartY !== undefined && n.hitSegmentEndY !== undefined) {
@@ -233,6 +262,9 @@ export function renderArgonPlayfield(
         opacity,
         true,
         false,
+        false,
+        upscroll,
+        frame.timeMs,
       );
     }
   });
@@ -246,7 +278,10 @@ export function renderArgonPlayfield(
     const rx = inset.x + (inset.width - rw) / 2;
     const color = col.color;
 
-    const shouldDrawHead = n.type === 'normal' || (n.type === 'hold' && (n.isMissed || !n.isHit));
+    const isHeadAtOrPastReceptor = upscroll ? n.y <= receptorY : n.y >= receptorY;
+    const shouldDrawHead = n.type === 'normal'
+      ? (!n.isHit && !n.isMissed)
+      : (n.isMissed || !n.isHit || !isHeadAtOrPastReceptor);
     if (shouldDrawHead) {
       const centerY = getNoteVisualY(n.y, col.width, settingsSlice);
       const topY = centerY - noteHeight / 2;
