@@ -1,4 +1,4 @@
-# Slot: HUD
+# Slot: HUD (osu!lazer client only)
 
 Target: lazer Argon **after** 2023.1114 (`ArgonSkin.GetDrawableComponent` / PR #25226). Combo sits bottom-left; accuracy and the PP counter (we label **PENAR**) sit top-right. An older 2022 playfield still in `../playfield-4k/argon-notes.png` shows score/acc **on the stage** — that HUD placement is obsolete.
 
@@ -9,8 +9,9 @@ Target: lazer Argon **after** 2023.1114 (`ArgonSkin.GetDrawableComponent` / PR #
 | `argon-song-progress-bar.png` | https://user-images.githubusercontent.com/191335/212855847-d8170579-4d1a-4f53-947f-13577782646d.png from [PR #22144](https://github.com/ppy/osu/pull/22144) (peppy) | 2023-01-17 | Bottom Argon progress: time label, rounded white fill, density graph behind |
 | `argon-song-progress-additive.png` | https://user-images.githubusercontent.com/39100084/212154037-e09ff6bc-78bd-451a-b533-8820bcf345bd.png from PR #22144 | 2023-01-12 | Segmented density (past dim, future tinted); time at right |
 | `official-video-2023-1114-hud.jpg` | https://i.ytimg.com/vi/7MYYjseY-Do/maxresdefault.jpg — [lazer updates 2023-11-14](https://www.youtube.com/watch?v=7MYYjseY-Do) | 2023-11-14 | Official still: Argon 4K notes on a phone; **combo bottom** (`533x`); playfield colours. Title-card osu! mark is **not** to be copied |
+| `lazer-timing-bar-thumb.jpg` | https://i.ytimg.com/vi/wkLweSoz9YQ/maxresdefault.jpg — [lazer updates: inconsistent hit windows](https://www.youtube.com/watch?v=wkLweSoz9YQ) | 2025-07-12 | Official title card whose foreground is the lazer timing distribution bar (Early … Late with window colour segments). Title text/logo overlay is **not** to be copied; compare the bar's segment colours and Early/Late labelling against our hit-error meter |
 
-Hotlink of PR #22144’s full gameplay PNG (`211904333-…png`) returned HTTP 403 on 2026-08-30; use the two progress stills plus the video thumbnail.
+Hotlink of PR #22144’s full gameplay PNG (`211904333-…png`) returned HTTP 403 on 2026-08-30; use the two progress stills plus the video thumbnails.
 
 Layout numbers from `ArgonSkin.cs` (2026-08-30 master), not from the 2022 still:
 

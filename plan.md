@@ -144,7 +144,7 @@ Primary:
 - Mods: `ManiaRuleset.GetModsFor`, `ManiaModEasy` / `ManiaModHardRock` / `ManiaModHidden`, `IManiaRateAdjustmentMod`, [lazer mod list wiki](https://raw.githubusercontent.com/ppy/osu-wiki/master/wiki/Gameplay/Game_modifier_(lazer)/en.md)
 - Argon: [`ArgonSkin.cs`](https://raw.githubusercontent.com/ppy/osu/master/osu.Game/Skinning/ArgonSkin.cs), `ManiaArgonSkinTransformer.cs` (`ArgonNotePiece`, `ArgonHoldBodyPiece`, column colours)
 
-Secondary: wiki mania screenshots, official changelog videos, Playwright-captured Argon stills stored locally as comparison boards (TASK-003).
+Secondary: lazer-client captures (2025.60x-lazer Song Select V1/V2 issue-report screenshots, official lazer-updates video thumbnails, Argon gameplay still from the colour-proposal PR), the in-progress results-redesign Figma, and Playwright-captured Argon stills stored locally as comparison boards (TASK-003). The osu!(stable) wiki stills were removed from `docs/visual-refs/argon/` on 2026-09-05; the board is lazer-only.
 
 ---
 
@@ -311,27 +311,29 @@ Not a pixel spec from wiki; this is the information architecture every lazer man
 - Skip intro: button when lead-in > ~5s (lazer uses skippable intro before first object)
 - Countdown “Are you ready?” / piper-style is **not** lazer; lazer uses a short lead-in with skip
 
-**Song select**
+**Song select (lazer Song Select V2; see `docs/visual-refs/argon/song-select/`)**
 
 - Full-bleed beatmap background (light blur, not a dark dashboard)
-- Carousel of **sets**, expanding to difficulties
-- Filter/search, group (title/artist/creator/difficulty), sort
-- Info wedge: title, artist, mapper, length/drain, BPM, stars, OD, HP, key count, CS unused
-- Leaderboard panel (local / global)
-- Bottom bar: **Mods / Random / Options** (and back)
+- Top-left **wedge**: set title/artist, mapper, stat pills. For mania: Notes, Hold Notes, Key Count, Approach Rate, Accuracy/OD, HP Drain (not stable's Circles/Sliders/Spinners/CS block)
+- **Details / Ranking tabs** with a Scope selector (we keep **Local** scope only)
+- Top filter bar: search, star-rating range, Sort / Group / Collection dropdowns
+- Right **carousel** of sets; selected set expands to per-difficulty pills with star ratings
+- Leaderboard panel with score, max combo, accuracy, grade per row; empty state when the chart has no plays
+- Footer: **Back / Mods / Random / Options** (plus the osu! cookie start button, which we restyle without the trademark)
 - Mod overlay: category columns, hexagonal (or rounded hex) mod buttons, multiplier, incompatibility, per-mod settings (DT rate, FL size, DA sliders, Cover height)
-- Preview audio with dim; scroll-speed adjustable from select (lazer recently **forbids changing scroll speed mid-map**)
+- Preview audio with dim; scroll-speed adjustable from select (lazer **forbids changing scroll speed mid-map**)
 
-**Results**
+**Results (shipped lazer client; redesign in progress — see `docs/visual-refs/argon/results/`)**
 
-- Huge grade (SS/S/A/…)
+- Grade display as the hero (SS/S/A/…; the official Figma redesign moves to a grade ring)
 - Score, accuracy to 2 decimals, max combo
-- Judgement column (Perfect → Miss) with counts
+- Judgement column (**Perfect → Great → Good → Ok → Meh → Miss**, never stable MAX/300/200) with counts
 - Hit error histogram + UR
 - Mods
 - Beatmap card
-- Retry / Replay / Back
-- Leaderboard context
+- Retry / Replay / Back (bottom action bar)
+- Score context panel (we show **local** scores only; lazer shows leaderboard scope rows)
+- No stable Default ranking-panel art; the results slot currently links lazer results videos + the redesign Figma until a lazer `F12` still is captured
 
 **Main menu**
 
@@ -496,7 +498,7 @@ Default `skinId`: `argon`. Keep `rhythmmania`, `rhythmplus`, `circle`, `rhythmma
 
 ### 5.4 Playwright vs Argon photos
 
-Store **fair-use reference stills** (screenshots of public wiki/changelog/Argon gameplay) in `docs/visual-refs/argon/` with a README: source URL, date, what to compare (HUD corners, note shape, 4K colours, results grade). Do not ship those files in the production bundle.
+Store **fair-use reference stills of the lazer client** (2025.60x-lazer issue-report captures, official lazer-updates video thumbnails, Argon gameplay stills from `ppy/osu` PRs) in `docs/visual-refs/argon/` with a README: source URL, client version/date, what to compare (HUD corners, note shape, 4K colours, V2 wedge/carousel/footer, results grade). Stable-client stills were purged from the board on 2026-09-05 and must not be re-added. Do not ship those files in the production bundle.
 
 Each visual task:
 
@@ -510,7 +512,7 @@ Each visual task:
 
 Match lazer Argon **structure** (Playwright vs refs):
 
-- **Song select:** full-bleed cover (light blur), carousel of sets → difficulty pills, info wedge (OD/HP/SR/BPM/length/keys), **Local ranking only** (this device’s scores), bottom **Mods / Random / Options / Play**, hexagonal category mod overlay. No Global/RM board.
+- **Song select:** lazer V2 — full-bleed cover (light blur), top-left wedge with mania stats (Notes / Hold Notes / Key Count / AR / OD / HP), Details / Ranking tabs, top filter bar, right carousel of sets → difficulty pills with stars, **Local ranking only** (this device’s scores), footer **Back / Mods / Random / Options**, hexagonal category mod overlay. No Global/RM board, no stable footer chrome.
 - **Results:** grade hero, score, acc, combo, mods, Perfect→Miss column, hit-error, PENAR, Retry / Replay / Back.
 - **Menu:** beat-pulse RhythmMania wordmark, Play primary, History/Skins/Profile secondary, settings gear, quiet resource links.
 - **Settings:** keep `settingsRegistry.tsx`; left rail; add scroll lock, HUD/PENAR toggles, 1K–10K binds.
@@ -695,7 +697,7 @@ Status starts as pending. Dependencies must be completed first.
 |---|---|---|---|
 | **TASK-001** | Declare Canvas2D Argon as reference renderer; Babylon remains optional skin; add `skinId: 'argon'` to types/defaults without drawing Argon yet | `types.ts`, `defaultSettings.ts`, `SkinScreen.tsx` (list entry only) | `npm run lint`; settings still load |
 | **TASK-002** | Extract `src/ruleset/mania/` and move existing window/score helpers unchanged **(done)** | `scoreCalculator.ts` → `scoreProcessor.ts`, `judgementTiming.ts`, new folder | tests still pass (behaviour freeze) |
-| **TASK-003** | Create `docs/visual-refs/argon/README.md` + slot files (hud, playfield-4k, song-select, results, pause). Download/save public Argon screenshots with source URLs. **Do not import into `public/`.** **(done)** | `docs/visual-refs/argon/*` | README lists each ref and comparison checklist |
+| **TASK-003** | Create `docs/visual-refs/argon/README.md` + slot files (hud, playfield-4k, song-select, results, pause). Download/save public **lazer-client** screenshots with source URLs + client versions. **Do not import into `public/`.** Refreshed 2026-09-05: purged all stable wiki stills; song-select is lazer V1/V2 captures, playfield has a lazer gameplay still, results links lazer videos + redesign Figma pending an `F12` still. **(done)** | `docs/visual-refs/argon/*` | README lists each ref and comparison checklist |
 | **TASK-004** | Canvas2D context: `{ alpha: false, desynchronized: true }` with feature-detect fallback; `AudioContext({ latencyHint: 'interactive' })` if not already **(done)** | `Canvas2DRenderer.ts`, `AudioEngine.ts` | play one map; no visual regression; lint |
 
 ### Offline cut (do before restyling song select)
