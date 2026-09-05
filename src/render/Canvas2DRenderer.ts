@@ -11,6 +11,8 @@
  */
 
 import { IPlayfieldRenderer, PlayfieldFrame, InitOpts, VisibleNote } from './types';
+import { renderArgonPlayfield } from './argonPlayfield';
+import { isArgonSkin } from './argonSkin';
 import { hexToRgba } from './color';
 import { getLaneColors } from './skinTheme';
 import { getNoteVisualY } from './playfieldLayout';
@@ -86,6 +88,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       ctx.translate(shakeX, shakeY);
     }
 
+    const useArgon = isArgonSkin(settingsSlice);
+    if (useArgon) {
+      renderArgonPlayfield(ctx, frame, this.keyCount);
+    } else {
     // Lane background rails & column glows
     const separatorOpacity = settingsSlice.laneSeparatorOpacity ?? 0.30;
     const isDynamicStyle = settingsSlice.squareRenderStyle === 'rhythmplus-dynamic';
@@ -878,6 +884,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       const notePadding = isFocusMode ? 1.5 : 6;
       drawEndReceptor(getNoteVisualY(n.endY, colW, settingsSlice), xPos, colW, notePadding, n);
     });
+    }
 
     // 6. RENDER PARTICLES BURST GENERATION
     if (!settingsSlice.disableParticles) {

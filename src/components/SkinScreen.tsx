@@ -31,7 +31,7 @@ const SKIN_STYLES: SkinStyle[] = [
   {
     id: 'argon',
     label: 'Argon (Canvas2D reference)',
-    description: 'Default Canvas2D skin. Argon note drawing lands in a later task; this id selects the reference renderer today.',
+    description: 'osu!(lazer)-style Argon notes, holds, receptors, and column colours on Canvas2D.',
   },
   {
     id: 'rhythmmania',
@@ -117,7 +117,7 @@ function SkinPreview({ styleId, compact = false }: { styleId: SkinStyleId; compa
         <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-[#1a1424] to-[#0b0b12] px-2 text-center">
           <span className={`font-semibold tracking-wide text-amber-200 ${compact ? 'text-[9px]' : 'text-sm'}`}>Argon</span>
           {!compact && (
-            <span className="text-[10px] leading-4 text-white/50">Canvas2D reference · playfield art later</span>
+            <span className="text-[10px] leading-4 text-white/50">Yellow / orange / pink / purple 4K notes</span>
           )}
         </div>
       )}

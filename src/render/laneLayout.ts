@@ -10,6 +10,8 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
+import { getArgonColumnColor, isArgonSkinId } from './argonSkin';
+
 export interface ColumnStyle {
   width: number;
   color: string;
@@ -22,6 +24,13 @@ export function getColumnStyles(
   customSkinColors?: string[],
   laneColors?: string[] | null,
 ): ColumnStyle[] {
+  if (isArgonSkinId(skinId)) {
+    return Array.from({ length: keyCount }, (_, i) => ({
+      width: baseWidth,
+      color: getArgonColumnColor(keyCount, i),
+    }));
+  }
+
   let colors = {
     blue: '#2e6b9e',
     white: '#eceff1',

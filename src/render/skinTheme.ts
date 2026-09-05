@@ -10,9 +10,11 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
+import { isArgonSkin } from './argonSkin';
 import { PlayfieldVisualSettings, ResolvedSkin } from './types';
 
 export function getLaneColors(settings: PlayfieldVisualSettings, keyCount: number): string[] | null {
+  if (isArgonSkin(settings)) return null;
   const colors = settings.receptorColorsByKeyCount?.[keyCount];
   return Array.isArray(colors) && colors.length === keyCount ? colors : null;
 }
@@ -34,7 +36,14 @@ export function resolveSkinTheme(settings: PlayfieldVisualSettings): ResolvedSki
     cyan: '#00b0ff'
   };
 
-  if (settings.skinId === 'custom' && settings.customSkinColors && settings.customSkinColors.length >= 4) {
+  if (isArgonSkin(settings)) {
+    colors = {
+      blue: '#ffc528',
+      white: '#fc6d01',
+      accent: '#d5235a',
+      cyan: '#cb3cec',
+    };
+  } else if (settings.skinId === 'custom' && settings.customSkinColors && settings.customSkinColors.length >= 4) {
     colors = {
       blue: settings.customSkinColors[0] || '#2e6b9e',
       white: settings.customSkinColors[1] || '#eceff1',

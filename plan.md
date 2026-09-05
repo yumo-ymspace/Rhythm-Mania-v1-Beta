@@ -751,7 +751,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-050** | Argon notes/holds/receptors/column colours on Canvas2D; default `skinId: 'argon'` | `Canvas2DRenderer.ts`, `skinTheme.ts`, `laneLayout.ts` | Playwright vs `playfield-4k` ref |
+| **TASK-050** | Argon notes/holds/receptors/column colours on Canvas2D; default `skinId: 'argon'` **(done)** | `Canvas2DRenderer.ts`, `skinTheme.ts`, `laneLayout.ts` | Playwright vs `playfield-4k` ref |
 | **TASK-051** | Hold body masking while held | renderer + note state | Playwright LN hold |
 | **TASK-052** | Argon HUD: wedges, health top-left, score on wedges | `ManiaHud` | Playwright vs `hud` ref |
 | **TASK-053** | Accuracy top-right, dual hit-error bars, combo bottom-left, progress, key counter | `ManiaHud` | Playwright vs `hud` ref |

@@ -10,6 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
+import { argonPaletteForKeyCount } from '../../render/argonSkin';
 import type { GameSettings } from '../../types';
 
 export const PLAYFIELD_WIDTH_MIN = 20;
@@ -53,16 +54,16 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   skinId: 'argon',
   squareRenderStyle: 'rhythmmania',
   receptorColorsByKeyCount: {
-    1: ['#00b0ff'],
-    2: ['#00b0ff', '#00b0ff'],
-    3: ['#00b0ff', '#00b0ff', '#00b0ff'],
-    4: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
-    5: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
-    6: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
-    7: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
-    8: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
-    9: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
-    10: ['#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff', '#00b0ff'],
+    1: argonPaletteForKeyCount(1),
+    2: argonPaletteForKeyCount(2),
+    3: argonPaletteForKeyCount(3),
+    4: argonPaletteForKeyCount(4),
+    5: argonPaletteForKeyCount(5),
+    6: argonPaletteForKeyCount(6),
+    7: argonPaletteForKeyCount(7),
+    8: argonPaletteForKeyCount(8),
+    9: argonPaletteForKeyCount(9),
+    10: argonPaletteForKeyCount(10),
   },
   noteOpacity: 1.0,
   receptorOpacity: 1.0,
