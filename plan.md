@@ -761,7 +761,7 @@ Status starts as pending. Dependencies must be completed first.
 
 | ID | Task | Touches | Verify |
 |---|---|---|---|
-| **TASK-060** | Song select carousel + wedge + bottom Mods/Random/Options + **local ranking panel** (no global) | `SongSelect.tsx` | Playwright vs `song-select` ref |
+| **TASK-060** | Song select carousel + wedge + bottom Mods/Random/Options + **local ranking panel** (no global) **(done)** | `SongSelect.tsx` | Playwright vs `song-select` ref |
 | **TASK-061** | Mod overlay visual (categories, hex-ish buttons, incompat) | SongSelect | Playwright |
 | **TASK-062** | Catalog overlay Argon tokens; search + catboy download only (TASK-009 already removed DB activation) | `OnlineBeatmapCatalog.tsx` | Playwright search → download |
 | **TASK-070** | Results grade-hero + judgement names + PENAR + local score list only | `ResultsScreen.tsx` | Playwright vs `results` ref |
