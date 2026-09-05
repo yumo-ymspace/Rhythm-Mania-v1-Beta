@@ -263,6 +263,91 @@ interface HitErrorTick {
   color: string;
 }
 
+function drawVerticalHitErrorMeter(
+  canvas: HTMLCanvasElement | null,
+  ticks: HitErrorTick[],
+  avgMs: number | null,
+  maxMs: number = 150
+): void {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  const halfH = h / 2;
+  const trackH = 180;
+  const trackHalfH = trackH / 2;
+  const centerX = 12;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background guide track (subtle rounded track)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.beginPath();
+  ctx.roundRect(centerX - 1.5, halfH - trackHalfH, 3, trackH, 1.5);
+  ctx.fill();
+
+  // Draw window color ranges (OD ranges in ms: Meh 136, Ok 112, Good 82, Great 49, Perfect 19.4)
+  const drawSegment = (ms: number, color: string, thickness: number = 3) => {
+    const yOffset = Math.min(trackHalfH, (ms / maxMs) * trackHalfH);
+    ctx.fillStyle = color;
+    ctx.fillRect(centerX - thickness / 2, halfH - yOffset, thickness, yOffset * 2);
+  };
+
+  drawSegment(136, 'rgba(244, 63, 94, 0.25)', 3);
+  drawSegment(112, 'rgba(249, 115, 22, 0.35)', 3);
+  drawSegment(82, 'rgba(234, 179, 8, 0.45)', 3);
+  drawSegment(49, 'rgba(34, 197, 94, 0.60)', 3);
+  drawSegment(19.4, 'rgba(102, 204, 255, 0.80)', 4);
+
+  // Center 0ms marker
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(centerX, halfH, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw ticks
+  const now = Date.now();
+  ticks.forEach(tick => {
+    const age = now - tick.timestamp;
+    if (age > 2000) return;
+    const alpha = Math.max(0, 1 - age / 2000);
+    const clampedError = Math.max(-maxMs, Math.min(maxMs, tick.error));
+    const tickY = halfH + (clampedError / maxMs) * trackHalfH;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = tick.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 7, tickY);
+    ctx.lineTo(centerX + 7, tickY);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Draw running average pointer / chevron
+  if (avgMs !== null) {
+    const clampedAvg = Math.max(-maxMs, Math.min(maxMs, avgMs));
+    const avgY = halfH + (clampedAvg / maxMs) * trackHalfH;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(centerX - 3, avgY);
+    ctx.lineTo(2, avgY - 4);
+    ctx.lineTo(2, avgY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 3, avgY);
+    ctx.lineTo(centerX + 7, avgY);
+    ctx.stroke();
+  }
+}
+
 export default function GameplayCanvas({
   beatmap: originalBeatmap,
   settings: propSettings,
@@ -374,6 +459,8 @@ export default function GameplayCanvas({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hitErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const leftHitErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rightHitErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const syncControllerRef = useRef<VideoSyncController | null>(null);
@@ -633,6 +720,36 @@ export default function GameplayCanvas({
   const lanePressCountRef = useRef<number[]>([]);
   const activeColumnsRef = useRef<boolean[]>([]);
   const hasKeyPressedOnceRef = useRef<boolean[]>([]);
+  const keyPressCountsRef = useRef<number[]>([]);
+
+  const updateKeyCounterUi = (colIndex: number, isPressed: boolean, incrementCount: boolean = false) => {
+    if (colIndex < 0 || colIndex >= beatmap.keyCount) return;
+    if (incrementCount) {
+      keyPressCountsRef.current[colIndex] = (keyPressCountsRef.current[colIndex] || 0) + 1;
+      const countEl = document.getElementById(`argon-key-count-${colIndex}`);
+      if (countEl) {
+        countEl.innerText = keyPressCountsRef.current[colIndex].toString();
+      }
+    }
+    const boxEl = document.getElementById(`argon-key-box-${colIndex}`);
+    if (boxEl) {
+      if (isPressed) {
+        boxEl.classList.add('argon-key-active');
+      } else {
+        boxEl.classList.remove('argon-key-active');
+      }
+    }
+  };
+
+  const resetKeyCounterUi = () => {
+    keyPressCountsRef.current = new Array(beatmap.keyCount).fill(0);
+    for (let i = 0; i < beatmap.keyCount; i++) {
+      const countEl = document.getElementById(`argon-key-count-${i}`);
+      if (countEl) countEl.innerText = '0';
+      const boxEl = document.getElementById(`argon-key-box-${i}`);
+      if (boxEl) boxEl.classList.remove('argon-key-active');
+    }
+  };
   const progressBarRef = useRef<HTMLElement | HTMLInputElement | null>(null);
   const isScrubbingRef = useRef<boolean>(false);
   const suppressSeekParticlesRef = useRef<boolean>(false);
@@ -860,6 +977,7 @@ export default function GameplayCanvas({
     activeColumnsRef.current = new Array(beatmap.keyCount).fill(false);
     laneGlowRef.current = new Array(beatmap.keyCount).fill(0);
     hasKeyPressedOnceRef.current = new Array(beatmap.keyCount).fill(false);
+    resetKeyCounterUi();
     
     hitErrorSamplesRef.current = [];
     unstableRateAccumulatorRef.current.reset();
@@ -1171,6 +1289,8 @@ export default function GameplayCanvas({
       counts[colIndex] = (counts[colIndex] || 0) + 1;
       if (counts[colIndex] !== 1) return;
 
+      updateKeyCounterUi(colIndex, true, true);
+
       const inputTime = readGameplayTime();
       advanceHoldTailTicks(notesRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
       keysPressedRef.current[colIndex] = true;
@@ -1198,6 +1318,8 @@ export default function GameplayCanvas({
       if ((counts[colIndex] || 0) <= 0) return;
       counts[colIndex] -= 1;
       if (counts[colIndex] > 0) return;
+
+      updateKeyCounterUi(colIndex, false, false);
 
       const inputTime = readGameplayTime();
       advanceHoldTailTicks(notesRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
@@ -2124,12 +2246,14 @@ export default function GameplayCanvas({
             const wasPressed = keysPressedRef.current[col];
             const isCurrentlyPressed = frame.keysPressed[col];
             if (!wasPressed && isCurrentlyPressed) {
+              updateKeyCounterUi(col, true, true);
               keysPressedRef.current[col] = true;
               activeColumnsRef.current[col] = true;
               laneGlowRef.current[col] = 1.0;
               hasKeyPressedOnceRef.current[col] = true;
               triggerHitEvent(col);
             } else if (wasPressed && !isCurrentlyPressed) {
+              updateKeyCounterUi(col, false, false);
               keysPressedRef.current[col] = false;
               activeColumnsRef.current[col] = false;
               triggerReleaseEvent(col);
@@ -2198,6 +2322,10 @@ export default function GameplayCanvas({
                   color: '#3b82f6'
                 });
 
+                updateKeyCounterUi(n.column, true, true);
+                if (n.type !== 'hold') {
+                  setTimeout(() => updateKeyCounterUi(n.column, false, false), 60);
+                }
                 mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
                 laneGlowRef.current[n.column] = 1.0;
                 spawnParticles(n.column, marvelousJudg.color);
@@ -2205,6 +2333,7 @@ export default function GameplayCanvas({
                   screenShakeRef.current = 4;
                 }
               } else if (evt.type === 'tail') {
+                updateKeyCounterUi(n.column, false, false);
                 if (n.isReleased || n.isHoldFailed) continue;
                 n.isReleased = true;
                 n.releaseTime = n.endTime!;
@@ -2384,6 +2513,12 @@ export default function GameplayCanvas({
         if (screenShakeRef.current > 0) {
           screenShakeRef.current *= 0.9;
           if (screenShakeRef.current < 0.1) screenShakeRef.current = 0;
+        }
+
+        // Draw Argon dual vertical hit-error meters flanking the stage
+        if (leftHitErrorCanvasRef.current || rightHitErrorCanvasRef.current) {
+          drawVerticalHitErrorMeter(leftHitErrorCanvasRef.current, hitErrorTicksRef.current, hitErrorAvgMs, 150);
+          drawVerticalHitErrorMeter(rightHitErrorCanvasRef.current, hitErrorTicksRef.current, hitErrorAvgMs, 150);
         }
 
         if (currentSettings.renderEngine === 'babylon') {
@@ -2626,6 +2761,7 @@ export default function GameplayCanvas({
     activeColumnsRef.current = new Array(beatmap.keyCount).fill(false);
     laneGlowRef.current = new Array(beatmap.keyCount).fill(0);
     hasKeyPressedOnceRef.current = new Array(beatmap.keyCount).fill(false);
+    resetKeyCounterUi();
 
     // 3. Reset score tracking
     scoreStateRef.current = {
@@ -3714,12 +3850,23 @@ export default function GameplayCanvas({
           </div>
         )}
 
-        {/* ARGON MANIA HUD (TASK-052: Health top-left, Wedges, Score on wedges) */}
+        {/* ARGON MANIA HUD (TASK-052/053: Complete Argon HUD layout) */}
         {!isPrePlay && (
           <ManiaHud
             score={uiScore}
             hp={uiHp}
+            accuracy={scoreStateRef.current.accuracy}
+            combo={uiCombo}
+            keyCount={beatmap.keyCount}
+            keyLabels={settings.bindings[beatmap.keyCount] || []}
+            playfieldWidthPercent={settings.playfieldWidthPercent ?? 40}
             isReplayMode={isReplayMode}
+            isAutoplay={isAutoplay}
+            progressBarRef={progressBarRef as React.Ref<HTMLDivElement>}
+            timeLabelRef={timeLabelRef}
+            timeLeftLabelRef={timeLeftLabelRef}
+            leftHitErrorCanvasRef={leftHitErrorCanvasRef}
+            rightHitErrorCanvasRef={rightHitErrorCanvasRef}
           />
         )}
 
@@ -3756,161 +3903,132 @@ export default function GameplayCanvas({
           />
         )}
 
-        {/* SONG TIMING PROGRESS BAR OR REPLAY SCRUBBER */}
-        {!isPrePlay && (
-          <div className={`absolute left-0 right-0 z-35 ${
-            (isReplayMode || isAutoplay) ? (settings.progressBarTop ? 'top-0' : 'bottom-0 flex flex-col justify-end') :
-            (settings.progressBarTop ? 'top-0 h-1.5' : 'bottom-0 h-1.5')
-          } pointer-events-none transition-all duration-300`}
-          >
-            {(isReplayMode || isAutoplay) ? (
-              <div className="w-full flex flex-col items-center px-4 md:px-8 py-4 pb-[max(1rem,calc(0.5rem+env(safe-area-inset-bottom,0px)))] bg-slate-950/95 border-t border-white/10 pointer-events-auto backdrop-blur-2xl shadow-[0_-15px_35px_rgba(0,0,0,0.95)] z-40">
-                <div className="w-full max-w-5xl flex flex-col gap-2.5">
-                     
-                     {/* Slider track + Time stamp row */}
-                     <div className="w-full flex items-center justify-between gap-4">
-                        
-                        {/* Play/Pause Button */}
-                        <button
-                           onClick={togglePause}
-                           className="text-white hover:text-cyan-400 hover:bg-white/10 active:scale-95 transition-all bg-white/5 rounded-full cursor-pointer h-10 w-10 flex items-center justify-center shrink-0 border border-white/10"
-                        >
-                           {isPaused ? <Play className="w-5 h-5 fill-current ml-0.5" /> : <Pause className="w-5 h-5 fill-current" />}
-                        </button>
+        {/* REPLAY SCRUBBER (Only in Replay/Autoplay mode; live play uses ArgonSongProgress in ManiaHud) */}
+        {!isPrePlay && (isReplayMode || isAutoplay) && (
+          <div className="absolute left-0 right-0 bottom-0 flex flex-col justify-end z-35 pointer-events-none transition-all duration-300">
+            <div className="w-full flex flex-col items-center px-4 md:px-8 py-4 pb-[max(1rem,calc(0.5rem+env(safe-area-inset-bottom,0px)))] bg-slate-950/95 border-t border-white/10 pointer-events-auto backdrop-blur-2xl shadow-[0_-15px_35px_rgba(0,0,0,0.95)] z-40">
+              <div className="w-full max-w-5xl flex flex-col gap-2.5">
+                   
+                   {/* Slider track + Time stamp row */}
+                   <div className="w-full flex items-center justify-between gap-4">
+                      
+                      {/* Play/Pause Button */}
+                      <button
+                         onClick={togglePause}
+                         className="text-white hover:text-cyan-400 hover:bg-white/10 active:scale-95 transition-all bg-white/5 rounded-full cursor-pointer h-10 w-10 flex items-center justify-center shrink-0 border border-white/10"
+                      >
+                         {isPaused ? <Play className="w-5 h-5 fill-current ml-0.5" /> : <Pause className="w-5 h-5 fill-current" />}
+                      </button>
 
-                        <div className="flex-1 w-full relative group py-2">
-                           <input 
-                              ref={progressBarRef as React.Ref<HTMLInputElement>}
-                              type="range"
-                              min="0"
-                              max={beatmap.duration * 1000}
-                              step="1"
-                              defaultValue={0}
-                              onPointerDown={() => {
-                                  isScrubbingRef.current = true;
-                                  suppressSeekParticlesRef.current = true;
-                                  wasPlayingRef.current = isPlayingRef.current && !isPaused;
-                                  mainAudio.pause();
-                                  if (videoRef.current) {
-                                      try { videoRef.current.pause(); } catch (e) {}
-                                  }
-                              }}
-                              onPointerUp={(e) => { 
-                                  isScrubbingRef.current = false; 
-                                  const newTime = Number((e.target as HTMLInputElement).value);
-                                  handleSeek(newTime);
-                                  if (wasPlayingRef.current) {
-                                      void mainAudio.playAsync(beatmap.bpm, settings.audioOffset).then(() => {
-                                        snapVideoToAudio(newTime, true);
-                                      });
-                                  }
-                              }}
-                              onChange={(e) => {
-                                  const newTime = Number(e.target.value);
-                                  const totalMs = beatmap.duration * 1000;
-                                  const progressPercent = totalMs > 0 ? (newTime / totalMs) * 100 : 0;
-                                  e.target.style.background = `linear-gradient(to right, #06b6d4 ${progressPercent}%, rgba(255,255,255,0.15) ${progressPercent}%)`;
-                                  
-                                  if (timeLabelRef.current) {
-                                     timeLabelRef.current.innerText = `${formatMsToMinSec(newTime)} / ${formatMsToMinSec(totalMs)}`;
-                                  }
-                                  if (timeLeftLabelRef.current) {
-                                    const remainMs = Math.max(0, totalMs - Math.max(0, newTime));
-                                    timeLeftLabelRef.current.innerText = `-${formatMsToMinSec(remainMs)}`;
-                                  }
-                                  simulateGameToTime(newTime);
-                                  audioTimeRef.current = newTime;
-                                  const now = performance.now();
-                                  if (now - lastVideoSeekTimeRef.current > 80) {
-                                      snapVideoToAudio(newTime, false);
-                                      lastVideoSeekTimeRef.current = now;
-                                  }
-                              }}
-                              className="w-full h-2 rounded-full appearance-none outline-none cursor-pointer group-hover:h-2.5 transition-all z-10 block bg-white/20"
-                              style={{
-                                 background: `linear-gradient(to right, #06b6d4 0%, rgba(255,255,255,0.15) 0%)`,
-                                 WebkitAppearance: 'none',
-                              }}
-                           />
-                           <style dangerouslySetInnerHTML={{__html: `
-                              input[type=range]::-webkit-slider-thumb {
-                                -webkit-appearance: none;
-                                appearance: none;
-                                width: 14px;
-                                height: 14px;
-                                border-radius: 50%;
-                                background: #ffffff;
-                                box-shadow: 0 0 10px rgba(6, 182, 212, 0.9), 0 0 4px rgba(255, 255, 255, 0.5);
-                                border: 2px solid #06b6d4;
-                                cursor: pointer;
-                                transition: transform 0.15s ease-in-out, background-color 0.1s;
-                              }
-                              input[type=range]:hover::-webkit-slider-thumb, 
-                              input[type=range]:active::-webkit-slider-thumb {
-                                transform: scale(1.4);
-                                background: #06b6d4;
-                                border-color: #ffffff;
-                              }
-                           `}} />
-                        </div>
+                      <div className="flex-1 w-full relative group py-2">
+                         <input 
+                            ref={progressBarRef as React.Ref<HTMLInputElement>}
+                            type="range"
+                            min="0"
+                            max={beatmap.duration * 1000}
+                            step="1"
+                            defaultValue={0}
+                            onPointerDown={() => {
+                                isScrubbingRef.current = true;
+                                suppressSeekParticlesRef.current = true;
+                                wasPlayingRef.current = isPlayingRef.current && !isPaused;
+                                mainAudio.pause();
+                                if (videoRef.current) {
+                                    try { videoRef.current.pause(); } catch (e) {}
+                                }
+                            }}
+                            onPointerUp={(e) => { 
+                                isScrubbingRef.current = false; 
+                                const newTime = Number((e.target as HTMLInputElement).value);
+                                handleSeek(newTime);
+                                if (wasPlayingRef.current) {
+                                    void mainAudio.playAsync(beatmap.bpm, settings.audioOffset).then(() => {
+                                      snapVideoToAudio(newTime, true);
+                                    });
+                                }
+                            }}
+                            onChange={(e) => {
+                                const newTime = Number(e.target.value);
+                                const totalMs = beatmap.duration * 1000;
+                                const progressPercent = totalMs > 0 ? (newTime / totalMs) * 100 : 0;
+                                e.target.style.background = `linear-gradient(to right, #06b6d4 ${progressPercent}%, rgba(255,255,255,0.15) ${progressPercent}%)`;
+                                
+                                if (timeLabelRef.current) {
+                                   timeLabelRef.current.innerText = `${formatMsToMinSec(newTime)} / ${formatMsToMinSec(totalMs)}`;
+                                }
+                                if (timeLeftLabelRef.current) {
+                                  const remainMs = Math.max(0, totalMs - Math.max(0, newTime));
+                                  timeLeftLabelRef.current.innerText = `-${formatMsToMinSec(remainMs)}`;
+                                }
+                                simulateGameToTime(newTime);
+                                audioTimeRef.current = newTime;
+                                const now = performance.now();
+                                if (now - lastVideoSeekTimeRef.current > 80) {
+                                    snapVideoToAudio(newTime, false);
+                                    lastVideoSeekTimeRef.current = now;
+                                }
+                            }}
+                            className="w-full h-2 rounded-full appearance-none outline-none cursor-pointer group-hover:h-2.5 transition-all z-10 block bg-white/20"
+                            style={{
+                               background: `linear-gradient(to right, #06b6d4 0%, rgba(255,255,255,0.15) 0%)`,
+                               WebkitAppearance: 'none',
+                            }}
+                         />
+                         <style dangerouslySetInnerHTML={{__html: `
+                            input[type=range]::-webkit-slider-thumb {
+                              -webkit-appearance: none;
+                              appearance: none;
+                              width: 14px;
+                              height: 14px;
+                              border-radius: 50%;
+                              background: #ffffff;
+                              box-shadow: 0 0 10px rgba(6, 182, 212, 0.9), 0 0 4px rgba(255, 255, 255, 0.5);
+                              border: 2px solid #06b6d4;
+                              cursor: pointer;
+                              transition: transform 0.15s ease-in-out, background-color 0.1s;
+                            }
+                            input[type=range]:hover::-webkit-slider-thumb, 
+                            input[type=range]:active::-webkit-slider-thumb {
+                              transform: scale(1.4);
+                              background: #06b6d4;
+                              border-color: #ffffff;
+                            }
+                         `}} />
+                      </div>
 
-                        {/* Direct readable Time Stamp HUD */}
-                        <span 
-                           ref={timeLabelRef}
-                           className="font-mono text-sm text-slate-300 font-bold shrink-0 min-w-[110px] text-right"
-                        >
-                           00:00 / 00:00
-                        </span>
+                      {/* Direct readable Time Stamp HUD */}
+                      <span 
+                         ref={timeLabelRef}
+                         className="font-mono text-sm text-slate-300 font-bold shrink-0 min-w-[110px] text-right"
+                      >
+                         00:00 / 00:00
+                      </span>
 
-                        <div className="flex items-center gap-2.5 shrink-0 border-l border-white/10 pl-4 h-8">
-                            <span className="text-[10px] font-black text-slate-400 tracking-wider uppercase">Speed</span>
-                            <select 
-                               onChange={(e) => {
-                                   const spd = Number(e.target.value);
-                                   mainAudio.setPlaybackRate(spd);
-                                   if (videoRef.current) videoRef.current.playbackRate = spd;
-                               }} 
-                               defaultValue={mainAudio.playbackRate || 1} 
-                               className="bg-white/10 hover:bg-white/15 text-white rounded-md px-2.5 py-1 outline-none font-mono text-xs border border-white/10 cursor-pointer transition-all font-semibold"
-                            >
-                              <option value={0.5}>0.5x</option>
-                              <option value={0.75}>0.75x</option>
-                              <option value={1}>1.0x</option>
-                              <option value={1.25}>1.25x</option>
-                              <option value={1.5}>1.5x</option>
-                              <option value={2}>2.0x</option>
-                            </select>
-                        </div>
+                      <div className="flex items-center gap-2.5 shrink-0 border-l border-white/10 pl-4 h-8">
+                          <span className="text-[10px] font-black text-slate-400 tracking-wider uppercase">Speed</span>
+                          <select 
+                             onChange={(e) => {
+                                 const spd = Number(e.target.value);
+                                 mainAudio.setPlaybackRate(spd);
+                                 if (videoRef.current) videoRef.current.playbackRate = spd;
+                             }} 
+                             defaultValue={mainAudio.playbackRate || 1} 
+                             className="bg-white/10 hover:bg-white/15 text-white rounded-md px-2.5 py-1 outline-none font-mono text-xs border border-white/10 cursor-pointer transition-all font-semibold"
+                          >
+                            <option value={0.5}>0.5x</option>
+                            <option value={0.75}>0.75x</option>
+                            <option value={1}>1.0x</option>
+                            <option value={1.25}>1.25x</option>
+                            <option value={1.5}>1.5x</option>
+                            <option value={2}>2.0x</option>
+                          </select>
+                      </div>
 
-                     </div>
-                </div>
+                   </div>
               </div>
-            ) : (
-              <div 
-                ref={progressBarRef as React.Ref<HTMLDivElement>}
-                className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]"
-                style={{ width: '0%' }}
-              />
-            )}
+            </div>
           </div>
         )}
-
-        {/* FLOATING ACCURACY (Bottom Left - TASK-053 will move to top-right) */}
-        {!isPrePlay && (
-          <div className={`absolute left-4 sm:left-6 ${(isReplayMode || isAutoplay) ? 'bottom-28' : 'bottom-[max(1.5rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))]'} z-30 flex flex-col items-start select-none font-sans pointer-events-none text-left drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]`}>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">ACCURACY</span>
-            <span className="text-2xl md:text-3xl font-black text-cyan-400 font-mono tracking-tight leading-none mb-1">
-              {scoreStateRef.current.accuracy.toFixed(2)}%
-            </span>
-          </div>
-        )}
-
-        {/* TIME LEFT — bottom right, only in real play & replay watch (hidden in autoplay). */}
-        <span
-          ref={timeLeftLabelRef}
-          className={`absolute right-4 sm:right-6 z-30 font-mono text-[13px] font-bold tracking-widest text-white/85 bg-black/40 px-2 py-0.5 rounded pointer-events-none select-none ${isReplayMode ? 'bottom-28' : 'bottom-[max(1.5rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))]'}`}
-          style={{ display: 'none' }}
-        />
 
         {isSkipVisible && !isPrePlay && !isFailed && !isPaused && (
           <button
@@ -4028,7 +4146,7 @@ export default function GameplayCanvas({
               <canvas ref={canvasRef} className="block w-full h-full cursor-none game-canvas-element touch-none select-none" />
             )}
 
-            {settings.renderEngine === 'babylon' && (
+            {settings.renderEngine === 'babylon' && settings.skinId !== 'argon' && (
               <canvas
                 ref={hitErrorCanvasRef}
                 className="absolute left-1/2 z-30 pointer-events-none"
@@ -4062,8 +4180,8 @@ export default function GameplayCanvas({
                   transformOrigin: 'center center',
                 }}
               >
-                {/* Combo numbers & burst */}
-                {uiCombo > 4 && (
+                {/* Combo numbers & burst (Legacy skins only; Argon places combo bottom-left) */}
+                {settings.skinId !== 'argon' && uiCombo > 4 && (
                   <div
                     className="absolute bottom-full pb-2 flex flex-col items-center justify-end gap-1 whitespace-nowrap"
                   >

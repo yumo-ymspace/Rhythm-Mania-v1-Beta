@@ -953,14 +953,15 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
 
     ctx.restore(); // POP screen shake translations
 
-    // 7. DRAW TIMING (HIT ERROR) METER
-    const maxMs = 150;
-    const barWidth = 300;
-    const barHeight = 8;
-    const centerX = width / 2;
-    const barY = settingsSlice.upsurfaceNoteMode ? receptorY - 55 : receptorY + 55;
+    // 7. DRAW TIMING (HIT ERROR) METER (Legacy skins only; Argon uses dual vertical meters in ManiaHud)
+    if (settingsSlice.skinId !== 'argon') {
+      const maxMs = 150;
+      const barWidth = 300;
+      const barHeight = 8;
+      const centerX = width / 2;
+      const barY = settingsSlice.upsurfaceNoteMode ? receptorY - 55 : receptorY + 55;
 
-    ctx.save();
+      ctx.save();
 
     ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
     ctx.lineWidth = 1;
@@ -1047,7 +1048,8 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       ctx.stroke();
     }
 
-    ctx.restore();
+      ctx.restore();
+    }
   }
 
   destroy(): void {
