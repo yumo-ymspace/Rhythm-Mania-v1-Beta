@@ -429,9 +429,9 @@ export default function OnlineBeatmapCatalog({
   };
 
   const statusStyle = (status?: string) => {
-    if (status === 'ranked') return 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]';
-    if (status === 'loved') return 'bg-pink-500/20 text-pink-300 border border-pink-400/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]';
-    return 'bg-slate-800/80 text-slate-300 border border-white/10';
+    if (status === 'ranked') return 'bg-[#48c6ff]/15 text-[#48c6ff] border border-[#48c6ff]/30 shadow-[0_0_10px_rgba(72,198,255,0.15)]';
+    if (status === 'loved') return 'bg-[#d5235a]/15 text-pink-300 border border-[#d5235a]/30 shadow-[0_0_10px_rgba(213,35,90,0.15)]';
+    return 'bg-white/5 text-slate-300 border border-white/10';
   };
 
   const headerDownloadMessage = importStatus?.msg
@@ -442,7 +442,7 @@ export default function OnlineBeatmapCatalog({
       initial={{ opacity: 0, x: 24, scale: 0.95 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 24, scale: 0.95 }}
-      className="fixed right-4 top-4 z-[130] flex max-w-sm items-stretch overflow-hidden rounded-2xl border border-cyan-400/30 bg-[#071932]/95 text-white shadow-[0_15px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,176,255,0.15)] backdrop-blur-xl"
+      className="fixed right-4 top-4 z-[130] flex max-w-sm items-stretch overflow-hidden rounded-2xl border border-white/15 bg-[#141522]/95 text-white shadow-[0_15px_40px_rgba(0,0,0,0.7),0_0_20px_rgba(255,204,34,0.1)] backdrop-blur-xl"
     >
       <div className="flex w-12 shrink-0 items-center justify-center border-r border-emerald-500/30 bg-emerald-500/20 text-emerald-400">
         <Check className="h-5 w-5" />
@@ -470,20 +470,20 @@ export default function OnlineBeatmapCatalog({
           <motion.div
             key="catalog-panel"
             ref={containerRef}
-            className="fixed inset-x-0 top-0 z-[110] w-full max-h-[85vh] md:max-h-[90vh] bg-gradient-to-b from-[#0b1426]/98 via-[#07101e]/98 to-[#050811]/98 border-b border-cyan-500/20 shadow-[0_25px_60px_rgba(0,0,0,0.85),0_0_40px_rgba(0,176,255,0.08)] backdrop-blur-2xl flex flex-col rounded-b-3xl overflow-hidden font-sans text-slate-200"
+            className="fixed inset-x-0 top-0 z-[110] w-full max-h-[85vh] md:max-h-[90vh] bg-gradient-to-b from-[#141522]/98 via-[#10111a]/98 to-[#0c0d14]/98 border-b border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl flex flex-col rounded-b-3xl overflow-hidden font-sans text-slate-200"
             initial={{ y: '-100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '-100%', opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
             style={{ willChange: 'transform, opacity' }}
           >
-            <div className="relative flex-none px-6 md:px-12 py-3.5 border-b border-white/[0.08] flex items-center justify-between bg-[#081326]/90 backdrop-blur-md">
+            <div className="relative flex-none px-6 md:px-12 py-3.5 border-b border-white/10 flex items-center justify-between bg-[#161724]/90 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_12px_rgba(0,176,255,0.2)]" aria-hidden="true">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#ffcc22]/30 bg-[#ffcc22]/10 text-[#ffcc22] shadow-[0_0_12px_rgba(255,204,34,0.2)]" aria-hidden="true">
                   <Music2 className="h-4 w-4 stroke-[2.2]" />
                 </div>
                 <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                  Beatmap <span className="text-cyan-300">Listing</span>
+                  Beatmap <span className="text-[#ffcc22]">Listing</span>
                 </h1>
               </div>
 
@@ -503,7 +503,7 @@ export default function OnlineBeatmapCatalog({
                   </div>
                   {downloadingMapId && downloadProgress && (
                     <div className="h-1 w-full overflow-hidden rounded-full bg-black/40">
-                      <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-[width] duration-200" style={{ width: `${downloadProgress.percentage}%` }} />
+                      <div className="h-full bg-gradient-to-r from-[#ffcc22] to-amber-300 transition-[width] duration-200 shadow-[0_0_8px_rgba(255,204,34,0.6)]" style={{ width: `${downloadProgress.percentage}%` }} />
                     </div>
                   )}
                 </motion.div>
@@ -511,7 +511,7 @@ export default function OnlineBeatmapCatalog({
 
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/10 hover:border-cyan-400/30 text-slate-400 hover:text-white transition duration-150 cursor-pointer shadow-md"
+                className="p-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/10 hover:border-[#ffcc22]/40 text-slate-400 hover:text-white transition duration-150 cursor-pointer shadow-md"
                 title="Close catalog"
               >
                 <X className="h-5 w-5" />
@@ -520,7 +520,7 @@ export default function OnlineBeatmapCatalog({
 
             {!osuConnected ? (
               <div className="flex-1 overflow-y-auto px-6 md:px-12 py-10">
-                <div className="max-w-xl mx-auto px-6 py-6 space-y-5 rounded-2xl border border-white/[0.08] bg-[#091426]/75 shadow-2xl backdrop-blur-md">
+                <div className="max-w-xl mx-auto px-6 py-6 space-y-5 rounded-2xl border border-white/10 bg-[#161724]/85 shadow-2xl backdrop-blur-md">
                   <div>
                     <h2 className="text-xl font-black uppercase tracking-wider text-white">Connect osu! to search</h2>
                     <p className="text-xs text-slate-400 leading-relaxed mt-1.5">
@@ -536,7 +536,7 @@ export default function OnlineBeatmapCatalog({
                   <button
                     type="button"
                     onClick={handleConnectOsu}
-                    className="w-full py-3.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-400/40 text-pink-100 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(236,72,153,0.15)] active:scale-[0.99] cursor-pointer"
+                    className="w-full py-3.5 rounded-xl bg-[#d5235a]/20 hover:bg-[#d5235a]/30 border border-[#d5235a]/40 text-pink-100 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(213,35,90,0.15)] active:scale-[0.99] cursor-pointer"
                   >
                     Sign in with osu!
                   </button>
@@ -559,20 +559,20 @@ export default function OnlineBeatmapCatalog({
                         placeholder="Client ID"
                         value={byoClientId}
                         onChange={(e) => setByoClientId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-[#060e1c] border border-white/15 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 rounded-xl text-xs text-white placeholder-slate-500 transition-all outline-none"
+                        className="w-full px-3.5 py-2.5 bg-[#10111a] border border-white/15 focus:border-[#ffcc22] focus:ring-2 focus:ring-[#ffcc22]/20 rounded-xl text-xs text-white placeholder-slate-500 transition-all outline-none"
                       />
                       <input
                         type="password"
                         placeholder="Client Secret"
                         value={byoClientSecret}
                         onChange={(e) => setByoClientSecret(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-[#060e1c] border border-white/15 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 rounded-xl text-xs text-white placeholder-slate-500 transition-all outline-none"
+                        className="w-full px-3.5 py-2.5 bg-[#10111a] border border-white/15 focus:border-[#ffcc22] focus:ring-2 focus:ring-[#ffcc22]/20 rounded-xl text-xs text-white placeholder-slate-500 transition-all outline-none"
                       />
                       <button
                         type="button"
                         disabled={byoBusy || !byoClientId.trim() || !byoClientSecret.trim()}
                         onClick={() => void handleByoConnect()}
-                        className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 text-xs font-black uppercase tracking-widest text-white transition cursor-pointer"
+                        className="w-full py-2.5 rounded-xl bg-[#ffcc22]/20 hover:bg-[#ffcc22] text-xs font-black uppercase tracking-widest text-[#ffcc22] hover:text-slate-950 border border-[#ffcc22]/30 hover:border-[#ffcc22] disabled:opacity-40 transition cursor-pointer"
                       >
                         {byoBusy ? 'Connecting…' : 'Save & connect'}
                       </button>
@@ -582,7 +582,7 @@ export default function OnlineBeatmapCatalog({
               </div>
             ) : (
               <>
-                <div className="relative flex-none px-6 md:px-12 py-4 border-b border-white/[0.06] bg-[#060e1c]/80 flex flex-col items-center gap-3">
+                <div className="relative flex-none px-6 md:px-12 py-4 border-b border-white/10 bg-[#12131c]/90 flex flex-col items-center gap-3">
                   <div className="relative w-full md:w-[68%] lg:w-[64%]">
                     <input
                       type="text"
@@ -595,7 +595,7 @@ export default function OnlineBeatmapCatalog({
                           setSubmittedSearchTerm(searchTerm);
                         }
                       }}
-                      className="w-full pl-4 pr-14 py-3 bg-[#0a1526]/90 border border-white/15 rounded-xl font-sans text-base font-bold text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400/80 focus:ring-2 focus:ring-cyan-400/25 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
+                      className="w-full pl-4 pr-14 py-3 bg-[#1a1b27] border border-white/10 rounded-xl font-sans text-base font-bold text-white placeholder-slate-400 focus:outline-none focus:border-[#ffcc22]/80 focus:ring-2 focus:ring-[#ffcc22]/20 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
                     />
                     <button
                       type="button"
@@ -603,7 +603,7 @@ export default function OnlineBeatmapCatalog({
                         setFilterSearchTerm(searchTerm);
                         setSubmittedSearchTerm(searchTerm);
                       }}
-                      className="absolute right-2 top-2 bottom-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-400 text-cyan-300 hover:text-slate-950 px-3 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+                      className="absolute right-2 top-2 bottom-2 rounded-lg bg-[#ffcc22]/15 hover:bg-[#ffcc22] text-[#ffcc22] hover:text-slate-950 border border-[#ffcc22]/30 hover:border-[#ffcc22] px-3 transition-all flex items-center justify-center cursor-pointer shadow-sm"
                       title="Search"
                     >
                       <Search className="h-5 w-5" />
@@ -620,8 +620,8 @@ export default function OnlineBeatmapCatalog({
                           onClick={() => setSearchCategory(category)}
                           className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                             active
-                              ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 shadow-[0_0_12px_rgba(0,176,255,0.25)] font-bold'
-                              : 'bg-white/[0.04] text-slate-400 border border-white/5 hover:bg-white/[0.08] hover:text-slate-200'
+                              ? 'bg-[#ffcc22]/20 text-[#ffcc22] border border-[#ffcc22]/40 shadow-[0_0_12px_rgba(255,204,34,0.25)] font-bold'
+                              : 'bg-white/[0.04] text-slate-400 border border-white/5 hover:bg-white/[0.08] hover:text-white'
                           }`}
                         >
                           {category}
@@ -642,7 +642,7 @@ export default function OnlineBeatmapCatalog({
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 min-h-0 bg-[#050913]/60">
+                <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 min-h-0 bg-[#0c0d14]/70">
                   {catalogError && (
                     <div className="p-3.5 mb-5 rounded-xl text-xs font-mono border bg-rose-950/30 text-rose-300 border-rose-500/30 shadow-lg">
                       {catalogError}
@@ -650,7 +650,7 @@ export default function OnlineBeatmapCatalog({
                   )}
                   {isLoading ? (
                     <div className="py-16 text-center text-slate-500">
-                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-cyan-400" />
+                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-[#ffcc22]" />
                       <p className="text-xs font-mono font-black uppercase tracking-widest text-white">
                         Searching osu! (ranked → loved → graveyard)…
                       </p>
@@ -663,7 +663,7 @@ export default function OnlineBeatmapCatalog({
                     </div>
                   ) : catalogRequestState !== 'loaded' ? (
                     <div className="py-16 text-center text-slate-500">
-                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-cyan-400" />
+                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-[#ffcc22]" />
                       <p className="text-xs font-mono font-black uppercase tracking-widest text-white">Searching beatmaps...</p>
                     </div>
                   ) : filteredManifest.length > 0 ? (
@@ -684,8 +684,8 @@ export default function OnlineBeatmapCatalog({
                             key={s.id}
                             className={`border rounded-2xl overflow-hidden relative shadow-lg transition-all duration-200 group ${
                               isDownloaded
-                                ? 'border-emerald-500/40 bg-[#071822]/80 hover:bg-[#0a2230]/90 shadow-[0_0_20px_rgba(16,185,129,0.08)]'
-                                : 'border-white/[0.08] bg-[#0a1528]/75 hover:bg-[#0e1e38]/90 hover:border-cyan-400/30 shadow-[0_8px_24px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_30px_rgba(0,176,255,0.12)]'
+                                ? 'border-emerald-500/40 bg-[#101c18]/85 hover:bg-[#14241e]/95 shadow-[0_0_20px_rgba(16,185,129,0.08)]'
+                                : 'border-white/10 bg-[#161724]/80 hover:bg-[#1d1e2e]/95 hover:border-[#ffcc22]/35 shadow-[0_8px_24px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_30px_rgba(255,204,34,0.08)]'
                             }`}
                             onClick={() => revealSet(s.id)}
                           >
@@ -695,15 +695,15 @@ export default function OnlineBeatmapCatalog({
                                   <img src={s.coverUrl} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" referrerPolicy="no-referrer" />
                                 ) : (
                                   <div className="flex h-full w-full items-center justify-center">
-                                    <Music className="h-8 w-8 text-cyan-400/40" />
+                                    <Music className="h-8 w-8 text-[#ffcc22]/40" />
                                   </div>
                                 )}
                               </div>
                               <div className="flex-1 min-w-0 text-left py-1">
-                                <h4 className="font-black text-lg text-white leading-tight truncate group-hover:text-cyan-100 transition-colors">
+                                <h4 className="font-black text-lg text-white leading-tight truncate group-hover:text-[#ffcc22] transition-colors">
                                   {s.title}
                                 </h4>
-                                <p className="text-xs text-cyan-300/80 font-bold truncate mt-1">
+                                <p className="text-xs text-slate-300 font-bold truncate mt-1">
                                   {s.artist}
                                 </p>
                                 <p className="text-xs text-slate-400 truncate mt-1">Mapped by <span className="text-slate-300 font-medium">{s.creator || 'Unknown'}</span></p>
@@ -714,7 +714,7 @@ export default function OnlineBeatmapCatalog({
                                   <span className="text-[10px] font-bold text-slate-400">
                                     {charts.length} {charts.length === 1 ? 'difficulty' : 'difficulties'}
                                   </span>
-                                  <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 group-hover:text-cyan-300 transition-all ${expanded ? 'rotate-180 text-cyan-300' : ''}`} />
+                                  <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 group-hover:text-[#ffcc22] transition-all ${expanded ? 'rotate-180 text-[#ffcc22]' : ''}`} />
                                 </div>
                               </div>
                               <div className="shrink-0 self-center pl-1" onClick={(event) => event.stopPropagation()}>
@@ -724,8 +724,8 @@ export default function OnlineBeatmapCatalog({
                                     <span className="text-[8px] font-mono font-black uppercase tracking-wider">READY</span>
                                   </div>
                                 ) : isDownloading ? (
-                                  <div className="flex flex-col items-center gap-1 text-cyan-300 shrink-0 bg-cyan-500/15 border border-cyan-400/30 px-3 py-2 rounded-xl animate-pulse shadow-[0_0_15px_rgba(0,176,255,0.2)]">
-                                    <Loader className="h-4 w-4 animate-spin text-cyan-400" />
+                                  <div className="flex flex-col items-center gap-1 text-[#ffcc22] shrink-0 bg-[#ffcc22]/15 border border-[#ffcc22]/40 px-3 py-2 rounded-xl animate-pulse shadow-[0_0_15px_rgba(255,204,34,0.2)]">
+                                    <Loader className="h-4 w-4 animate-spin text-[#ffcc22]" />
                                     <span className="text-[8px] font-mono uppercase font-black">{downloadProgress?.percentage || 0}%</span>
                                   </div>
                                 ) : isQueued ? (
@@ -736,7 +736,7 @@ export default function OnlineBeatmapCatalog({
                                 ) : (
                                   <button
                                     onClick={() => enqueueDownload(s)}
-                                    className="p-3 bg-cyan-500/15 hover:bg-cyan-400 text-cyan-300 hover:text-slate-950 rounded-xl border border-cyan-400/30 hover:border-cyan-300 shadow-[0_0_15px_rgba(0,176,255,0.15)] hover:shadow-[0_0_20px_rgba(0,176,255,0.4)] transition-all duration-150 active:scale-95 flex items-center justify-center cursor-pointer"
+                                    className="p-3 bg-[#ffcc22]/15 hover:bg-[#ffcc22] text-[#ffcc22] hover:text-slate-950 rounded-xl border border-[#ffcc22]/30 hover:border-[#ffcc22] shadow-[0_0_15px_rgba(255,204,34,0.15)] hover:shadow-[0_0_20px_rgba(255,204,34,0.4)] transition-all duration-150 active:scale-95 flex items-center justify-center cursor-pointer"
                                     title="Queue map pack"
                                   >
                                     <Download className="h-4 w-4 stroke-[2.2]" />
@@ -747,17 +747,17 @@ export default function OnlineBeatmapCatalog({
                             {isDownloaded && <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />}
                             {isDownloading && downloadProgress && (
                               <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
-                                <div className="h-full bg-gradient-to-r from-cyan-400 to-sky-300 shadow-[0_0_8px_rgba(0,176,255,0.6)] transition-[width] duration-200" style={{ width: `${downloadProgress.percentage}%` }} />
+                                <div className="h-full bg-gradient-to-r from-[#ffcc22] to-amber-300 shadow-[0_0_8px_rgba(255,204,34,0.6)] transition-[width] duration-200" style={{ width: `${downloadProgress.percentage}%` }} />
                               </div>
                             )}
                             {expanded && (
-                              <div className="border-t border-white/[0.08] bg-black/30 px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2" onClick={(event) => event.stopPropagation()}>
+                              <div className="border-t border-white/10 bg-black/40 px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2" onClick={(event) => event.stopPropagation()}>
                                 {charts.length > 0 ? charts.map((chart, index) => {
                                   const rating = Number(chart.starRating ?? 0);
                                   return (
-                                    <div key={`${chart.id}-${index}`} className="flex items-center justify-between gap-2 rounded-xl bg-[#060f1e]/80 border border-white/[0.06] hover:border-cyan-500/20 px-3 py-2 text-xs text-slate-200 transition-colors">
+                                    <div key={`${chart.id}-${index}`} className="flex items-center justify-between gap-2 rounded-xl bg-[#10111a]/90 border border-white/[0.08] hover:border-[#ffcc22]/30 px-3 py-2 text-xs text-slate-200 transition-colors">
                                       <span className="truncate">
-                                        <b className="text-cyan-300 font-mono font-bold mr-1">{chart.keyCount ? `${chart.keyCount}K` : ''}</b>
+                                        <b className="text-[#ffcc22] font-mono font-bold mr-1">{chart.keyCount ? `${chart.keyCount}K` : ''}</b>
                                         {chart.version || chart.name || 'Unknown'}
                                       </span>
                                       <span className={`shrink-0 rounded-md px-2 py-0.5 font-mono font-bold text-[10px] border uppercase ${getDifficultyBadge(rating)}`}>
@@ -775,7 +775,7 @@ export default function OnlineBeatmapCatalog({
                       })}
                     </div>
                   ) : mirrorManifest.length === 0 ? (
-                    <div className="bg-[#091426]/60 border border-white/[0.08] py-16 px-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-500 max-w-md mx-auto shadow-2xl backdrop-blur-md">
+                    <div className="bg-[#161724]/60 border border-white/10 py-16 px-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-500 max-w-md mx-auto shadow-2xl backdrop-blur-md">
                       <Info className="h-10 w-10 mb-3 text-slate-600" />
                       <p className="text-xs font-sans font-black tracking-widest uppercase text-white">No maps found</p>
                       <p className="text-[10px] text-slate-400 font-mono max-w-xs mt-1 leading-relaxed uppercase">

@@ -1262,7 +1262,7 @@ export default function SongSelect({
                   <button
                     type="button"
                     onClick={onOpenOnlineCatalog}
-                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/35 bg-cyan-400/80 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-cyan-950 transition hover:bg-cyan-400 cursor-pointer"
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-[#ffcc22]/40 bg-[#ffcc22]/90 hover:bg-[#ffcc22] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 transition cursor-pointer shadow-[0_0_15px_rgba(255,204,34,0.2)]"
                   >
                     <Search className="h-3.5 w-3.5" /> Beatmap Listing
                   </button>
@@ -1681,7 +1681,7 @@ export default function SongSelect({
                       onClick={() => { setShowOptionsMenu(false); onOpenOnlineCatalog(); }}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
                     >
-                      <Search className="h-3.5 w-3.5 text-cyan-400" />
+                      <Search className="h-3.5 w-3.5 text-[#ffcc22]" />
                       <span>Beatmap Listing</span>
                     </button>
                   )}
