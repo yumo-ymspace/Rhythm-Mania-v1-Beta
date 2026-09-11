@@ -1467,6 +1467,7 @@ export default function App() {
                 <SkinScreen
                   settings={settings}
                   updateSettings={updateSettings}
+                  onBack={() => navigateScreen('menu')}
                 />
             </motion.div>
           )}
