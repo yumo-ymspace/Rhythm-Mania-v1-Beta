@@ -930,6 +930,9 @@ export default function App() {
         disableLaneShake: Boolean(updated.disableLaneShake),
         enableSongPreview: updated.enableSongPreview !== false,
         showFpsCounter: Boolean(updated.showFpsCounter),
+        showPenarDuringPlay: updated.showPenarDuringPlay !== undefined ? Boolean(updated.showPenarDuringPlay) : true,
+        localDisplayName: updated.localDisplayName !== undefined ? String(updated.localDisplayName).slice(0, 32) : '',
+        difficultyAdjust: updated.difficultyAdjust,
       };
 
       if (updated.bindings) {

@@ -136,9 +136,9 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
 
       {/* ── SECTION 1: GAMEPLAY LANE KEYBINDS (SHOWN IN COMPACT ROWS) ──────── */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 pb-1.5 border-b border-white/[0.08]">
-          <Gamepad2 className="w-4 h-4 text-[var(--skin-accent)]" />
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-100">
+        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
+          <Gamepad2 className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-200 font-sans">
             Gameplay Lane Keybinds
           </h3>
         </div>
@@ -149,11 +149,11 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
             return (
               <div 
                 key={num} 
-                className="py-2.5 px-3.5 rounded-lg bg-[#0a203b]/40 border border-white/[0.07] flex flex-row items-center justify-between gap-4 hover:border-white/[0.12] transition-all"
+                className="py-2.5 px-3.5 rounded-xl bg-[#0e121b]/90 border border-white/[0.08] flex flex-row items-center justify-between gap-4 hover:border-white/15 transition-all"
               >
                 {/* Compact Row Label */}
                 <div className="flex items-center min-w-10">
-                  <span className="text-xs font-bold text-slate-200 font-sans">{num}K</span>
+                  <span className="text-xs font-black text-white font-sans">{num}K</span>
                 </div>
 
                 {/* Streamlined Keys Container (Single Row Placement) */}
@@ -169,10 +169,10 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
                           colIndex: idx, 
                           label: `${num}K - Column ${idx + 1}` 
                         })}
-                        className={`min-w-11 h-9 px-2 font-mono text-xs font-bold rounded-md transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer border focus:outline-none focus:ring-1 focus:ring-[var(--skin-accent)] ${
+                        className={`min-w-11 h-9 px-2 font-mono text-xs font-bold rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer border focus:outline-none focus:ring-1 focus:ring-cyan-400/40 ${
                           isRebindingNow 
-                            ? 'bg-[var(--skin-accent)]/20 text-[var(--skin-accent)] border-[var(--skin-accent)]/50 animate-pulse shadow-skin-accent-glow' 
-                            : 'bg-[#102a4a]/70 border-[#234b79]/50 hover:bg-[#193454] hover:text-white text-slate-200'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 animate-pulse shadow-[0_0_12px_rgba(0,176,255,0.35)]' 
+                            : 'bg-[#141824] border-white/10 hover:border-cyan-400/40 hover:bg-white/[0.06] text-slate-200 hover:text-white'
                         }`}
                       >
                         <span className="text-[8px] text-slate-400 scale-75 font-sans leading-none">
@@ -193,21 +193,21 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
 
       {/* ── SECTION 2: SHORTCUT & UTILITY BINDINGS ─────────────────── */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 pb-1.5 border-b border-white/[0.08]">
-          <Keyboard className="w-4 h-4 text-cyan-300" />
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-100">
+        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
+          <Keyboard className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-200 font-sans">
             Gameplay Shortcuts
           </h3>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Pause / Resume */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-[#0a203b]/40 border border-white/[0.07] hover:border-white/[0.12] transition-all">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-[#0e121b]/90 border border-white/[0.08] hover:border-white/15 transition-all">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <Pause className="w-3.5 h-3.5 text-slate-400" /> Pause / Resume
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 font-sans">
+                <Pause className="w-3.5 h-3.5 text-cyan-400" /> Pause / Resume
               </span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-slate-400 font-mono">
                 Pauses or resumes active song play
               </span>
             </div>
@@ -217,10 +217,10 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
                 settingId: 'bindPause', 
                 label: 'Pause / Resume' 
               })}
-              className={`min-w-16 h-8 px-2 font-mono text-xs font-semibold rounded-md transition-all cursor-pointer border ${
+              className={`min-w-16 h-8 px-2.5 font-mono text-xs font-bold rounded-lg transition-all cursor-pointer border ${
                 activeRebind?.settingId === 'bindPause'
-                  ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 animate-pulse'
-                  : 'bg-[#102a4a]/70 border-[#234b79]/50 hover:bg-[#193454] hover:text-white text-slate-200'
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 animate-pulse'
+                  : 'bg-[#141824] border-white/10 hover:border-cyan-400/40 hover:bg-white/[0.06] text-slate-200 hover:text-white'
               }`}
             >
               {activeRebind?.settingId === 'bindPause' ? '?' : formatKeyName(settings.bindPause || 'escape')}
@@ -228,12 +228,12 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
           </div>
 
           {/* Quick Restart */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-[#0a203b]/40 border border-white/[0.07] hover:border-white/[0.12] transition-all">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-[#0e121b]/90 border border-white/[0.08] hover:border-white/15 transition-all">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <RotateCcw className="w-3.5 h-3.5 text-slate-400" /> Quick Restart / Retry
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 font-sans">
+                <RotateCcw className="w-3.5 h-3.5 text-cyan-400" /> Quick Restart / Retry
               </span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-slate-400 font-mono">
                 Instantly reloads and restarts current map
               </span>
             </div>
@@ -243,10 +243,10 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
                 settingId: 'bindRetry', 
                 label: 'Quick Restart / Retry' 
               })}
-              className={`min-w-16 h-8 px-2 font-mono text-xs font-semibold rounded-md transition-all cursor-pointer border ${
+              className={`min-w-16 h-8 px-2.5 font-mono text-xs font-bold rounded-lg transition-all cursor-pointer border ${
                 activeRebind?.settingId === 'bindRetry'
-                  ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 animate-pulse'
-                  : 'bg-[#102a4a]/70 border-[#234b79]/50 hover:bg-[#193454] hover:text-white text-slate-200'
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 animate-pulse'
+                  : 'bg-[#141824] border-white/10 hover:border-cyan-400/40 hover:bg-white/[0.06] text-slate-200 hover:text-white'
               }`}
             >
               {activeRebind?.settingId === 'bindRetry' ? '?' : formatKeyName(settings.bindRetry || 'r')}
@@ -254,12 +254,12 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
           </div>
 
           {/* Skip Intro */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-[#0a203b]/40 border border-white/[0.07] hover:border-white/[0.12] transition-all">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-[#0e121b]/90 border border-white/[0.08] hover:border-white/15 transition-all">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <span className="text-[11px]">⏭</span> Skip Intro
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5 font-sans">
+                <span className="text-[11px] text-cyan-400">⏭</span> Skip Intro
               </span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-slate-400 font-mono">
                 Jump over long silence before first note
               </span>
             </div>
@@ -269,10 +269,10 @@ export default function BindingMatrix({ settings, update }: BindingMatrixProps) 
                 settingId: 'bindSkipIntro', 
                 label: 'Skip Intro' 
               })}
-              className={`min-w-16 h-8 px-2 font-mono text-xs font-semibold rounded-md transition-all cursor-pointer border ${
+              className={`min-w-16 h-8 px-2.5 font-mono text-xs font-bold rounded-lg transition-all cursor-pointer border ${
                 activeRebind?.settingId === 'bindSkipIntro'
-                  ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 animate-pulse'
-                  : 'bg-[#102a4a]/70 border-[#234b79]/50 hover:bg-[#193454] hover:text-white text-slate-200'
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 animate-pulse'
+                  : 'bg-[#141824] border-white/10 hover:border-cyan-400/40 hover:bg-white/[0.06] text-slate-200 hover:text-white'
               }`}
             >
               {activeRebind?.settingId === 'bindSkipIntro' ? '?' : formatKeyName((settings as unknown as Record<string, string>).bindSkipIntro || 'enter')}

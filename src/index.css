@@ -44,13 +44,13 @@ body {
   --skin-accent: #00b0ff;
   --skin-accent-rgb: 0, 176, 255;
 
-  /* Settings shell tokens */
-  --settings-bg: 6 26 52;                  /* #061a34 - matching top bar */
-  --settings-surface: 25 52 84;            /* #193454 - matching top active tab */
+  /* Settings shell tokens (Argon) */
+  --settings-bg: 11 14 20;                  /* #0b0e14 - deep obsidian */
+  --settings-surface: 20 26 36;            /* #141a24 - neutral dark surface */
   --settings-border: 255 255 255;          /* used at low alpha */
-  --settings-text: 226 232 240;            /* slate-200 */
+  --settings-text: 241 245 249;            /* slate-100 */
   --settings-muted: 148 163 184;           /* slate-400 */
-  --settings-changed: 234 179 8;           /* amber-400 — the yellow rail */
+  --settings-changed: 245 158 11;          /* amber-500 #f59e0b — the yellow rail */
 }
 
 /* Dynamic Skin Accent helper classes */
@@ -96,7 +96,7 @@ body {
   @keyframes combo-pop {
     0% { transform: scale(0.7); opacity: 0.5; }
     50% { transform: scale(1.15); opacity: 1; }
-    100% { transform: scale(1.0); opacity: 1; }
+    100% { transform: scale(1.0); opacity: 0.95; }
   }
   @keyframes judgement-pulse {
     0% { transform: scale(0.6); opacity: 0.2; }
@@ -134,37 +134,39 @@ body {
   background: rgba(34, 211, 238, 0.4);
 }
 
-/* Settings shell */
+/* Settings shell (Argon) */
 .settings-shell {
-  background: linear-gradient(to bottom, rgb(15 40 70 / 0.98), rgb(6 26 52 / 0.98));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-right: 1px solid rgb(var(--settings-border) / 0.08);
-  box-shadow: 0 10px 40px rgb(0 0 0 / 0.5);
+  background: linear-gradient(180deg, rgba(14, 18, 27, 0.98) 0%, rgba(8, 10, 15, 0.99) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
 }
 
 /* One row of a setting: rail | label/desc | control */
 .settings-row {
   display: grid;
-  grid-template-columns: 6px 1fr auto;
-  gap: 0.75rem;
+  grid-template-columns: 4px 1fr auto;
+  gap: 0.85rem;
   align-items: start;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  transition: background-color 120ms ease;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 .settings-row:hover {
-  background-color: rgb(255 255 255 / 0.04);
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 /* The "changed from default" rail */
 .settings-rail {
-  width: 3px;
+  width: 4px;
   align-self: stretch;
   border-radius: 9999px;
   background-color: transparent;
   cursor: pointer;
-  transition: background-color 120ms ease, box-shadow 120ms ease;
+  transition: all 140ms ease;
   position: relative;
 }
 .settings-rail::before {
@@ -177,7 +179,12 @@ body {
 }
 .settings-rail.is-changed {
   background-color: rgb(var(--settings-changed));
-  box-shadow: 0 0 8px rgb(var(--settings-changed) / 0.6);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+}
+.settings-rail.is-changed:hover {
+  background-color: #fde047;
+  box-shadow: 0 0 14px rgba(253, 224, 71, 0.85);
+  transform: scaleX(1.35);
 }
 
 /* Shake animation for empty search */

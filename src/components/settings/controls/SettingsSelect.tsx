@@ -25,10 +25,10 @@ export default function SettingsSelect({ value, options, onChange, id }: Setting
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-[#0c223d]/90 border border-[#204572]/70 text-slate-100 text-sm rounded-md px-3 py-1.5 focus:outline-none focus:border-[var(--skin-accent)] focus:ring-1 focus:ring-[var(--skin-accent)] cursor-pointer"
+      className="bg-[#121622] border border-white/10 text-slate-100 text-xs font-sans rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 cursor-pointer shadow-sm transition-all"
     >
       {options.map((opt) => (
-        <option key={opt.value} value={opt.value} className="bg-[#071932] text-slate-100">
+        <option key={opt.value} value={opt.value} className="bg-[#0b0e15] text-slate-100">
           {opt.label}
         </option>
       ))}

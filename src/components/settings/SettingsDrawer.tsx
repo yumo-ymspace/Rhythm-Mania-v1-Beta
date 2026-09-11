@@ -110,25 +110,28 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
           {open && (
             <motion.div
               key="mobile-settings"
-              className="fixed inset-0 z-50 bg-gradient-to-b from-[#0e2a4d]/98 to-[#061a34]/98 flex flex-col font-sans select-none overflow-hidden"
+              className="fixed inset-0 z-50 bg-gradient-to-b from-[#0e121b] via-[#0b0e14] to-[#07090e] flex flex-col font-sans select-none overflow-hidden"
               initial={{ x: '100vw' }}
               animate={{ x: 0 }}
               exit={{ x: '100vw' }}
               transition={{ type: 'spring', damping: 25, stiffness: 250 }}
             >
               {/* Header */}
-              <div className="flex-none px-4 py-4 border-b border-white/[0.08] flex items-center gap-3 bg-[#061a34]/95 backdrop-blur-md">
+              <div className="flex-none px-4 py-4 border-b border-white/[0.08] flex items-center gap-3 bg-[#0a0d14]/95 backdrop-blur-md">
                 <button
                   onClick={onClose}
-                  className="p-2 -ml-1 rounded-xl bg-white/5 border border-white/10 text-slate-300 active:scale-95 transition"
+                  className="p-2 -ml-1 rounded-xl bg-white/5 border border-white/10 text-slate-300 active:scale-95 transition cursor-pointer"
                 >
                   <LucideIcons.ChevronLeft className="w-5 h-5" />
                 </button>
-                <h1 className="text-lg font-black uppercase tracking-wider text-white">Settings</h1>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(0,176,255,0.8)]" />
+                  <h1 className="text-base font-black uppercase tracking-wider text-white">Settings</h1>
+                </div>
               </div>
 
               {/* Category selector */}
-              <div className="flex-none bg-[#041224]/70 border-b border-white/[0.08] flex flex-wrap gap-2 px-4 py-3 justify-center">
+              <div className="flex-none bg-[#090c12]/80 border-b border-white/[0.08] flex flex-wrap gap-2 px-4 py-3 justify-center">
                 {SECTIONS.filter(s => s.id !== 'input' && (!s.showWhen || s.showWhen(settings))).map((s) => {
                   const Icon = s.icon;
                   const isActive = s.id === activeSection;
@@ -137,13 +140,13 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                     <button
                       key={s.id}
                       onClick={() => setActiveSection(s.id)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-black tracking-wider uppercase font-sans transition-all duration-200 shrink-0 ${
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[10px] font-black tracking-wider uppercase font-sans transition-all duration-150 shrink-0 cursor-pointer ${
                         isActive 
-                          ? 'bg-[#193454] border-cyan-400/40 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_12px_rgba(0,176,255,0.18)]' 
-                          : 'bg-white/[0.03] border-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
+                          ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_12px_rgba(0,176,255,0.25)]' 
+                          : 'bg-white/[0.03] border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
                       }`}
                     >
-                      <Icon className="w-3.5 h-3.5" />
+                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-cyan-300' : 'text-slate-400'}`} />
                       <span>{s.label}</span>
                     </button>
                   );
@@ -240,20 +243,25 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                     return (
                       <div
                         key={row.id}
-                        className={`relative bg-[#081e38]/80 border border-white/[0.08] p-4 rounded-xl flex ${
+                        className={`relative bg-[#0e121b]/90 border border-white/[0.08] p-4 rounded-xl flex ${
                           isVertical ? 'flex-col gap-4' : 'flex-row items-center justify-between gap-4'
                         } text-left`}
                       >
                         {isChanged && (
                           <div
-                            onClick={() => resetRow(row.id)}
-                            className="absolute left-0 top-3 bottom-3 w-[3px] bg-amber-500 rounded-r shadow-[0_0_8px_rgba(234,179,8,0.6)] cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              resetRow(row.id);
+                            }}
+                            className="absolute left-0 top-2 bottom-2 w-1.5 bg-amber-400 rounded-r shadow-[0_0_8px_rgba(251,191,36,0.7)] cursor-pointer z-10 before:absolute before:-inset-x-3 before:inset-y-0 before:content-['']"
                             title="Reset to default"
+                            role="button"
+                            tabIndex={0}
                           />
                         )}
                         
                         <label htmlFor={`setting-mobile-${row.id}`} className={`flex flex-col justify-center min-w-0 flex-1 cursor-pointer ${isChanged ? 'pl-2' : ''}`}>
-                          <span className="text-sm font-sans font-extrabold text-white leading-tight uppercase tracking-wider">
+                          <span className="text-sm font-sans font-bold text-white leading-tight uppercase tracking-wider">
                             {row.label}
                           </span>
                           {(!isCustomOrComplex || row.control.kind === 'slider') && (
@@ -273,10 +281,10 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
               </div>
 
               {/* Restore Defaults & Version Sticky Footer */}
-              <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(1.5rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-gradient-to-t from-[#061a34] via-[#061a34]/95 to-transparent border-t border-white/[0.08] flex flex-col items-center">
+              <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(1.5rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] bg-gradient-to-t from-[#07090e] via-[#07090e]/95 to-transparent border-t border-white/[0.08] flex flex-col items-center">
                 <button
                   onClick={handleRestoreRequest}
-                  className="w-full py-3.5 bg-red-650 hover:bg-red-750 active:scale-95 text-white font-sans font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg"
+                  className="w-full py-3 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/25 active:scale-95 text-rose-200 font-sans font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg cursor-pointer"
                 >
                   Restore defaults
                 </button>

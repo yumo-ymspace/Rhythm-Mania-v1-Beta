@@ -36,19 +36,19 @@ export default function ConfirmModal({ isOpen, message, onConfirm, onCancel }: C
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#071932] border border-[#1b3b64]/80 rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-[#0b0e15] border border-white/10 rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
         <div className="flex items-center gap-3 text-amber-400">
-          <AlertCircle className="w-6 h-6" />
-           <h3 id="settings-confirm-title" className="text-lg font-bold text-white">Confirm Action</h3>
+          <AlertCircle className="w-5 h-5" />
+          <h3 id="settings-confirm-title" className="text-base font-black uppercase tracking-wider text-white font-sans">Confirm Action</h3>
         </div>
-        <p className="text-slate-300 text-sm leading-relaxed">
+        <p className="text-slate-300 text-sm leading-relaxed font-sans">
           {message}
         </p>
         <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={onCancel}
-            className="px-4 py-2 rounded-lg bg-[#193454]/70 text-slate-200 hover:bg-[#193454] hover:text-white border border-[#2d5584]/60 transition-colors cursor-pointer text-sm font-medium"
+            className="px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer text-xs font-bold uppercase tracking-wider font-sans"
           >
             Cancel
           </button>
@@ -57,7 +57,7 @@ export default function ConfirmModal({ isOpen, message, onConfirm, onCancel }: C
               onConfirm();
               onCancel(); // Close modal
             }}
-            className="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-500 transition-colors shadow-lg shadow-amber-900/50 cursor-pointer text-sm font-semibold"
+            className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white transition-all shadow-lg shadow-rose-950/50 cursor-pointer text-xs font-bold uppercase tracking-wider font-sans active:scale-95"
           >
             Reset
           </button>

@@ -47,33 +47,34 @@ export default function SettingsSearchBar({ value, onChange, onClose, shaking }:
   }, [value, onChange, onClose]);
 
   return (
-    <div className="flex-none p-4 border-b border-white/[0.08] flex items-center justify-between">
+    <div className="flex-none px-6 py-4 border-b border-white/[0.08] bg-[#080b11]/70 backdrop-blur-md flex items-center justify-between gap-4">
       <div className={`relative flex-1 max-w-sm ${shaking ? 'settings-shake' : ''}`}>
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-300/70" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/80 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search settings... (Ctrl+F)"
-          className="w-full bg-[#06182e]/80 border border-[#1b3a60]/70 rounded-lg pl-9 pr-8 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[var(--skin-accent)] focus:ring-1 focus:ring-[var(--skin-accent)] transition-all"
+          className="w-full bg-[#0f1420] border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all font-sans"
         />
         {value && (
           <button
             onClick={() => onChange('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 transition-colors"
+            title="Clear search"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
       
       <button 
         onClick={onClose}
-        className="ml-4 p-2 text-slate-400 hover:text-white bg-[#193454]/60 hover:bg-[#193454] rounded-full transition-colors flex-none"
+        className="p-2 text-slate-400 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 rounded-xl transition-all flex-none cursor-pointer active:scale-95 shadow-sm"
         title="Close (Esc)"
       >
-        <X className="w-5 h-5" />
+        <X className="w-4 h-4" />
       </button>
     </div>
   );

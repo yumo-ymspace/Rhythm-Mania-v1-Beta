@@ -69,20 +69,20 @@ export default function SettingsPane({
   const sectionDef = SECTIONS.find(s => s.id === activeSection);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-8">
+    <div className="flex-1 overflow-y-auto px-6 py-7">
       {!q && sectionDef && (
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-slate-100">{sectionDef.label}</h2>
-          <p className="text-sm text-slate-400 mt-1">{sectionDef.description}</p>
+        <div className="mb-7 pb-4 border-b border-white/[0.06]">
+          <h2 className="text-2xl font-black uppercase tracking-wider text-white font-sans">{sectionDef.label}</h2>
+          <p className="text-xs text-slate-400 font-mono uppercase tracking-wide mt-1.5 leading-relaxed">{sectionDef.description}</p>
         </div>
       )}
 
       {q && rows.length === 0 ? (
-        <div className="text-slate-400 mt-8">
+        <div className="text-slate-400 font-mono text-sm mt-8">
           No settings match &ldquo;{query}&rdquo;.
         </div>
       ) : (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           {rows.map((row) => {
             // Need to pass the isChanged value
             const currentValue = settings[row.id as keyof GameSettings];

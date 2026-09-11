@@ -28,7 +28,8 @@ export default function SettingsRow({ id, label, description, isChanged, onReset
       <div
         className={`settings-rail ${isChanged ? 'is-changed' : ''}`}
         onClick={isChanged ? onReset : undefined}
-        title={isChanged ? "Reset to default" : undefined}
+        title={isChanged ? `Reset "${label}" to default` : undefined}
+        aria-label={isChanged ? `Reset "${label}" to default` : undefined}
         role={isChanged ? "button" : undefined}
         tabIndex={isChanged ? 0 : undefined}
         onKeyDown={(e) => {
@@ -38,15 +39,15 @@ export default function SettingsRow({ id, label, description, isChanged, onReset
           }
         }}
       />
-      <label htmlFor={`setting-${id}`} className="flex flex-col justify-center cursor-pointer min-w-0">
-        <span className="text-sm font-medium text-slate-100 select-none">
+      <label htmlFor={`setting-${id}`} className="flex flex-col justify-center cursor-pointer min-w-0 pr-4">
+        <span className="text-sm font-sans font-bold text-slate-100 select-none tracking-wide">
           {label}
         </span>
-        <div className="text-xs text-slate-400 mt-0.5 max-w-prose leading-snug">
+        <div className="text-[11px] text-slate-400 mt-1 max-w-prose leading-relaxed font-mono">
           {description}
         </div>
       </label>
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end shrink-0">
         {children}
       </div>
     </div>

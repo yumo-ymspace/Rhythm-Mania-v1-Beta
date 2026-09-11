@@ -180,6 +180,26 @@ describe('settings, history, and URL boundaries', () => {
     expect(clean.receptorSizeMultiplier).toBe(1.00);
   });
 
+  it('preserves lockScrollSpeedDuringPlay and showPenarDuringPlay toggles', () => {
+    const cleanDefault = sanitizeSettings({}, DEFAULT_SETTINGS);
+    expect(cleanDefault.lockScrollSpeedDuringPlay).toBe(true);
+    expect(cleanDefault.showPenarDuringPlay).toBe(true);
+
+    const cleanOff = sanitizeSettings({
+      lockScrollSpeedDuringPlay: false,
+      showPenarDuringPlay: false,
+    }, DEFAULT_SETTINGS);
+    expect(cleanOff.lockScrollSpeedDuringPlay).toBe(false);
+    expect(cleanOff.showPenarDuringPlay).toBe(false);
+
+    const cleanOn = sanitizeSettings({
+      lockScrollSpeedDuringPlay: true,
+      showPenarDuringPlay: true,
+    }, DEFAULT_SETTINGS);
+    expect(cleanOn.lockScrollSpeedDuringPlay).toBe(true);
+    expect(cleanOn.showPenarDuringPlay).toBe(true);
+  });
+
   it('allows local/blob assets only and rejects executable URL schemes', () => {
     expect(isSafeAssetUrl('/backgrounds/Ferineon.webp')).toBe(true);
     expect(isSafeAssetUrl('blob:https://rhythm-mania.com/id')).toBe(true);
