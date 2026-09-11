@@ -59,10 +59,10 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
         aria-hidden="true"
       >
         <defs>
-          {/* Vertical gradient: AccentColour #66CCFF from 0% opacity to 25% opacity */}
+          {/* Vertical gradient: AccentColour var(--argon-accent, #66CCFF) from 0% opacity to 25% opacity */}
           <linearGradient id="argonWedgeGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#66CCFF" stopOpacity="0.0" />
-            <stop offset="100%" stopColor="#66CCFF" stopOpacity="0.25" />
+            <stop offset="0%" stopColor="var(--argon-accent, #66CCFF)" stopOpacity="0.0" />
+            <stop offset="100%" stopColor="var(--argon-accent, #66CCFF)" stopOpacity="0.25" />
           </linearGradient>
 
           {/* Dark glass background gradient */}
@@ -80,10 +80,10 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
               y="0"
               width={rectWidth}
               height={height}
-              rx="10"
-              ry="10"
+              rx="var(--argon-wedge-radius, 10px)"
+              ry="var(--argon-wedge-radius, 10px)"
               fill="url(#argonWedgeBackdrop)"
-              stroke="#66CCFF"
+              stroke="var(--argon-accent, #66CCFF)"
               strokeOpacity="0.12"
               strokeWidth="1"
             />
@@ -92,8 +92,8 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
               y="0"
               width={rectWidth}
               height={height}
-              rx="10"
-              ry="10"
+              rx="var(--argon-wedge-radius, 10px)"
+              ry="var(--argon-wedge-radius, 10px)"
               fill="url(#argonWedgeGradient)"
               opacity="0.6"
             />
@@ -108,10 +108,10 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
               y="0"
               width={rectWidth}
               height={height}
-              rx="10"
-              ry="10"
+              rx="var(--argon-wedge-radius, 10px)"
+              ry="var(--argon-wedge-radius, 10px)"
               fill="url(#argonWedgeBackdrop)"
-              stroke="#66CCFF"
+              stroke="var(--argon-accent, #66CCFF)"
               strokeOpacity="0.25"
               strokeWidth="1"
             />
@@ -120,8 +120,8 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
               y="0"
               width={rectWidth}
               height={height}
-              rx="10"
-              ry="10"
+              rx="var(--argon-wedge-radius, 10px)"
+              ry="var(--argon-wedge-radius, 10px)"
               fill="url(#argonWedgeGradient)"
             />
           </g>

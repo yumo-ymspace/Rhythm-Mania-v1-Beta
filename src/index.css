@@ -53,6 +53,20 @@ body {
   --settings-changed: 245 158 11;          /* amber-500 #f59e0b — the yellow rail */
 }
 
+/* Scoped Argon skin tokens */
+html[data-skin="argon"] {
+  --argon-accent: #66ccff;
+  --argon-accent-rgb: 102, 204, 255;
+  --argon-wedge-radius: 10px;
+  --argon-motion: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="argon"] {
+    --argon-motion: 0ms;
+  }
+}
+
 /* Dynamic Skin Accent helper classes */
 .text-skin-accent {
   color: var(--skin-accent) !important;

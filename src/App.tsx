@@ -52,6 +52,7 @@ import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
 import { resolveSkinTheme } from './render/skinTheme';
+import { isArgonSkin } from './render/argonSkin';
 import { cssColorToHex, parseCssColor } from './render/color';
 
 
@@ -286,6 +287,13 @@ export default function App() {
       document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const activeSkin = isArgonSkin(settings) ? 'argon' : 'legacy';
+      document.documentElement.dataset.skin = activeSkin;
+    }
+  }, [settings]);
 
   const toggleFullscreen = async () => {
     if (FullscreenManager.isFullscreenActive()) {
