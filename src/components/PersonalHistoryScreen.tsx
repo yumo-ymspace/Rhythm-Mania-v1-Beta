@@ -21,6 +21,7 @@ import {
   Check,
   X,
   Loader2,
+  Award,
 } from 'lucide-react';
 import { PlayHistoryRecord, Beatmap, GameSettings } from '../types';
 import { sanitizeCssUrl } from '../utils/securityLimits';
@@ -144,6 +145,7 @@ export default function PersonalHistoryScreen({
   history,
   allBeatmaps,
   onWatchReplay,
+  onViewResult,
   onClearHistory,
   onDeleteRecord,
   onImportRecords,
@@ -471,6 +473,16 @@ export default function PersonalHistoryScreen({
             </div>
 
             <div className="flex items-center justify-between gap-2 relative z-10">
+              {onViewResult && (
+                <button
+                  type="button"
+                  onClick={() => { onViewResult(selectedRecord); }}
+                  className="flex-1 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 font-sans font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                >
+                  <Award className="h-4 w-4" />
+                  <span>Result</span>
+                </button>
+              )}
               {onWatchReplay && selectedRecord.replayFrames && selectedRecord.replayFrames.length > 0 && (
                 <button
                   type="button"
@@ -639,6 +651,18 @@ export default function PersonalHistoryScreen({
                     <span className="text-[9px] text-cyan-400/80 truncate">Original beatmapset is being downloaded...</span>
                   </div>
                 </div>
+              )}
+
+              {onViewResult && (
+                <button
+                  type="button"
+                  id="history-view-results-button"
+                  onClick={() => onViewResult(selectedRecord)}
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 active:scale-95 text-amber-200 font-sans font-black text-sm tracking-wider rounded-xl shadow-lg shadow-black/20 flex items-center justify-center gap-2 border border-amber-400/30 transition cursor-pointer"
+                >
+                  <Award className="h-4 w-4 text-amber-400" />
+                  <span>View Results Screen</span>
+                </button>
               )}
 
               <button

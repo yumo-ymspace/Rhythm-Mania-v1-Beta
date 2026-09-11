@@ -766,7 +766,7 @@ Status starts as pending. Dependencies must be completed first.
 | **TASK-060** | Song select carousel + wedge + bottom Mods/Random/Options + **local ranking panel** (no global). Wedge uses lazer V2 mania stats (Notes / Hold Notes / Key Count / AR / Accuracy / HP Drain) + Details/Ranking tabs + Local scope. **(done)** | `SongSelect.tsx` | Playwright vs `song-select` ref |
 | **TASK-061** | Mod overlay visual (categories, hex-ish buttons, incompat) **(done)** | SongSelect | Playwright |
 | **TASK-062** | Catalog overlay Argon tokens; search + catboy download only (TASK-009 already removed DB activation) **(done)** | `OnlineBeatmapCatalog.tsx` | Playwright search → download |
-| **TASK-070** | Results grade-hero + judgement names + PENAR + local score list only | `ResultsScreen.tsx` | Playwright vs `results` ref |
+| **TASK-070** | Results grade-hero + judgement names + PENAR + local score list only **(done)** | `ResultsScreen.tsx` | Playwright vs `results` ref |
 | **TASK-071** | History restyle | `PersonalHistoryScreen.tsx` | Playwright |
 | **TASK-080** | Main menu logo pulse + stacked actions; no account chip | `MainMenu.tsx` | Playwright |
 | **TASK-081** | Settings rail restyle + PENAR/scroll-lock rows | `settings/*` | Playwright |
