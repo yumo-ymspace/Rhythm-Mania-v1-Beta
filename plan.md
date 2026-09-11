@@ -767,7 +767,7 @@ Status starts as pending. Dependencies must be completed first.
 | **TASK-061** | Mod overlay visual (categories, hex-ish buttons, incompat) **(done)** | SongSelect | Playwright |
 | **TASK-062** | Catalog overlay Argon tokens; search + catboy download only (TASK-009 already removed DB activation) **(done)** | `OnlineBeatmapCatalog.tsx` | Playwright search → download |
 | **TASK-070** | Results grade-hero + judgement names + PENAR + local score list only **(done)** | `ResultsScreen.tsx` | Playwright vs `results` ref |
-| **TASK-071** | History restyle | `PersonalHistoryScreen.tsx` | Playwright |
+| **TASK-071** | History restyle **(done)** | `PersonalHistoryScreen.tsx` | Playwright |
 | **TASK-080** | Main menu logo pulse + stacked actions; no account chip | `MainMenu.tsx` | Playwright |
 | **TASK-081** | Settings rail restyle + PENAR/scroll-lock rows | `settings/*` | Playwright |
 | **TASK-082** | Skin screen: Argon default, legacy listed | `SkinScreen.tsx` | Playwright |
