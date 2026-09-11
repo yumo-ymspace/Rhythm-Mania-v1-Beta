@@ -30,18 +30,22 @@ function columnInset(x: number, width: number): { x: number; width: number } {
   return { x: x + ARGON_COLUMN_GAP / 2, width: Math.max(1, width - ARGON_COLUMN_GAP) };
 }
 
-function drawChevronDown(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+export function drawChevronDown(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
   const halfW = size * 0.38;
   const halfH = size * 0.22;
+  const t = Math.max(2.5, size * 0.14);
   ctx.beginPath();
+  // Outer contour: top-left -> bottom point -> top-right
   ctx.moveTo(cx - halfW, cy - halfH);
   ctx.lineTo(cx, cy + halfH);
   ctx.lineTo(cx + halfW, cy - halfH);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = Math.max(2, size * 0.12);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.stroke();
+  // Inner contour notch: top-right inner -> inner bottom point -> top-left inner
+  ctx.lineTo(cx + halfW - t * 0.7, cy - halfH);
+  ctx.lineTo(cx, cy + halfH - t);
+  ctx.lineTo(cx - halfW + t * 0.7, cy - halfH);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
 }
 
 function drawArgonNotePiece(

@@ -110,6 +110,31 @@ describe('Argon column colours', () => {
     expect(getNoteVisualY(400, 80, rhythmplus)).toBe(400 - 4);
     expect(isArgonSkin(rhythmplus)).toBe(false);
   });
+
+  it('TASK-V-050: draws filled note chevron polygon with expected geometry', async () => {
+    const { drawChevronDown } = await import('../src/render/argonPlayfield');
+    const calls: string[] = [];
+    const mockCtx = {
+      beginPath: () => calls.push('beginPath'),
+      moveTo: (x: number, y: number) => calls.push(`moveTo(${x.toFixed(1)},${y.toFixed(1)})`),
+      lineTo: (x: number, y: number) => calls.push(`lineTo(${x.toFixed(1)},${y.toFixed(1)})`),
+      closePath: () => calls.push('closePath'),
+      fill: () => calls.push('fill'),
+      fillStyle: '',
+    } as unknown as CanvasRenderingContext2D;
+
+    drawChevronDown(mockCtx, 50, 50, 20);
+    expect(mockCtx.fillStyle).toBe('#ffffff');
+    expect(calls).toContain('beginPath');
+    expect(calls).toContain('closePath');
+    expect(calls).toContain('fill');
+    // Top-left outer: 50 - 20*0.38 = 42.4, 50 - 20*0.22 = 45.6
+    expect(calls).toContain('moveTo(42.4,45.6)');
+    // Bottom apex outer: 50, 50 + 20*0.22 = 54.4
+    expect(calls).toContain('lineTo(50.0,54.4)');
+    // Top-right outer: 50 + 20*0.38 = 57.6, 50 - 20*0.22 = 45.6
+    expect(calls).toContain('lineTo(57.6,45.6)');
+  });
 });
 
 describe('TASK-082: Skin screen Argon default and legacy catalog', () => {
