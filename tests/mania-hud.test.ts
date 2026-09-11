@@ -13,7 +13,9 @@
 import { describe, expect, it } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ManiaHud, ArgonHealthDisplay, ArgonScoreCounter, ArgonWedgePieces } from '../src/components/ManiaHud';
+import { ManiaHud, ArgonHealthDisplay, ArgonScoreCounter, ArgonWedgePieces, ArgonSongProgress } from '../src/components/ManiaHud';
+import { computeSongDensityBins, DENSITY_BIN_COUNT } from '../src/render/argonSkin';
+import type { HitObject } from '../src/types';
 
 describe('ManiaHud and Argon HUD components (TASK-052)', () => {
   it('renders ManiaHud with health display, wedges, and score counter', () => {
@@ -99,4 +101,73 @@ describe('ManiaHud and Argon HUD components (TASK-052)', () => {
     );
     expect(htmlReplay).toContain('REPLAY');
   });
+
+  it('TASK-V-052: computes 64 rate-invariant map-time density bins normalized to peak 1.0', () => {
+    // Empty notes returns 64 zeros
+    const emptyBins = computeSongDensityBins([]);
+    expect(emptyBins).toHaveLength(DENSITY_BIN_COUNT);
+    expect(Array.from(emptyBins).every((v) => v === 0)).toBe(true);
+
+    // Notes at distinct map times across 100,000ms duration
+    const testNotes: HitObject[] = [
+      { id: '1', time: 0, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false },
+      { id: '2', time: 25000, column: 1, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false },
+      { id: '3', time: 50000, column: 2, type: 'hold', endTime: 55000, isHit: false, isReleased: false, isMissed: false, isHoldFailed: false },
+      { id: '4', time: 50000, column: 3, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false }, // two notes at 50,000ms (peak)
+      { id: '5', time: 99999, column: 0, type: 'normal', isHit: false, isReleased: false, isMissed: false, isHoldFailed: false },
+    ];
+    const bins = computeSongDensityBins(testNotes, 100000);
+    expect(bins).toHaveLength(64);
+
+    // Bin 0 (0ms) has 1 note -> 0.5
+    expect(bins[0]).toBe(0.5);
+    // Bin 16 (25000ms = 25% * 64 = 16) has 1 note -> 0.5
+    expect(bins[16]).toBe(0.5);
+    // Bin 32 (50000ms = 50% * 64 = 32) has 2 notes -> maxCount=2, normalized to 1.0
+    expect(bins[32]).toBe(1.0);
+    // Bin 63 (99999ms) has 1 note -> 0.5
+    expect(bins[63]).toBe(0.5);
+    // An empty bin
+    expect(bins[10]).toBe(0);
+  });
+
+  it('TASK-V-052: renders ArgonSongProgress with density histogram canvas and progress pill', () => {
+    const dummyBins = new Float32Array(64);
+    dummyBins[0] = 1.0;
+    dummyBins[32] = 0.5;
+
+    const html = renderToStaticMarkup(
+      React.createElement(ArgonSongProgress, {
+        densityBins: dummyBins,
+      })
+    );
+
+    expect(html).toContain('id="argon-song-progress"');
+    // Contains density histogram canvas
+    expect(html).toContain('<canvas');
+    expect(html).toContain('width="256"');
+    expect(html).toContain('height="16"');
+    // Contains elapsed and remaining time labels
+    expect(html).toContain('0:00');
+    expect(html).toContain('-0:00');
+  });
+
+  it('TASK-V-052: passes densityBins to ArgonSongProgress inside ManiaHud', () => {
+    const dummyBins = new Float32Array(64);
+    dummyBins[10] = 1.0;
+
+    const html = renderToStaticMarkup(
+      React.createElement(ManiaHud, {
+        score: 500000,
+        hp: 100,
+        densityBins: dummyBins,
+        isReplayMode: false,
+        isAutoplay: false,
+      })
+    );
+
+    expect(html).toContain('id="argon-song-progress"');
+    expect(html).toContain('<canvas');
+  });
 });
+

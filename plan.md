@@ -212,8 +212,8 @@ Pixel-perfect vs `osu.exe` is not required. Fail: wrong HUD corner, slab notes, 
 | **TASK-V-002** | optional / unstarted | Outfit only if later stills demand it (fonts stay Inter/Space Grotesk) | — |
 | **TASK-V-050** | **done** | Filled rice arrow (same `size` / `halfW` / `halfH` as `drawChevronDown`); 4K+7K+9K colour shots; **no table edits** | `playfield-4k` ~4 px |
 | **TASK-V-051** | **done** | Oval still-diff; optional taper; **lane dim** | holds + `argon-notes.png` |
-| **TASK-V-052** | pending | Density `Float32Array` length 64, map-time bins, one canvas in progress pill | `hud/argon-song-progress-*` |
-| **TASK-V-053** | pending | HUD still-diff only (combo/PENAR already shipped) | `hud/` |
+| **TASK-V-052** | **done** | Density `Float32Array` length 64, map-time bins, one canvas in progress pill | `hud/argon-song-progress-*` |
+| **TASK-V-053** | **done** | HUD still-diff only (combo/PENAR already shipped) | `hud/` |
 | **TASK-V-043** | pending | Visible **Exit**; do not rebuild pause stack | `pause/` |
 | **TASK-V-060** | pending | Decorative wedge 480–520px desktop; **no shear at 390×844**; axis-aligned controls | `song-select/v2*` |
 | **TASK-V-061** | pending | Footer chrome still-diff | v2 footer |
@@ -222,7 +222,7 @@ Pixel-perfect vs `osu.exe` is not required. Fail: wrong HUD corner, slab notes, 
 | **TASK-V-080** | pending | Menu still-diff; pulse already reduced-motion | `task080*` |
 | **TASK-V-090** | pending | Skins copy: 3D is not Argon SoT | SkinScreen |
 
-**Next visual task: TASK-V-052 (Argon song progress density histogram).**
+**Next visual task: TASK-V-043 (Pause Exit label) / TASK-V-060 (Song Select decorative wedge).**
 
 Density contract (do not invent another): bin `floor(t_map / audioDuration * 64)` clamped 0..63; one count per object at head time; compute once per beatmap identity; **do not** rebuild on DT/HT; elapsed clip uses playback clock.
 

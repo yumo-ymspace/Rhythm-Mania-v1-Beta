@@ -95,6 +95,7 @@ import { calculateScrollSpeedFactor, computeScrollTravelTimeMs, updateColumnsLay
 import { getColumnStyles } from '../render/laneLayout';
 import { getVisibleNotes } from '../render/noteVisibility';
 import { createScrollModel, ScrollModel } from '../render/scrollVelocity';
+import { computeSongDensityBins } from '../render/argonSkin';
 import { parseBeatmap } from '../utils/beatmapParser';
 import {
   BABYLON_PLAYFIELD_WIDTH_MAX,
@@ -448,6 +449,11 @@ export default function GameplayCanvas({
 
   const introSkippable = React.useMemo(() => isIntroSkippable(firstNoteTime, INTRO_SKIP_THRESHOLD_MS), [firstNoteTime]);
   const skipTargetMs = React.useMemo(() => computeSkipTargetMs(firstNoteTime, INTRO_SKIP_LEAD_IN_MS), [firstNoteTime]);
+
+  // TASK-V-052: Rate-invariant map-time 64-bin density histogram computed once per beatmap identity
+  const densityBins = React.useMemo(() => {
+    return computeSongDensityBins(beatmap.notes, (beatmap.duration || 0) * 1000);
+  }, [beatmap.id, beatmap.notes, beatmap.duration]);
 
   const replayData = React.useMemo(
     () => normalizeReplayFrames(replayRecord?.replayFrames, beatmap.keyCount),
@@ -3896,6 +3902,7 @@ export default function GameplayCanvas({
             isReplayMode={isReplayMode}
             isAutoplay={isAutoplay}
             progressBarRef={progressBarRef as React.Ref<HTMLDivElement>}
+            densityBins={densityBins}
             timeLabelRef={timeLabelRef}
             timeLeftLabelRef={timeLeftLabelRef}
             leftHitErrorCanvasRef={leftHitErrorCanvasRef}

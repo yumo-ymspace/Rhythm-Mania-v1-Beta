@@ -27,6 +27,8 @@ export interface ManiaHudProps {
   isReplayMode?: boolean;
   isAutoplay?: boolean;
   progressBarRef?: React.Ref<HTMLDivElement>;
+  densityCanvasRef?: React.Ref<HTMLCanvasElement>;
+  densityBins?: Float32Array;
   timeLabelRef?: React.Ref<HTMLSpanElement>;
   timeLeftLabelRef?: React.Ref<HTMLSpanElement>;
   leftHitErrorCanvasRef?: React.Ref<HTMLCanvasElement>;
@@ -402,10 +404,53 @@ export const ArgonDualHitErrorMeters: React.FC<{
  */
 export const ArgonSongProgress: React.FC<{
   progressBarRef?: React.Ref<HTMLDivElement>;
+  densityCanvasRef?: React.Ref<HTMLCanvasElement>;
+  densityBins?: Float32Array;
   timeLabelRef?: React.Ref<HTMLSpanElement>;
   timeLeftLabelRef?: React.Ref<HTMLSpanElement>;
   className?: string;
-}> = ({ progressBarRef, timeLabelRef, timeLeftLabelRef, className = '' }) => {
+}> = ({ progressBarRef, densityCanvasRef, densityBins, timeLabelRef, timeLeftLabelRef, className = '' }) => {
+  const localCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
+  const setMergedCanvasRef = React.useCallback(
+    (node: HTMLCanvasElement | null) => {
+      localCanvasRef.current = node;
+      if (typeof densityCanvasRef === 'function') {
+        densityCanvasRef(node);
+      } else if (densityCanvasRef && typeof densityCanvasRef === 'object') {
+        (densityCanvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = node;
+      }
+    },
+    [densityCanvasRef]
+  );
+
+  React.useEffect(() => {
+    const canvas = localCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!densityBins || densityBins.length === 0) return;
+
+    const binCount = densityBins.length;
+    const binWidth = w / binCount;
+
+    for (let i = 0; i < binCount; i++) {
+      const val = densityBins[i];
+      if (val <= 0) continue;
+      const barH = Math.max(1, val * h);
+      const x = i * binWidth;
+      const y = h - barH;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.fillRect(x, y, Math.max(1, binWidth - 0.5), barH);
+    }
+  }, [densityBins]);
+
   return (
     <div
       id="argon-song-progress"
@@ -419,11 +464,21 @@ export const ArgonSongProgress: React.FC<{
         0:00
       </span>
 
-      {/* Pill-shaped progress track */}
+      {/* Pill-shaped progress track with density histogram */}
       <div className="flex-1 h-[10px] sm:h-[12px] rounded-full bg-slate-950/75 border border-white/15 p-[2px] relative overflow-hidden backdrop-blur-sm shadow-inner">
+        {/* Background density histogram */}
+        <canvas
+          ref={setMergedCanvasRef}
+          width={256}
+          height={16}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          aria-hidden="true"
+        />
+
+        {/* Elapsed white fill with glowing accent border */}
         <div
           ref={progressBarRef}
-          className="h-full rounded-full bg-white shadow-[0_0_12px_rgba(126,215,253,0.9)] transition-none"
+          className="h-full rounded-full bg-white shadow-[0_0_12px_rgba(126,215,253,0.9)] transition-none relative z-10"
           style={{ width: '0%' }}
         />
       </div>
@@ -465,6 +520,8 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
   isReplayMode = false,
   isAutoplay = false,
   progressBarRef,
+  densityCanvasRef,
+  densityBins,
   timeLabelRef,
   timeLeftLabelRef,
   leftHitErrorCanvasRef,
@@ -536,6 +593,8 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
       {!isReplayMode && !isAutoplay && (
         <ArgonSongProgress
           progressBarRef={progressBarRef}
+          densityCanvasRef={densityCanvasRef}
+          densityBins={densityBins}
           timeLabelRef={timeLabelRef}
           timeLeftLabelRef={timeLeftLabelRef}
         />

@@ -12,12 +12,15 @@
 
 import { parseCssColor } from './color';
 import type { PlayfieldVisualSettings } from './types';
+import type { HitObject } from '../types';
 
 /** Recreated from osu!(lazer) `ArgonNotePiece` (osu-resources bitmaps are not used). */
 export const ARGON_NOTE_HEIGHT = 42;
 export const ARGON_NOTE_ACCENT_RATIO = 0.82;
 export const ARGON_CORNER_RADIUS = 3.4;
 export const ARGON_COLUMN_GAP = 1;
+
+export const DENSITY_BIN_COUNT = 64;
 
 export const ARGON_COLOUR_SPECIAL = '#a96aff';
 export const ARGON_COLOUR_YELLOW = '#ffc528';
@@ -95,3 +98,54 @@ export function argonLighten(color: string, amount: number): string {
   const factor = 1 + amount;
   return `rgb(${Math.min(255, Math.round(parsed.r * factor))},${Math.min(255, Math.round(parsed.g * factor))},${Math.min(255, Math.round(parsed.b * factor))})`;
 }
+
+/**
+ * Computes a rate-invariant 64-bin density histogram in map-time domain (TASK-V-052).
+ * - Each hit object contributes 1 count at its head time (`obj.time`).
+ * - Bin index: Math.floor((obj.time / audioDurationMs) * 64), clamped to 0..63.
+ * - Normalized so peak bin value equals 1.0 (empty map returns all zeros).
+ * - audioDurationMs: map audio duration in ms (unrated). If missing or <= 0, max(note time/endTime) is used.
+ */
+export function computeSongDensityBins(
+  notes: readonly HitObject[] | undefined,
+  audioDurationMs?: number,
+): Float32Array {
+  const bins = new Float32Array(DENSITY_BIN_COUNT);
+  if (!notes || notes.length === 0) {
+    return bins;
+  }
+
+  let effectiveDuration = audioDurationMs && audioDurationMs > 0 ? audioDurationMs : 0;
+  if (effectiveDuration <= 0) {
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      const endTime = n.endTime !== undefined && n.endTime > n.time ? n.endTime : n.time;
+      if (endTime > effectiveDuration) {
+        effectiveDuration = endTime;
+      }
+    }
+  }
+
+  if (effectiveDuration <= 0) {
+    return bins;
+  }
+
+  let maxCount = 0;
+  for (let i = 0; i < notes.length; i++) {
+    const t = Math.max(0, notes[i].time);
+    const binIdx = Math.min(DENSITY_BIN_COUNT - 1, Math.max(0, Math.floor((t / effectiveDuration) * DENSITY_BIN_COUNT)));
+    bins[binIdx]++;
+    if (bins[binIdx] > maxCount) {
+      maxCount = bins[binIdx];
+    }
+  }
+
+  if (maxCount > 0) {
+    for (let b = 0; b < DENSITY_BIN_COUNT; b++) {
+      bins[b] /= maxCount;
+    }
+  }
+
+  return bins;
+}
+
