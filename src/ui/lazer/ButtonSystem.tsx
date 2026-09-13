@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Settings as SettingsIcon,
@@ -22,10 +22,9 @@ import {
   User as SoloIcon,
   Globe as MultiIcon,
   Trophy as PlaylistsIcon,
-  Info as InfoIcon,
-  Ban as BanIcon,
 } from 'lucide-react';
 import { MenuButton } from './MenuButton';
+import { ComingSoonNotificationStack, useComingSoonToasts } from './ComingSoonNotifications';
 import {
   LAZER_SETTINGS,
   LAZER_PLAY,
@@ -42,19 +41,6 @@ import {
 
 
 export type ButtonSystemPhase = 'top-level' | 'play';
-
-/** A single stackable toast notification. */
-type ToastNotification = {
-  id: string;
-  title: string;
-  detail?: string;
-  iconType: 'info' | 'ban';
-  /**
-   * Set to true just before removal on click, so that AnimatePresence
-   * captures the throw-left exit animation rather than the slide-right one.
-   */
-  clickDismissed: boolean;
-};
 
 export type ButtonSystemProps = {
   phase: ButtonSystemPhase;
@@ -78,74 +64,16 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
   className = '',
 }) => {
   const reducedMotion = useLazerReducedMotion();
-  const [notifications, setNotifications] = useState<ToastNotification[]>([]);
+  const {
+    toasts: notifications,
+    showComingSoon,
+    addToast: addNotification,
+    handleClickDismiss,
+  } = useComingSoonToasts();
 
-  /** Per-notification auto-dismiss timers. */
-  const timerMapRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // --- Notification helpers ---
-
-  const clearNotifTimer = (id: string) => {
-    const t = timerMapRef.current.get(id);
-    if (t !== undefined) {
-      clearTimeout(t);
-      timerMapRef.current.delete(id);
-    }
-  };
-
-  const removeNotification = useCallback((id: string) => {
-    clearNotifTimer(id);
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
-
-  const addNotification = useCallback(
-    (title: string, detail: string | undefined, iconType: 'info' | 'ban') => {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      setNotifications(prev => [
-        ...prev,
-        { id, title, detail, iconType, clickDismissed: false },
-      ]);
-      const t = setTimeout(() => removeNotification(id), 2400);
-      timerMapRef.current.set(id, t);
-    },
-    [removeNotification],
-  );
-
-  /**
-   * Dismiss a notification via click using a two-step approach:
-   * 1. Mark clickDismissed: true → React re-renders with the throw-left exit prop.
-   * 2. Remove in the next animation frame → AnimatePresence captures the updated exit.
-   */
-  const handleClickDismiss = useCallback(
-    (id: string) => {
-      clearNotifTimer(id);
-      setNotifications(prev =>
-        prev.map(n => (n.id === id ? { ...n, clickDismissed: true } : n)),
-      );
-      requestAnimationFrame(() => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
-      });
-    },
-    [],
-  );
-
-  // Cleanup all timers on unmount.
-  useEffect(() => {
-    return () => {
-      timerMapRef.current.forEach(t => clearTimeout(t));
-      timerMapRef.current.clear();
-    };
-  }, []);
-
   // --- Feature actions ---
-
-  const showComingSoon = useCallback(
-    (feature: string) => {
-      addNotification('Coming soon', feature, 'info');
-    },
-    [addNotification],
-  );
 
   const handleExitClick = useCallback(() => {
     addNotification("You can't exit!", "You're not going nowhere!", 'ban');
@@ -188,7 +116,11 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
         transition={
           reducedMotion
             ? { duration: 0 }
-            : { duration: LAZER_DURATION.barRestore, ease: LAZER_EASE_OUT_QUINT }
+            : {
+                duration: LAZER_DURATION.barRestore,
+                delay: 0.18,
+                ease: LAZER_EASE_OUT_QUINT,
+              }
         }
       >
         <div className="lazer-button-system-layout">
@@ -305,53 +237,9 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
         </div>
       </motion.div>
 
-      {/* Stacking notification area — fixed top-right, grows downward */}
-      <div className="lazer-notification-stack">
-        <AnimatePresence>
-          {notifications.map(notif => (
-            <motion.aside
-              key={notif.id}
-              className="lazer-coming-soon"
-              role="status"
-              aria-live="polite"
-              layout
-              initial={{ opacity: 0, x: 48 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={
-                notif.clickDismissed
-                  ? {
-                      opacity: 0,
-                      x: -340,
-                      y: 28,
-                      rotate: -14,
-                      transition: { duration: 0.42, ease: [0.4, 0, 0.9, 0.55] },
-                    }
-                  : {
-                      opacity: 0,
-                      x: 48,
-                      transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-                    }
-              }
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              onClick={() => handleClickDismiss(notif.id)}
-            >
-              <span className="lazer-coming-soon-icon" aria-hidden="true">
-                {notif.iconType === 'info' ? (
-                  <InfoIcon className="w-4 h-4" strokeWidth={2.4} />
-                ) : (
-                  <BanIcon className="w-4 h-4" strokeWidth={2.4} />
-                )}
-              </span>
-              <span className="lazer-coming-soon-copy">
-                <span className="lazer-coming-soon-title">{notif.title}</span>
-                {notif.detail && (
-                  <span className="lazer-coming-soon-detail">{notif.detail}</span>
-                )}
-              </span>
-            </motion.aside>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* Stacking notification area — fixed top-right, grows downward.
+          Shares the same coming-soon system as the toolbar Now Playing button. */}
+      <ComingSoonNotificationStack toasts={notifications} onDismiss={handleClickDismiss} />
     </div>
   );
 };

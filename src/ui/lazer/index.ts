@@ -75,6 +75,8 @@ export { MenuButton } from './MenuButton';
 export type { MenuButtonProps, MenuButtonState } from './MenuButton';
 export { ButtonSystem } from './ButtonSystem';
 export type { ButtonSystemProps, ButtonSystemPhase } from './ButtonSystem';
+export { ComingSoonNotificationStack, useComingSoonToasts } from './ComingSoonNotifications';
+export type { LazerToastNotice } from './ComingSoonNotifications';
 export { LazerToolbar, ToolbarTooltip } from './LazerToolbar';
 export type { LazerToolbarProps, ToolbarTooltipProps, LazerTooltipData } from './LazerToolbar';
 

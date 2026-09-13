@@ -30,25 +30,29 @@ describe('TASK-V-012: lazer toolbar + hover tooltips', () => {
     expect(html).toContain('is-visible');
     expect(html).toContain('id="toolbar-btn-settings"');
     expect(html).toContain('id="toolbar-btn-home"');
+    expect(html).toContain('href="https://changelog.rhythm-mania.com"');
+    expect(html).toContain('href="https://discord.rhythm-mania.com"');
+    expect(html).toContain('href="https://github.rhythm-mania.com"');
+    expect(html).toContain('href="https://bug-report.rhythm-mania.com"');
+    expect(html).toContain('href="https://wiki.rhythm-mania.com"');
     expect(html).toContain('id="toolbar-btn-listing"');
     expect(html).toContain('id="toolbar-btn-now-playing"');
+    expect(html).toContain('is-disabled-now-playing');
     expect(html).toContain('id="toolbar-profile"');
     expect(html).toContain('TestPlayer');
     expect(html).toContain('id="toolbar-clock"');
     expect(html).toContain('id="toolbar-btn-notifications"');
   });
 
-  it('renders active pink state on listing and now-playing buttons when active', () => {
+  it('renders active pink state on listing button when listing is open', () => {
     const html = renderToStaticMarkup(
       React.createElement(LazerToolbar, {
         visible: true,
         isListingOpen: true,
-        isNowPlayingOpen: true,
       })
     );
 
     expect(html).toContain('id="toolbar-btn-listing" class="lazer-toolbar-btn is-active-pink"');
-    expect(html).toContain('id="toolbar-btn-now-playing" class="lazer-toolbar-btn is-active-pink"');
   });
 
   it('renders hidden state when visible=false', () => {
@@ -89,5 +93,35 @@ describe('TASK-V-012: lazer toolbar + hover tooltips', () => {
     expect(html).toContain('beatmap listing');
     expect(html).toContain('browse for new beatmaps');
     expect(html).toContain('CTRL-B');
+  });
+
+  it('renders ToolbarTooltip with align=right correctly', () => {
+    const mockRect = {
+      left: 1100,
+      top: 0,
+      right: 1200,
+      bottom: 40,
+      width: 100,
+      height: 40,
+      x: 1100,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+
+    const html = renderToStaticMarkup(
+      React.createElement(ToolbarTooltip, {
+        data: {
+          title: 'clock',
+          subtitle: 'session elapsed: 00:00:00',
+          align: 'right',
+        },
+        anchorRect: mockRect,
+      })
+    );
+
+    expect(html).toContain('lazer-toolbar-tooltip');
+    expect(html).toContain('is-align-right');
+    expect(html).toContain('clock');
+    expect(html).toContain('session elapsed: 00:00:00');
   });
 });
