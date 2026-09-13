@@ -36,7 +36,10 @@ const STATIC_ASSETS = [
   '/backgrounds/nikio.webp',
   '/backgrounds/serr.webp',
   '/backgrounds/soncak.webp',
-  '/backgrounds/wxyz.webp'
+  '/backgrounds/wxyz.webp',
+  '/sounds/d1.mp3',
+  '/sounds/d2.mp3',
+  '/sounds/d3.mp3'
 ];
 
 self.addEventListener('install', (event) => {

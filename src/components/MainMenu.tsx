@@ -24,6 +24,7 @@ import {
   lazerCompactCookieX,
   useLazerReducedMotion,
 } from '../ui/lazer';
+import { playMenuSound } from '../utils/menuSounds';
 
 export type LazerMenuPhase = 'idle' | 'top-level' | 'play';
 
@@ -180,17 +181,30 @@ export const MainMenu = ({
     onNavigate('select');
   }, [onNavigate]);
 
+  const handleSelectPlayWithSound = useCallback(() => {
+    playMenuSound('d2');
+    openPlay();
+  }, [openPlay]);
+
+  const handleSelectSoloWithSound = useCallback(() => {
+    playMenuSound('d3');
+    handleSelectSolo();
+  }, [handleSelectSolo]);
+
   const handleCookieClick = useCallback(() => {
     if (!reducedMotion) {
       setIsCookieClicking(true);
       window.setTimeout(() => setIsCookieClicking(false), 90);
     }
     if (phase === 'idle') {
+      playMenuSound('d1');
       // Transition right as the click peak is hit so enlargement flows seamlessly into shrinking
       window.setTimeout(() => openTopLevel(), 70);
     } else if (phase === 'top-level') {
+      playMenuSound('d2');
       openPlay();
     } else if (phase === 'play') {
+      playMenuSound('d3');
       handleSelectSolo();
     }
   }, [phase, reducedMotion, openTopLevel, openPlay, handleSelectSolo]);
@@ -212,6 +226,7 @@ export const MainMenu = ({
 
       if (phase === 'idle' && isIdleActivationKey(event)) {
         event.preventDefault();
+        playMenuSound('d1');
         openTopLevel();
         return;
       }
@@ -286,8 +301,8 @@ export const MainMenu = ({
           <ButtonSystem
             key="lazer-button-system"
             phase={phase as ButtonSystemPhase}
-            onSelectPlay={openPlay}
-            onSelectSolo={handleSelectSolo}
+            onSelectPlay={handleSelectPlayWithSound}
+            onSelectSolo={handleSelectSoloWithSound}
             onOpenSettings={onOpenSettings}
             onOpenBrowse={onOpenBrowse}
             onBackToTopLevel={returnTopLevel}

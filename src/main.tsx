@@ -14,6 +14,11 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { preloadMenuSounds } from './utils/menuSounds';
+
+// Fetch + decode the first-menu cookie sounds immediately so the first
+// cookie press plays instantly instead of waiting on network.
+preloadMenuSounds();
 
 // Register Service Worker for robust offline caching
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
