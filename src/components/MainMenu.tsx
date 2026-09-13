@@ -11,7 +11,7 @@
  */
 
 import { Github, BookOpen, MessageSquareWarning } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LazerCookie,
@@ -150,6 +150,23 @@ export const MainMenu = ({
   const [isCookieClicking, setIsCookieClicking] = useState(false);
   const reducedMotion = useLazerReducedMotion();
 
+  // Logical phase ref: mirrors React state synchronously so rapid presses
+  // between renders can't act on a stale phase (which skipped d2).
+  const phaseRef = useRef<LazerMenuPhase>('idle');
+  // Pending idle -> top-level timer (cookie click waits 70ms for the click peak).
+  const idleTimerRef = useRef<number | null>(null);
+  // Set once the play-phase navigation fires; blocks repeat d3 on key mash.
+  const soloNavigatedRef = useRef(false);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+    if (phase !== 'play') soloNavigatedRef.current = false;
+  }, [phase]);
+
+  useEffect(() => () => {
+    if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
+  }, []);
+
   useEffect(() => {
     onPhaseChange?.(phase);
   }, [phase, onPhaseChange]);
@@ -162,56 +179,102 @@ export const MainMenu = ({
   }, []);
 
   const openTopLevel = useCallback(() => {
+    phaseRef.current = 'top-level';
     setPhase('top-level');
   }, [setPhase]);
 
   const openPlay = useCallback(() => {
+    phaseRef.current = 'play';
     setPhase('play');
   }, [setPhase]);
 
   const returnTopLevel = useCallback(() => {
+    if (idleTimerRef.current !== null) {
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+    phaseRef.current = 'top-level';
     setPhase('top-level');
   }, [setPhase]);
 
   const returnIdle = useCallback(() => {
+    if (idleTimerRef.current !== null) {
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+    soloNavigatedRef.current = false;
+    phaseRef.current = 'idle';
     setPhase('idle');
   }, [setPhase]);
 
   const handleSelectSolo = useCallback(() => {
+    if (soloNavigatedRef.current) return;
+    soloNavigatedRef.current = true;
     onNavigate('select');
   }, [onNavigate]);
 
   const handleSelectPlayWithSound = useCallback(() => {
+    // Guard stale double-clicks: only the top-level -> play edge plays d2.
+    if (phaseRef.current !== 'top-level') return;
     playMenuSound('d2');
     openPlay();
   }, [openPlay]);
 
   const handleSelectSoloWithSound = useCallback(() => {
+    if (soloNavigatedRef.current) return;
     playMenuSound('d3');
     handleSelectSolo();
   }, [handleSelectSolo]);
 
   const handleCookieClick = useCallback(() => {
+    // Drop focus so a focused cookie button can't re-fire via native
+    // Enter/Space activation on top of this handler (double d3).
+    const active = document.activeElement as HTMLElement | null;
+    if (active && (active.id === 'lazer-cookie' || active.closest?.('#lazer-cookie'))) {
+      active.blur();
+    }
     if (!reducedMotion) {
       setIsCookieClicking(true);
       window.setTimeout(() => setIsCookieClicking(false), 90);
     }
-    if (phase === 'idle') {
+    const logical = phaseRef.current;
+    if (logical === 'idle' && idleTimerRef.current === null) {
       playMenuSound('d1');
+      // Promote logically right away so a fast follow-up press lands on the
+      // top-level edge (d2) instead of replaying d1 while state is pending.
+      phaseRef.current = 'top-level';
       // Transition right as the click peak is hit so enlargement flows seamlessly into shrinking
-      window.setTimeout(() => openTopLevel(), 70);
-    } else if (phase === 'top-level') {
+      idleTimerRef.current = window.setTimeout(() => {
+        idleTimerRef.current = null;
+        openTopLevel();
+      }, 70);
+    } else if (logical === 'idle') {
+      // Fast follow-up during the 70ms idle transition: skip straight to
+      // play so d2 is never skipped.
+      if (idleTimerRef.current !== null) {
+        window.clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
       playMenuSound('d2');
       openPlay();
-    } else if (phase === 'play') {
+    } else if (logical === 'top-level') {
+      playMenuSound('d2');
+      openPlay();
+    } else {
+      if (soloNavigatedRef.current) return;
       playMenuSound('d3');
       handleSelectSolo();
     }
-  }, [phase, reducedMotion, openTopLevel, openPlay, handleSelectSolo]);
+  }, [reducedMotion, openTopLevel, openPlay, handleSelectSolo]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target) || event.repeat) return;
+
+      // Focused cookie button already fires a native click on Enter/Space;
+      // handling it here too would double-play the sound.
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('#lazer-cookie')) return;
 
       if (
         (event.key === 'Enter' || event.key === ' ') &&
@@ -224,25 +287,24 @@ export const MainMenu = ({
         return;
       }
 
-      if (phase === 'idle' && isIdleActivationKey(event)) {
+      if (phaseRef.current === 'idle' && isIdleActivationKey(event)) {
         event.preventDefault();
-        playMenuSound('d1');
-        openTopLevel();
+        handleCookieClick();
         return;
       }
 
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (phase === 'play') {
+        if (phaseRef.current === 'play') {
           returnTopLevel();
-        } else if (phase === 'top-level') {
+        } else if (phaseRef.current === 'top-level') {
           returnIdle();
         }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [phase, openTopLevel, returnTopLevel, returnIdle, handleCookieClick]);
+  }, [openTopLevel, returnTopLevel, returnIdle, handleCookieClick]);
 
   // idle: scale 1, centred
   // top-level / play: smaller cookie parked in the settings–play gap
