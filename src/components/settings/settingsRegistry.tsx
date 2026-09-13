@@ -245,6 +245,13 @@ export const ROWS: RowDef[] = [
     defaultValue: DEFAULT_SETTINGS.previewVolume,
   },
   {
+    id: 'launchMusicVolume', section: 'audio', label: 'Game Launch Music Volume',
+    description: 'Volume multiplier for the song that plays on the game launch menu. Default is 10% of music volume.',
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    defaultValue: DEFAULT_SETTINGS.launchMusicVolume,
+    keywords: ['launch', 'menu', 'startup', 'title', 'music'],
+  },
+  {
     id: 'masterVolume', section: 'audio', label: 'Master volume',
     description: 'Overall volume applied to music and hitsounds during gameplay.',
     control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },

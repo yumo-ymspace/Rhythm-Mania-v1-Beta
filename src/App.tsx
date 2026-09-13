@@ -50,6 +50,9 @@ import { AssetLifecycleManager } from './utils/assetLifecycle';
 import { computeChecksum } from './utils/checksum';
 import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
+import { MENU_FALLBACK_TRACK, menuMusic, pickMenuMusicIndex } from './utils/menuMusic';
+import type { PreparedLaunchTrack } from './utils/launchMenuTrack';
+import LoadingScreen from './components/LoadingScreen';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
 import { resolveSkinTheme } from './render/skinTheme';
 import { cssColorToHex, parseCssColor } from './render/color';
@@ -108,6 +111,12 @@ type AppRoute = {
 
 function isRemovedProfilePath(pathname: string): boolean {
   return pathname === '/profile' || pathname.startsWith('/profile/');
+}
+
+/** Effective output level for the game launch menu song. */
+function launchMusicLevel(s: GameSettings): number {
+  const slider = Number.isFinite(s.launchMusicVolume) ? s.launchMusicVolume : 0.1;
+  return s.musicVolume * slider * s.masterVolume;
 }
 
 function resolveRoute(pathname: string): AppRoute {
@@ -329,6 +338,142 @@ export default function App() {
   // decide whether Song Select should auto-resume the last selected map: only
   // post-gameplay returns auto-select; fresh app loads do not.
   const [hasPlayedThisSession, setHasPlayedThisSession] = useState(false);
+  // True once the IndexedDB/legacy map load settles, so launch menu music can
+  // roll its random pick against the real installed-song pool.
+  const [mapsReady, setMapsReady] = useState(false);
+  // Launch menu music: the loading screen's start button rolls once per
+  // session between the bundled fallback track and every installed song
+  // (fallback loops when nothing is installed) and starts it audibly.
+  // Returning to the menu resumes the rolled track.
+  const menuChoiceRef = useRef<{ rolled: boolean; mapId: string | null }>({ rolled: false, mapId: null });
+  const menuMusicGenRef = useRef(0);
+  // Boot gate: the loading screen owns the launch until its start button
+  // fires. The click is a real user gesture, so the launch song starts
+  // audibly at once instead of fighting browser autoplay policy.
+  // The boot loading screen only runs on a fresh root (/) launch. Refreshing
+  // or deep-linking into /select or any other page boots straight in.
+  const [booted, setBooted] = useState(
+    () => typeof window === 'undefined' || window.location.pathname !== '/',
+  );
+
+  // Fired synchronously from the start-button click (a real user gesture),
+  // so the launch song starts audibly at once. The curtain lifts later via
+  // handleBootEntered once the farewell sequence finishes.
+  const handleBootStartPressed = useCallback((track: PreparedLaunchTrack) => {
+    menuChoiceRef.current = { rolled: true, mapId: track.mapId };
+    menuMusic.play(
+      track.src ?? MENU_FALLBACK_TRACK,
+      launchMusicLevel(settings),
+    );
+  }, [settings]);
+
+  const handleBootEntered = useCallback(() => {
+    setBooted(true);
+  }, []);
+
+  // Before boot completes, ignore every input outside the loading screen so
+  // stray key presses can't trigger menu sounds or navigate behind the black
+  // curtain. Capture-phase runs before the menus' own window listeners, and
+  // events targeting the loading screen (the start button) stay exempt.
+  useEffect(() => {
+    if (booted) return;
+    const block = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('#boot-loading-screen')) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', block, true);
+    window.addEventListener('keyup', block, true);
+    window.addEventListener('pointerdown', block, true);
+    window.addEventListener('pointerup', block, true);
+    window.addEventListener('wheel', block, { capture: true, passive: false });
+    return () => {
+      window.removeEventListener('keydown', block, true);
+      window.removeEventListener('keyup', block, true);
+      window.removeEventListener('pointerdown', block, true);
+      window.removeEventListener('pointerup', block, true);
+      window.removeEventListener('wheel', block, { capture: true });
+    };
+  }, [booted]);
+
+  useEffect(() => {
+    menuMusic.setVolume(launchMusicLevel(settings));
+  }, [settings]);
+
+  useEffect(() => {
+    if (!booted) {
+      menuMusic.stop();
+      return;
+    }
+    if (currentScreen !== 'menu') {
+      menuMusicGenRef.current++;
+      menuMusic.stop();
+      return;
+    }
+    if (!mapsReady) return;
+    const volume = launchMusicLevel(settings);
+
+    const playMapTrack = async (map: Beatmap, generation: number) => {
+      try {
+        const cached = storageManager.lruMediaCache.get(map.id);
+        let src = cached?.audioUrl || map.audioUrl;
+        if (!src) {
+          const clone: Beatmap = {
+            ...map,
+            notes: map.notes ? map.notes.map(n => ({ ...n })) : [],
+          };
+          await unpackBeatmap(clone);
+          const fresh = storageManager.lruMediaCache.get(map.id);
+          src = fresh?.audioUrl || clone.audioUrl;
+        }
+        if (menuMusicGenRef.current !== generation) return;
+        if (src) {
+          menuMusic.play(src, launchMusicLevel(settings));
+        } else {
+          menuMusic.play(MENU_FALLBACK_TRACK, launchMusicLevel(settings));
+        }
+      } catch (err) {
+        console.warn('Menu music track unpack failed, falling back:', err instanceof Error ? err.message : String(err));
+        if (menuMusicGenRef.current !== generation) return;
+        menuMusic.play(MENU_FALLBACK_TRACK, launchMusicLevel(settings));
+      }
+    };
+
+    if (!menuChoiceRef.current.rolled) {
+      menuChoiceRef.current.rolled = true;
+      const index = pickMenuMusicIndex(customMaps.length + 1);
+      if (index === 0) {
+        menuChoiceRef.current.mapId = null;
+        menuMusic.play(MENU_FALLBACK_TRACK, volume);
+        return;
+      }
+      const picked = customMaps[index - 1];
+      if (!picked) {
+        menuChoiceRef.current.mapId = null;
+        menuMusic.play(MENU_FALLBACK_TRACK, volume);
+        return;
+      }
+      menuChoiceRef.current.mapId = picked.id;
+      const generation = ++menuMusicGenRef.current;
+      void playMapTrack(picked, generation);
+      return;
+    }
+
+    if (menuMusic.isPlaying()) return;
+    const chosenId = menuChoiceRef.current.mapId;
+    if (!chosenId) {
+      menuMusic.play(MENU_FALLBACK_TRACK, volume);
+      return;
+    }
+    const chosen = customMaps.find(m => m.id === chosenId);
+    if (!chosen) {
+      menuMusic.play(MENU_FALLBACK_TRACK, volume);
+      return;
+    }
+    const generation = ++menuMusicGenRef.current;
+    void playMapTrack(chosen, generation);
+  }, [booted, currentScreen, mapsReady, customMaps, settings]);
 
   const activePlayBeatmap = React.useMemo(() => {
     if (!selectedBeatmap) return null;
@@ -875,7 +1020,9 @@ export default function App() {
         await loadLegacyMaps();
       }
     };
-    loadMapsFromIndexedDB();
+    loadMapsFromIndexedDB().finally(() => {
+      setMapsReady(true);
+    });
   }, []);
 
   const updateSettings = useCallback((newSettings: Partial<GameSettings>) => {
@@ -901,6 +1048,7 @@ export default function App() {
         hitsoundVolume: Number(updated.hitsoundVolume !== undefined ? updated.hitsoundVolume : 0.60),
         musicVolume: Number(updated.musicVolume !== undefined ? updated.musicVolume : 0.75),
         previewVolume: Number(updated.previewVolume !== undefined ? updated.previewVolume : 0.70),
+        launchMusicVolume: Number(updated.launchMusicVolume !== undefined ? updated.launchMusicVolume : 0.10),
         masterVolume: Number(updated.masterVolume !== undefined ? updated.masterVolume : 1.0),
         keyMode: Number(updated.keyMode !== undefined ? updated.keyMode : 4),
         bindings: {},
@@ -1688,6 +1836,15 @@ export default function App() {
         customMaps={customMaps}
         onImportPackage={handleImportPackage}
       />
+
+      {!booted && (
+        <LoadingScreen
+          customMaps={customMaps}
+          mapsReady={mapsReady}
+          onStartPressed={handleBootStartPressed}
+          onEntered={handleBootEntered}
+        />
+      )}
 
       <LazerCursor enabled={settings.menuCursorEnabled !== false} />
     </div>

@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   hitsoundVolume: 0.60,
   musicVolume: 0.75,
   previewVolume: 0.70,
+  launchMusicVolume: 0.10,
   masterVolume: 1.0,
   keyMode: 4,
   bindings: {

@@ -285,6 +285,7 @@ export interface GameSettings {
   hitsoundVolume: number; // 0 to 1
   musicVolume: number; // 0 to 1
   previewVolume: number; // 0 to 1 multiplier applied to song previews
+  launchMusicVolume: number; // 0 to 1 multiplier applied to the game launch menu song
   masterVolume: number; // 0 to 1 applied to all gameplay audio
   keyMode: number; // 1..10
   bindings: KeyBindings;

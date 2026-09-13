@@ -306,6 +306,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     hitsoundVolume: clamp(settings.hitsoundVolume, 0, 1, defaultSettings.hitsoundVolume),
     musicVolume: clamp(settings.musicVolume, 0, 1, defaultSettings.musicVolume),
     previewVolume: clamp(settings.previewVolume, 0, 1, defaultSettings.previewVolume),
+    launchMusicVolume: clamp(settings.launchMusicVolume, 0, 1, defaultSettings.launchMusicVolume),
     masterVolume: clamp(settings.masterVolume, 0, 1, defaultSettings.masterVolume),
     keyMode: clamp(settings.keyMode, MIN_KEY_COUNT, MAX_KEY_COUNT, defaultSettings.keyMode),
     bindings: bindings,
