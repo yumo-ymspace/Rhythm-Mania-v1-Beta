@@ -39,6 +39,7 @@ import metadata from '../../metadata.json';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
 import { computeModMultiplier } from '../ruleset/mania/scoreProcessor';
 import ModSelectOverlay from './ModSelectOverlay';
+import { SongSelectFooter, SongSelectCarousel, SongSelectLeftPanel } from '../ui/lazer';
 
 const DEFAULT_SONG_BANNER = '/backgrounds/Ferineon.webp';
 
@@ -151,6 +152,21 @@ export default function SongSelect({
   const [manualExpandedSongKey, setManualExpandedSongKey] = useState<string | null>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState<boolean>(false);
   const [mobileTab, setMobileTab] = useState<'carousel' | 'ranking'>('carousel');
+  const carouselContainerRef = useRef<HTMLDivElement | null>(null);
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll the active selection to stay vertically centered-ish in the carousel
+  useEffect(() => {
+    if (activeItemRef.current && carouselContainerRef.current) {
+      const container = carouselContainerRef.current;
+      const item = activeItemRef.current;
+      const itemTop = item.offsetTop;
+      const itemHeight = item.offsetHeight;
+      const containerHeight = container.clientHeight;
+      const targetScroll = itemTop - containerHeight / 2 + itemHeight / 2;
+      container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+    }
+  }, [selectedCustomMapId, manualExpandedSongKey]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -971,7 +987,7 @@ export default function SongSelect({
     <div 
       className="relative w-full h-[calc(100dvh_-_60px)] sm:h-[calc(100dvh_-_68px)] text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
-      {/* 1. Full-bleed background cover artwork with light blur */}
+      {/* 1. Full-bleed background cover artwork: readable art, dark translucent left wedge (TASK-V-020) */}
       {selectBgUrl && (
         <div 
           className="absolute inset-0 bg-cover bg-center pointer-events-none transition-all duration-700 scale-105"
@@ -981,9 +997,13 @@ export default function SongSelect({
           }}
         />
       )}
+      {/* Dark left wedge gradient + subtle overall tint matching songslect (2).jpg */}
       <div 
-        className="absolute inset-0 bg-[#07070c]/70 backdrop-blur-[3px] pointer-events-none"
-        style={{ zIndex: 1 }}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          zIndex: 1,
+          background: 'linear-gradient(90deg, rgba(6, 8, 14, 0.92) 0%, rgba(6, 8, 14, 0.82) 420px, rgba(6, 8, 14, 0.45) 750px, rgba(6, 8, 14, 0.3) 100%)',
+        }}
       />
 
       {/* Version Tag */}
@@ -1045,246 +1065,29 @@ export default function SongSelect({
       <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-16 min-h-0">
         
         {/* =======================================================
-            LEFT COLUMN: INFO WEDGE & LOCAL RANKING PANEL
+            LEFT COLUMN: INFO WEDGE & LOCAL RANKING PANEL (TASK-V-022)
             ======================================================= */}
         <div className={`w-full lg:w-[480px] xl:w-[520px] flex-col h-full min-h-0 border-r border-white/10 bg-[#06060a]/60 backdrop-blur-md p-4 lg:p-6 gap-4 overflow-y-auto ${
           isMobile && mobileTab !== 'ranking' ? 'hidden' : 'flex'
         }`}>
-          {selectedCustomMap ? (
-            <div className="flex flex-col gap-4">
-              
-              {/* TOP INFO WEDGE — lazer V2 Argon-like skewed panel */}
-              <div
-                className="relative overflow-hidden border border-white/10 bg-[#101018]/90 p-4 lg:p-5 shadow-2xl flex flex-col gap-3.5"
-                style={{ clipPath: 'polygon(0 0, 100% 0, 96% 100%, 0 100%)' }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-pink-500/5 pointer-events-none" />
-                <div className="absolute -top-12 -left-8 w-40 h-40 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="flex items-start justify-between gap-3 relative z-10">
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[9px] font-black uppercase tracking-[0.2em] text-slate-200">
-                        Local
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded font-mono font-black text-[10px] ${getDifficultyColor(currentStarRating)}`}>
-                        ★ {currentStarRating.toFixed(2)}
-                      </span>
-                    </div>
-                    <h1 className="font-sans font-black text-xl lg:text-2xl text-white tracking-tight leading-tight truncate" title={selectedCustomMap.title}>
-                      {selectedCustomMap.title}
-                    </h1>
-                    <span className="text-[11px] text-slate-300 font-sans truncate mt-0.5">
-                      {selectedCustomMap.artist || 'Unknown Artist'}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono uppercase mt-0.5 truncate">
-                      mapped by {selectedCustomMap.creator || 'Unknown'}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-md text-xs font-mono font-black text-slate-100 shadow-inner">
-                      {selectedCustomMap.keyCount || 4}K
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 truncate max-w-[120px]" title={selectedCustomMap.difficulty}>
-                      {selectedCustomMap.difficulty}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Mania wedge stats matching lazer V2 */}
-                <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2.5 pt-1">
-                  {[
-                    { label: 'Notes', value: String(selectedRiceNoteCount), fill: Math.min(1, selectedRiceNoteCount / 2000) },
-                    { label: 'Hold Notes', value: String(selectedHoldNoteCount), fill: Math.min(1, selectedHoldNoteCount / 800) },
-                    { label: 'Key Count', value: String(selectedCustomMap.keyCount || 4), fill: Math.min(1, (selectedCustomMap.keyCount || 4) / 10) },
-                    { label: 'Approach Rate', value: selectedApproachRate.toFixed(1), fill: Math.min(1, selectedApproachRate / 10) },
-                    { label: 'Accuracy', value: selectedAccuracyOd.toFixed(1), fill: Math.min(1, selectedAccuracyOd / 10) },
-                    { label: 'HP Drain', value: selectedHpDrain.toFixed(1), fill: Math.min(1, selectedHpDrain / 10) },
-                  ].map((stat) => (
-                    <div key={stat.label} className="flex flex-col gap-1 min-w-0">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[9px] font-mono text-slate-400 font-bold uppercase tracking-wide truncate">{stat.label}</span>
-                        <span className="text-xs font-mono font-black text-white tabular-nums">{stat.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-black/50 border border-white/5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-pink-500/80 to-cyan-400/80"
-                          style={{ width: `${Math.max(6, stat.fill * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Details / Ranking tabs + Local scope (lazer V2 IA; Local only) */}
-              <div className="flex-1 flex flex-col min-h-0 rounded-2xl border border-white/10 bg-[#0a0a10]/70 overflow-hidden shadow-xl">
-                <div className="px-3 py-2 border-b border-white/10 bg-black/40 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setLeftPanelTab('details')}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                        leftPanelTab === 'details'
-                          ? 'bg-white/15 text-white border border-white/20'
-                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                      }`}
-                    >
-                      Details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLeftPanelTab('ranking')}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                        leftPanelTab === 'ranking'
-                          ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/30'
-                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                      }`}
-                    >
-                      Ranking
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[9px] font-mono font-black uppercase tracking-widest text-cyan-300">
-                    <Award className="h-3.5 w-3.5" />
-                    <span>Scope: Local</span>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-[160px]">
-                  {leftPanelTab === 'details' ? (
-                    <div className="space-y-3 text-xs font-mono">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                          <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Length</div>
-                          <div className="text-sm font-black text-white mt-1">{formatDuration(selectedCustomMap.duration || 0)}</div>
-                        </div>
-                        <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                          <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">BPM</div>
-                          <div className="text-sm font-black text-white mt-1">{selectedCustomMap.bpm || 120}</div>
-                        </div>
-                        <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                          <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Objects</div>
-                          <div className="text-sm font-black text-white mt-1">{selectedNoteCount}</div>
-                        </div>
-                        <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                          <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
-                          <div className={`text-sm font-black mt-1 ${getDifficultyColor(currentStarRating)}`}>★ {currentStarRating.toFixed(2)}</div>
-                        </div>
-                      </div>
-                      <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-slate-300 leading-relaxed">
-                        <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1">Difficulty</div>
-                        <div className="font-sans font-bold text-white">{selectedCustomMap.difficulty}</div>
-                        <div className="mt-2 text-[10px] text-slate-500">
-                          Local ranking only — scores on this device for the selected chart.
-                        </div>
-                      </div>
-                    </div>
-                  ) : chartLocalScores.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 space-y-2">
-                      <Award className="h-8 w-8 opacity-30 text-slate-400" />
-                      <p className="font-sans font-bold text-xs uppercase tracking-wider text-slate-400">Leaderboards are not available for this beatmap!</p>
-                      <p className="text-[10px] font-mono text-slate-600">No local plays yet — play this chart to set a personal record on this device.</p>
-                    </div>
-                  ) : (
-                    chartLocalScores.map((score, idx) => (
-                      <div
-                        key={score.id || idx}
-                        className="p-3 bg-black/50 border border-white/5 hover:border-white/15 rounded-xl flex items-center justify-between gap-3 text-xs font-mono transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-black shrink-0 ${
-                            idx === 0 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' :
-                            idx === 1 ? 'bg-cyan-400/20 text-cyan-300 border border-cyan-400/40' :
-                            idx === 2 ? 'bg-orange-400/20 text-orange-300 border border-orange-400/40' :
-                            'bg-white/5 text-slate-400 border border-white/10'
-                          }`}>
-                            #{idx + 1}
-                          </span>
-                          <span className={`w-7 h-6 flex items-center justify-center rounded text-[10px] font-black shrink-0 ${getGradeBadgeClass(score.grade)}`}>
-                            {score.grade}
-                          </span>
-                          <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-black text-white text-sm tracking-tight">
-                                {score.score.toLocaleString()}
-                              </span>
-                              {score.mods && score.mods.length > 0 && (
-                                <div className="flex items-center gap-0.5">
-                                  {score.mods.map((mod) => (
-                                    <span key={mod} className="px-1 py-0.2 bg-white/10 rounded text-[8px] font-black text-slate-300">
-                                      {mod}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                              <span>{score.accuracy.toFixed(2)}%</span>
-                              <span>•</span>
-                              <span>{score.maxCombo}x</span>
-                              <span>•</span>
-                              <span className="truncate max-w-[100px] text-slate-500">
-                                {score.playedBy || settings.localDisplayName || 'Guest'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        {onWatchReplay && (
-                          <button
-                            type="button"
-                            onClick={() => onWatchReplay(score, selectedCustomMap)}
-                            className="p-2 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 rounded-lg transition cursor-pointer shrink-0"
-                            title="Watch Local Replay"
-                          >
-                            <Play className="h-3.5 w-3.5 fill-current" />
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-white/10 bg-[#0d0e14]/85 shadow-xl gap-4">
-              <span className="p-4 bg-pink-500/10 text-pink-500 rounded-full border border-pink-500/20 shadow">
-                <Music className="h-8 w-8" />
-              </span>
-              <div className="flex flex-col gap-1.5">
-                <h3 className="text-lg font-sans font-black text-white tracking-widest uppercase">
-                  No Beatmap Selected
-                </h3>
-                <p className="text-xs text-slate-400 font-sans max-w-sm leading-relaxed">
-                  Select a beatmap set from the carousel on the right to inspect difficulty pills and local rankings.
-                </p>
-                {onOpenOnlineCatalog && (
-                  <button
-                    type="button"
-                    onClick={onOpenOnlineCatalog}
-                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-[#ffcc22]/40 bg-[#ffcc22]/90 hover:bg-[#ffcc22] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 transition cursor-pointer shadow-[0_0_15px_rgba(255,204,34,0.2)]"
-                  >
-                    <Search className="h-3.5 w-3.5" /> Beatmap Listing
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-pink-500/35 bg-pink-500/80 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-pink-100 transition hover:bg-pink-500 cursor-pointer mt-1"
-                >
-                  <Upload className="h-3.5 w-3.5" /> Import Songs Locally
-                </button>
-              </div>
-            </div>
-          )}
-
-          {importStatus && (
-            <div className={`p-2.5 rounded-xl text-xs font-mono border ${
-              importStatus.type === 'ok' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-rose-950/40 text-rose-400 border-rose-800/40'
-            }`}>
-              {importStatus.msg}
-            </div>
-          )}
+          <SongSelectLeftPanel
+            selectedMap={selectedCustomMap}
+            currentStarRating={currentStarRating}
+            isFavorite={selectedCustomMap ? favoriteSongs.includes(getMapSongKey(selectedCustomMap)) : false}
+            onToggleFavorite={() => {
+              if (selectedCustomMap) toggleFavorite(getMapSongKey(selectedCustomMap));
+            }}
+            activeTab={leftPanelTab}
+            onChangeTab={setLeftPanelTab}
+            localScores={chartLocalScores}
+            onWatchReplay={onWatchReplay}
+            settings={settings}
+            getDifficultyColor={getDifficultyColor}
+            getGradeBadgeClass={getGradeBadgeClass}
+            onOpenOnlineCatalog={onOpenOnlineCatalog}
+            onImportClick={() => fileInputRef.current?.click()}
+            importStatus={importStatus}
+          />
         </div>
 
         {/* =======================================================
@@ -1424,303 +1227,89 @@ export default function SongSelect({
             </div>
           </div>
 
-          {/* CAROUSEL SETS AND DIFFICULTY PILLS */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 flex flex-col gap-2 relative z-10 min-h-0">
-            {songGroups.length > 0 ? (
-              songGroups.map((group) => {
-                const isGroupActive = selectedGroup?.songKey === group.songKey;
-                const isExpanded = expandedSongKey === group.songKey || isGroupActive;
-                const groupBannerUrl = group.coverUrl || DEFAULT_SONG_BANNER;
-                const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
-
-                return (
-                  <div key={group.songKey} className="flex flex-col gap-1.5 transition-all">
-                    
-                    {/* SET CARD */}
-                    <div 
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={isGroupActive}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          handleSelectGroup(group);
-                        }
-                      }}
-                      onClick={() => handleSelectGroup(group)}
-                      className={`group relative border rounded-xl overflow-hidden cursor-pointer select-none transition-all duration-200 shadow-md ${
-                        isGroupActive
-                          ? 'border-skin-accent shadow-[0_0_20px_rgba(var(--skin-accent-rgb),0.3)] bg-[#181524]/85'
-                          : 'border-white/10 bg-[#0c0c14]/80 hover:bg-[#141420]/90 hover:border-white/20'
-                      }`}
-                    >
-                      <img
-                        src={groupBannerUrl}
-                        className="absolute inset-0 h-full w-full object-cover opacity-60 pointer-events-none transition-transform duration-300 group-hover:scale-105"
-                        referrerPolicy="no-referrer"
-                        loading="eager"
-                        decoding="async"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null;
-                          event.currentTarget.src = DEFAULT_SONG_BANNER;
-                        }}
-                        alt=""
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/40 pointer-events-none" />
-
-                      <div className="relative flex items-center justify-between p-3.5 py-3 gap-3">
-                        <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
-                          <span className="text-[10px] uppercase font-mono tracking-wider text-skin-accent mb-0.5 leading-none font-bold">
-                            {group.artist || 'Unknown Artist'}
-                          </span>
-                          <h4 className="font-extrabold font-sans text-base lg:text-lg text-white tracking-tight truncate leading-tight">
-                            {group.title}
-                          </h4>
-                          <span className="text-[10px] text-slate-400 font-mono mt-1 uppercase font-bold tracking-normal">
-                            mapped by {group.creator || 'alevi'}
-                          </span>
-                        </div>
-
-                        {/* Right side of card: Favorite + Keys + Diff count */}
-                        <div className="flex items-center gap-2 shrink-0 select-none">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); toggleFavorite(group.songKey); }}
-                            title={favoriteSongs.includes(group.songKey) ? 'Remove from favorites' : 'Add to favorites'}
-                            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                          >
-                            <Heart className={`h-4 w-4 transition-colors ${
-                              favoriteSongs.includes(group.songKey)
-                                ? 'fill-rose-500 text-rose-500'
-                                : 'text-slate-500 group-hover:text-slate-300'
-                            }`} />
-                          </button>
-                          
-                          {group.maps?.length > 0 && (
-                            <span className="px-2 py-1 bg-black/50 border border-white/10 rounded text-[10px] font-mono font-black text-slate-300">
-                              {Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
-                                .sort((a, b) => Number(a) - Number(b))
-                                .map(k => `${k}K`)
-                                .join('/')}
-                            </span>
-                          )}
-
-                          <span className="px-2 py-1 bg-white/10 border border-white/15 rounded text-[10px] font-mono font-bold text-slate-200">
-                            {group.maps.length} {group.maps.length === 1 ? 'diff' : 'diffs'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* EXPANDED DIFFICULTY PILLS */}
-                    {isExpanded && (
-                      <div className="pl-4 pr-1 py-1 flex flex-col gap-1.5 animate-fade-in">
-                        {sortedDiffs.map((diff) => {
-                          const isDiffSelected = selectedCustomMapId === diff.id;
-                          const rating = getStarRating(diff);
-                          const bestRecord = playHistory
-                            .filter(r => recordMatchesSelectedChart(r, diff))
-                            .sort(compareLocalScoreRows)[0];
-
-                          return (
-                            <div
-                              key={diff.id}
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => {
-                                if (isDiffSelected) {
-                                  handleStartPlay(diff);
-                                } else {
-                                  handleSelectCustomMap(diff);
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  if (isDiffSelected) {
-                                    handleStartPlay(diff);
-                                  } else {
-                                    handleSelectCustomMap(diff);
-                                  }
-                                }
-                              }}
-                              className={`group/pill flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all cursor-pointer shadow-sm select-none ${
-                                isDiffSelected
-                                  ? 'bg-skin-accent/20 border-skin-accent text-white shadow-[0_0_15px_rgba(var(--skin-accent-rgb),0.3)] translate-x-1'
-                                  : 'bg-[#101018]/85 hover:bg-[#161622] border-white/10 hover:border-white/20 text-slate-300 hover:text-white'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <span className={`px-2 py-0.5 rounded font-mono font-black text-xs shrink-0 ${getDifficultyColor(rating)}`}>
-                                  ★ {rating.toFixed(2)}
-                                </span>
-                                <span className="font-bold text-xs sm:text-sm truncate">
-                                  {diff.difficulty}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0 font-mono text-xs">
-                                <span className="px-1.5 py-0.5 bg-black/40 border border-white/10 rounded text-[9px] font-bold text-slate-400">
-                                  {diff.keyCount || 4}K
-                                </span>
-                                {bestRecord && (
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getGradeBadgeClass(bestRecord.grade)}`}>
-                                    {bestRecord.grade}
-                                  </span>
-                                )}
-                                {isDiffSelected && (
-                                  <span className="text-[10px] text-skin-accent font-black animate-pulse uppercase">
-                                    READY
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  </div>
-                );
-              })
-            ) : (
-              <div className="bg-[#0c0c14]/80 border border-white/10 p-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 shadow-xl gap-2">
-                <Info className="h-6 w-6 text-slate-500" />
-                <p className="text-xs font-sans font-black tracking-widest uppercase">No beatmaps matches discovered</p>
-                <p className="text-[10px] text-slate-500 font-mono max-w-xs uppercase">Tweak your star rating boundaries or search query</p>
-              </div>
-            )}
-          </div>
+          {/* CAROUSEL SETS AND DIFFICULTY PILLS (TASK-V-021) */}
+          <SongSelectCarousel
+            songGroups={songGroups}
+            selectedGroupKey={selectedGroup?.songKey}
+            expandedSongKey={expandedSongKey}
+            selectedMapId={selectedCustomMapId}
+            favoriteSongs={favoriteSongs}
+            playHistory={playHistory}
+            onSelectGroup={handleSelectGroup}
+            onSelectDifficulty={(diff) => handleSelectCustomMap(diff)}
+            onStartPlay={(diff) => handleStartPlay(diff)}
+            onToggleFavorite={toggleFavorite}
+            getStarRating={getStarRating}
+            getDifficultyColor={getDifficultyColor}
+            getGradeBadgeClass={getGradeBadgeClass}
+            containerRef={carouselContainerRef}
+            activeItemRef={activeItemRef}
+          />
 
         </div>
       </div>
 
       {/* =======================================================
-          4. DOCKED BOTTOM TOOLBAR: BACK, MODS, RANDOM, OPTIONS, PLAY
+          4. DOCKED BOTTOM TOOLBAR: SongSelectFooter (TASK-V-020)
           ======================================================= */}
-      <div className="fixed bottom-0 inset-x-0 h-16 bg-[#07070a]/95 backdrop-blur-md border-t border-white/10 z-40 flex items-center justify-between px-4 lg:px-8 select-none">
-        
-        {/* Left: Back button */}
-        <button
-          id="bottom-back-button"
-          type="button"
-          onClick={() => onBack?.()}
-          className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 hover:border-white/20 rounded-xl text-xs font-mono font-black uppercase tracking-wider text-slate-300 hover:text-white transition cursor-pointer"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Back</span>
-          <span className="text-[9px] text-slate-500 border border-white/10 px-1 py-0.2 rounded hidden sm:inline">ESC</span>
-        </button>
-
-        {/* Center: Mods, Random, Options tools */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Mods Button */}
-          <button
-            id="bottom-mods-button"
-            type="button"
-            onClick={() => setShowModsModal(true)}
-            className="relative flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-[#1a1d22] hover:bg-[#22272e] active:scale-95 border border-white/10 rounded-xl text-xs font-sans font-black uppercase tracking-wider text-white transition cursor-pointer shadow-md"
-          >
-            <ArrowUpDown className="h-4 w-4 text-[#a3e635]" />
-            <span>Mods</span>
-            <span className="text-[9px] font-mono text-slate-400 border border-white/10 px-1 py-0.2 rounded hidden sm:inline">F1</span>
-            {(settings.selectedMods || []).length > 0 && (
-              <span className="ml-0.5 sm:ml-1 px-1.5 py-0.5 bg-[#a3e635] text-slate-950 rounded-full text-[9px] font-mono font-black leading-none">
-                {(settings.selectedMods || []).length}
-              </span>
-            )}
-          </button>
-
-          {/* Random Button */}
-          <button
-            id="bottom-random-button"
-            type="button"
-            onClick={handleSelectRandom}
-            className="flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-[#1a1d22] hover:bg-[#22272e] active:scale-95 border border-white/10 rounded-xl text-xs font-sans font-black uppercase tracking-wider text-white transition cursor-pointer shadow-md"
-          >
-            <Shuffle className="h-4 w-4 text-[#38bdf8]" />
-            <span>Random</span>
-            <span className="text-[9px] font-mono text-slate-400 border border-white/10 px-1 py-0.2 rounded hidden sm:inline">F2</span>
-          </button>
-
-          {/* Options Button */}
-          <div className="relative">
-            <button
-              id="bottom-options-button"
-              type="button"
-              onClick={() => setShowOptionsMenu(prev => !prev)}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-[#1a1d22] hover:bg-[#22272e] active:scale-95 border border-white/10 rounded-xl text-xs font-sans font-black uppercase tracking-wider text-white transition cursor-pointer shadow-md"
-            >
-              <SlidersHorizontal className="h-4 w-4 text-purple-400" />
-              <span>Options</span>
-              <span className="text-[9px] font-mono text-slate-400 border border-white/10 px-1 py-0.2 rounded hidden sm:inline">F3</span>
-            </button>
-
-            {/* Options Popover */}
-            {showOptionsMenu && (
-              <>
-                <div className="fixed inset-0 z-45 cursor-default" onClick={() => setShowOptionsMenu(false)} />
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 bg-[#12121c] border border-white/15 rounded-xl shadow-2xl p-2 min-w-[220px] flex flex-col gap-1 text-xs font-mono">
-                  {selectedCustomMap && onDeleteSongGroup && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteSelectedSet}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition cursor-pointer ${
-                        songDeleteConfirmKey === getMapSongKey(selectedCustomMap)
-                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                          : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-rose-400" />
-                      <span>{songDeleteConfirmKey === getMapSongKey(selectedCustomMap) ? 'Confirm Delete Set' : 'Delete Beatmap Set'}</span>
-                    </button>
-                  )}
-                  {onOpenOnlineCatalog && (
-                    <button
-                      type="button"
-                      onClick={() => { setShowOptionsMenu(false); onOpenOnlineCatalog(); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
-                    >
-                      <Search className="h-3.5 w-3.5 text-[#ffcc22]" />
-                      <span>Beatmap Listing</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { setShowOptionsMenu(false); fileInputRef.current?.click(); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
-                  >
-                    <Upload className="h-3.5 w-3.5 text-pink-400" />
-                    <span>Import Songs (.osz / .osu)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowOptionsMenu(false); onOpenSettings(); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
-                  >
-                    <Sliders className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Game Settings</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Right: Primary Play Button */}
-        <button
-          id="bottom-play-button"
-          type="button"
-          disabled={!selectedCustomMap}
-          onClick={() => handleStartPlay()}
-          className="flex items-center gap-2.5 sm:gap-3 px-5 sm:px-8 py-2.5 sm:py-3 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-slate-950 font-sans font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.35)] transition-all cursor-pointer"
-        >
-          <Play className="h-4 w-4 fill-current" />
-          <span>Play</span>
-          <span className="text-[9px] font-mono font-bold bg-slate-950/30 text-white px-1.5 py-0.5 rounded hidden sm:inline">Enter</span>
-        </button>
-
-      </div>
+      <SongSelectFooter
+        onBack={() => onBack?.()}
+        onOpenMods={() => setShowModsModal(true)}
+        onRandom={handleSelectRandom}
+        onToggleOptions={() => setShowOptionsMenu(prev => !prev)}
+        onStartPlay={() => handleStartPlay()}
+        canPlay={Boolean(selectedCustomMap)}
+        selectedModsCount={(settings.selectedMods || []).length}
+        previewBpm={selectedCustomMap?.bpm || 120}
+        isOptionsOpen={showOptionsMenu}
+        optionsContent={
+          <>
+            <div className="fixed inset-0 z-45 cursor-default" onClick={() => setShowOptionsMenu(false)} />
+            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 bg-[#12121c] border border-white/15 rounded-xl shadow-2xl p-2 min-w-[220px] flex flex-col gap-1 text-xs font-mono">
+              {selectedCustomMap && onDeleteSongGroup && (
+                <button
+                  type="button"
+                  onClick={handleDeleteSelectedSet}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition cursor-pointer ${
+                    songDeleteConfirmKey === getMapSongKey(selectedCustomMap)
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+                  <span>{songDeleteConfirmKey === getMapSongKey(selectedCustomMap) ? 'Confirm Delete Set' : 'Delete Beatmap Set'}</span>
+                </button>
+              )}
+              {onOpenOnlineCatalog && (
+                <button
+                  type="button"
+                  onClick={() => { setShowOptionsMenu(false); onOpenOnlineCatalog(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
+                >
+                  <Search className="h-3.5 w-3.5 text-[#ffcc22]" />
+                  <span>Beatmap Listing</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setShowOptionsMenu(false); fileInputRef.current?.click(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
+              >
+                <Upload className="h-3.5 w-3.5 text-pink-400" />
+                <span>Import Songs (.osz / .osu)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowOptionsMenu(false); onOpenSettings(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-slate-300 hover:bg-white/5 hover:text-white transition cursor-pointer"
+              >
+                <Sliders className="h-3.5 w-3.5 text-amber-400" />
+                <span>Game Settings</span>
+              </button>
+            </div>
+          </>
+        }
+      />
 
       {/* =======================================================
           MODS INTERACTIVE OVERLAY SCREEN

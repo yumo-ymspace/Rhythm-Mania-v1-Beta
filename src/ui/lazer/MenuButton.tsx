@@ -82,7 +82,7 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
       ? { duration: LAZER_DURATION.menuExplode, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }
       : isHovered
         ? LAZER_HOVER_WIDTH_SPRING
-        : { duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] };
+        : ({ type: 'spring', duration: 0.38, bounce: 0.4 } as const);
 
   return (
     <motion.button

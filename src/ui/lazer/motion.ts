@@ -73,9 +73,9 @@ export const LAZER_DURATION = {
 } as const;
 
 export const LAZER_MENU_BUTTON_WIDTH_PX = 172;
-/** Play, solo rest at 216px; settings and back rest slightly shorter at 192px. */
-export const LAZER_MENU_LEAD_WIDTH_PX = 216;
-export const LAZER_MENU_SETTINGS_WIDTH_PX = 192;
+/** Play, solo rest at 240px; settings and back rest slightly shorter at 216px. */
+export const LAZER_MENU_LEAD_WIDTH_PX = 240;
+export const LAZER_MENU_SETTINGS_WIDTH_PX = 216;
 export const LAZER_MENU_OVERLAP_PX = 18;
 /** Visible gap between settings/back and play/solo; cookie parks in this slot. */
 export const LAZER_COOKIE_SLOT_PX = 128;

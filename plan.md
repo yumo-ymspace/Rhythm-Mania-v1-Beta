@@ -265,10 +265,10 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 | **TASK-V-010** | **done** | Main menu idle | `hud/first menu 1.png` |
 | **TASK-V-011** | **done** | Main menu button system | `hud/first menu 2.png`, `first menu 3.png`, `first menu on hover.png` |
 | **TASK-V-012** | **done** | Toolbar + hover tooltips | `hud/first menu 2.png`, `songselct onhober playing.jpg`, `onhover smth else.jpg`, `on hover top bar smth.jpg` |
-| **TASK-V-013** | pending | Now-playing overlay | `hud/songselct onhover playing songs.jpg` |
-| **TASK-V-020** | pending | Song Select shell + footer + parked cookie | `song-select/song select.png`, `hud/songslect (2).jpg` |
-| **TASK-V-021** | pending | Carousel (collapsed + expanded) | `hud/songslect.jpg`, `hud/songselect.jpg`, `hud/songslect (2).jpg` |
-| **TASK-V-022** | pending | Left title / stats / ranking | `hud/songselect.jpg`, `hud/songslect (2).jpg` |
+| **TASK-V-013** | skipped | Now-playing overlay | `hud/songselct onhover playing songs.jpg` |
+| **TASK-V-020** | **done** | Song Select shell + footer + parked cookie | `song-select/song select.png`, `hud/songslect (2).jpg` |
+| **TASK-V-021** | **done** | Carousel (collapsed + expanded) | `hud/songslect.jpg`, `hud/songselect.jpg`, `hud/songslect (2).jpg` |
+| **TASK-V-022** | **done** | Left title / stats / ranking | `hud/songselect.jpg`, `hud/songslect (2).jpg` |
 | **TASK-V-023** | pending | Search / star / sort / group | `hud/songselect.jpg` |
 | **TASK-V-024** | pending | Options popover | `hud/option menu.png` |
 | **TASK-V-030** | pending | Mod Select overlay chrome + columns | `hud/mod menu.png`, `hud/mods.jpg` |
@@ -284,7 +284,7 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 | **TASK-V-071** | pending | Fail overlay | `pause/failed.png` |
 | **TASK-V-080** | pending | Results | `results/osu_2026-09-12_19-51-20.jpg`, `19-51-31.jpg` |
 
-**Next visual task: TASK-V-013.**
+**Next visual task: TASK-V-023.**
 
 ---
 
@@ -413,6 +413,8 @@ All in-game notifications (coming-soon toasts, system events, future real events
 
 ### TASK-V-013 — Now-playing overlay
 
+**Status:** skipped.
+
 **Stills:** `hud/songselct onhover playing songs.jpg` (dup: `song-select/osu_2026-09-12_19-53-49.jpg`)
 
 **Work:** Clicking the toolbar music icon (or `F6`) opens a small player **under the right side of the toolbar**.
@@ -431,6 +433,8 @@ All in-game notifications (coming-soon toasts, system events, future real events
 
 ### TASK-V-020 — Song Select shell
 
+**Status:** done (2026-09-13).
+
 **Stills:** `song-select/song select.png`, `hud/songslect (2).jpg`
 
 **Work:** Rebuild the frame of `SongSelect.tsx`. Not the carousel guts yet (V-021) and not the left wedge guts yet (V-022).
@@ -446,6 +450,8 @@ All in-game notifications (coming-soon toasts, system events, future real events
 ---
 
 ### TASK-V-021 — Carousel
+
+**Status:** done (2026-09-13).
 
 **Stills:** `hud/songslect.jpg` (collapsed), `hud/songselect.jpg` (expanded + local grade), `hud/songslect (2).jpg` (graveyard expanded).
 
@@ -466,6 +472,8 @@ Do not build Global ranking. Do not add convert diffs if the product filter is m
 ---
 
 ### TASK-V-022 — Left title, stats, ranking
+
+**Status:** done (2026-09-13).
 
 **Stills:** `hud/songselect.jpg`, `hud/songslect (2).jpg` (empty Local). `hud/option menu.png` is the Options popover, not the ranking empty state.
 

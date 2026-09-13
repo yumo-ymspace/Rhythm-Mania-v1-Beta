@@ -34,6 +34,8 @@ import {
   LAZER_BACK,
   LAZER_DURATION,
   LAZER_EASE_OUT_QUINT,
+  LAZER_EASE_OUT_EXPO,
+  LAZER_MENU_BUTTON_WIDTH_PX,
   LAZER_MENU_LEAD_WIDTH_PX,
   LAZER_MENU_SETTINGS_WIDTH_PX,
   useLazerReducedMotion,
@@ -110,18 +112,47 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
       {/* 100px Grey Strip across viewport */}
       <motion.div
         className="lazer-button-strip"
-        initial={{ scaleY: 0, opacity: 0 }}
-        animate={{ scaleY: 1, opacity: 1 }}
-        exit={{ scaleY: 0, opacity: 0 }}
-        transition={
-          reducedMotion
-            ? { duration: 0 }
-            : {
-                duration: LAZER_DURATION.barRestore,
-                delay: 0.18,
-                ease: LAZER_EASE_OUT_QUINT,
-              }
-        }
+        initial="exit"
+        animate="enter"
+        exit="exit"
+        variants={{
+          enter: {
+            scaleY: 1,
+            opacity: 1,
+            transition: reducedMotion
+              ? { duration: 0 }
+              : {
+                  scaleY: {
+                    duration: 0.16,
+                    delay: 0.15,
+                    ease: LAZER_EASE_OUT_EXPO,
+                  },
+                  opacity: {
+                    duration: 0.14,
+                    delay: 0.15,
+                    ease: LAZER_EASE_OUT_EXPO,
+                  },
+                },
+          },
+          exit: {
+            scaleY: 0,
+            opacity: 0,
+            transition: reducedMotion
+              ? { duration: 0 }
+              : {
+                  scaleY: {
+                    duration: 0.14,
+                    delay: 0,
+                    ease: LAZER_EASE_OUT_EXPO,
+                  },
+                  opacity: {
+                    duration: 0.12,
+                    delay: 0,
+                    ease: LAZER_EASE_OUT_EXPO,
+                  },
+                },
+          },
+        }}
       >
         <div className="lazer-button-system-layout">
           {/* Left Button Slot (Settings or Back) */}
@@ -167,6 +198,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   icon={<PlayIcon className="w-6 h-6 fill-current" />}
                   color={LAZER_PLAY}
                   baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
+                  hoverScale={320 / LAZER_MENU_LEAD_WIDTH_PX}
                   onClick={onSelectPlay}
                 />
               )}
@@ -209,6 +241,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   icon={<SoloIcon className="w-6 h-6" />}
                   color={LAZER_PLAY}
                   baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
+                  hoverScale={320 / LAZER_MENU_LEAD_WIDTH_PX}
                   onClick={onSelectSolo}
                 />
               )}

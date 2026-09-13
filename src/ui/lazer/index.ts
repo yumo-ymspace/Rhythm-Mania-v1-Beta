@@ -79,4 +79,9 @@ export { ComingSoonNotificationStack, useComingSoonToasts } from './ComingSoonNo
 export type { LazerToastNotice } from './ComingSoonNotifications';
 export { LazerToolbar, ToolbarTooltip } from './LazerToolbar';
 export type { LazerToolbarProps, ToolbarTooltipProps, LazerTooltipData } from './LazerToolbar';
-
+export { SongSelectFooter } from './SongSelectFooter';
+export type { SongSelectFooterProps } from './SongSelectFooter';
+export { SongSelectCarousel } from './SongSelectCarousel';
+export type { SongSelectCarouselProps, CarouselSongGroup } from './SongSelectCarousel';
+export { SongSelectLeftPanel, computeBpmSummary } from './SongSelectLeftPanel';
+export type { SongSelectLeftPanelProps } from './SongSelectLeftPanel';

@@ -320,6 +320,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
               handleMouseEnter(e, {
                 title: 'changelog',
                 subtitle: 'development updates',
+                align: 'right',
               })
             }
             onMouseLeave={handleMouseLeave}
@@ -338,6 +339,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
               handleMouseEnter(e, {
                 title: 'discord',
                 subtitle: 'join community server',
+                align: 'right',
               })
             }
             onMouseLeave={handleMouseLeave}
@@ -356,6 +358,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
               handleMouseEnter(e, {
                 title: 'github',
                 subtitle: 'source code repository',
+                align: 'right',
               })
             }
             onMouseLeave={handleMouseLeave}
@@ -374,6 +377,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
               handleMouseEnter(e, {
                 title: 'bug report',
                 subtitle: 'report an issue or bug',
+                align: 'right',
               })
             }
             onMouseLeave={handleMouseLeave}
@@ -392,6 +396,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
               handleMouseEnter(e, {
                 title: 'wiki',
                 subtitle: 'knowledge base',
+                align: 'right',
               })
             }
             onMouseLeave={handleMouseLeave}
@@ -414,7 +419,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
             handleMouseEnter(e, {
               title: 'beatmap listing',
               subtitle: 'browse for new beatmaps',
-              shortcut: 'CTRL-B',
+              align: 'right',
             })
           }
           onMouseLeave={handleMouseLeave}
@@ -434,7 +439,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
             handleMouseEnter(e, {
               title: 'now playing',
               subtitle: 'currently playing track (coming soon)',
-              shortcut: 'F6',
+              align: 'right',
             })
           }
           onMouseLeave={handleMouseLeave}

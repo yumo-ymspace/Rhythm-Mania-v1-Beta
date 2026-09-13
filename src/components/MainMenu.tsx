@@ -146,13 +146,12 @@ export const MainMenu = ({
 
   const [cookieSize, setCookieSize] = useState(440);
   const [cookieHovered, setCookieHovered] = useState(false);
+  const [isCookieClicking, setIsCookieClicking] = useState(false);
   const reducedMotion = useLazerReducedMotion();
 
   useEffect(() => {
     onPhaseChange?.(phase);
   }, [phase, onPhaseChange]);
-
-
 
   useEffect(() => {
     const update = () => setCookieSize(menuCookieSize(window.innerWidth, window.innerHeight));
@@ -163,33 +162,38 @@ export const MainMenu = ({
 
   const openTopLevel = useCallback(() => {
     setPhase('top-level');
-  }, []);
+  }, [setPhase]);
 
   const openPlay = useCallback(() => {
     setPhase('play');
-  }, []);
+  }, [setPhase]);
 
   const returnTopLevel = useCallback(() => {
     setPhase('top-level');
-  }, []);
+  }, [setPhase]);
 
   const returnIdle = useCallback(() => {
     setPhase('idle');
-  }, []);
+  }, [setPhase]);
 
   const handleSelectSolo = useCallback(() => {
     onNavigate('select');
   }, [onNavigate]);
 
   const handleCookieClick = useCallback(() => {
+    if (!reducedMotion) {
+      setIsCookieClicking(true);
+      window.setTimeout(() => setIsCookieClicking(false), 90);
+    }
     if (phase === 'idle') {
-      openTopLevel();
+      // Transition right as the click peak is hit so enlargement flows seamlessly into shrinking
+      window.setTimeout(() => openTopLevel(), 70);
     } else if (phase === 'top-level') {
       openPlay();
     } else if (phase === 'play') {
       handleSelectSolo();
     }
-  }, [phase, openTopLevel, openPlay, handleSelectSolo]);
+  }, [phase, reducedMotion, openTopLevel, openPlay, handleSelectSolo]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -229,28 +233,26 @@ export const MainMenu = ({
   // top-level / play: smaller cookie parked in the settings–play gap
   const isCompact = phase !== 'idle';
   const hoverBoost = !reducedMotion && cookieHovered ? 1.08 : 1;
+  const clickBoost = !reducedMotion && isCookieClicking ? 1.15 : 1;
   // While idle cookie is 420-580px, compact bar cookie scales to 0.48 so it fits the horizontal bar neatly
-  const targetScale = (isCompact ? 0.48 : 1.0) * hoverBoost;
+  const targetScale = (isCompact ? 0.48 : 1.0) * hoverBoost * clickBoost;
   const cookieX = isCompact ? lazerCompactCookieX() : 0;
 
-
-
-  const cookieMoveEase = isCompact
-    ? ([0.22, 1, 0.36, 1] as [number, number, number, number])
-    : ([0.16, 1, 0.3, 1] as [number, number, number, number]);
-  const cookieMoveDuration = isCompact ? 0.55 : LAZER_DURATION.logoToIdle;
+  // Single unified spring configuration for scale and position so shrinking and moving happen simultaneously
+  const compactMotionSpring = { type: 'spring', duration: 0.45, bounce: 0.1 } as const;
 
   const cookieTransition = reducedMotion
     ? { duration: 0 }
-    : cookieHovered
-      ? {
-          scale: { duration: 0.22, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
-          x: { duration: cookieMoveDuration, ease: cookieMoveEase },
-        }
-      : {
-          scale: { duration: cookieMoveDuration, ease: cookieMoveEase },
-          x: { duration: cookieMoveDuration, ease: cookieMoveEase },
-        };
+    : {
+        scale: isCookieClicking && !isCompact
+          ? { type: 'spring', duration: 0.1, bounce: 0.2 }
+          : isCompact
+            ? compactMotionSpring
+            : { type: 'spring', duration: 0.46, bounce: 0.3 },
+        x: isCompact
+          ? compactMotionSpring
+          : { type: 'spring', duration: 0.48, bounce: 0.28 },
+      };
 
   return (
     <div
