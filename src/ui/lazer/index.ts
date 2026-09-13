@@ -51,7 +51,9 @@ export {
   LAZER_COOKIE_SLOT_PX,
   LAZER_MENU_BUTTON_WIDTH_PX,
   LAZER_MENU_LEAD_WIDTH_PX,
+  LAZER_MENU_SETTINGS_WIDTH_PX,
   LAZER_MENU_OVERLAP_PX,
+
   lazerCompactCookieX,
   LAZER_MENU_WEDGE,
   LAZER_OVERLAY_BG_ALPHA,
@@ -73,3 +75,6 @@ export { MenuButton } from './MenuButton';
 export type { MenuButtonProps, MenuButtonState } from './MenuButton';
 export { ButtonSystem } from './ButtonSystem';
 export type { ButtonSystemProps, ButtonSystemPhase } from './ButtonSystem';
+export { LazerToolbar, ToolbarTooltip } from './LazerToolbar';
+export type { LazerToolbarProps, ToolbarTooltipProps, LazerTooltipData } from './LazerToolbar';
+

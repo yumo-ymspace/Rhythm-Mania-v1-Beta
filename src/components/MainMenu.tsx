@@ -88,8 +88,13 @@ export const RESOURCE_LINKS = [
 
 export function menuCookieSize(width: number, height: number): number {
   const vmin = Math.min(width, height);
-  return Math.round(Math.min(480, Math.max(240, vmin * 0.64)));
+  if (vmin <= 480) {
+    return Math.round(Math.max(200, Math.min(220, vmin * 0.54)));
+  }
+  // Desktop / tablet: noticeably bigger RM cookie (450px - 580px)
+  return Math.round(Math.min(580, Math.max(420, vmin * 0.72)));
 }
+
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -121,17 +126,33 @@ export type MainMenuProps = {
   onNavigate: (screen: 'select' | 'history' | 'skins') => void;
   onOpenSettings: () => void;
   onOpenBrowse?: () => void;
+  phase?: LazerMenuPhase;
+  onPhaseChange?: (phase: LazerMenuPhase) => void;
 };
 
 export const MainMenu = ({
   onNavigate,
   onOpenSettings,
   onOpenBrowse,
+  phase: controlledPhase,
+  onPhaseChange,
 }: MainMenuProps) => {
-  const [phase, setPhase] = useState<LazerMenuPhase>('idle');
-  const [cookieSize, setCookieSize] = useState(280);
+  const [internalPhase, setInternalPhase] = useState<LazerMenuPhase>('idle');
+  const phase = controlledPhase !== undefined ? controlledPhase : internalPhase;
+  const setPhase = useCallback((p: LazerMenuPhase) => {
+    setInternalPhase(p);
+    onPhaseChange?.(p);
+  }, [onPhaseChange]);
+
+  const [cookieSize, setCookieSize] = useState(440);
   const [cookieHovered, setCookieHovered] = useState(false);
   const reducedMotion = useLazerReducedMotion();
+
+  useEffect(() => {
+    onPhaseChange?.(phase);
+  }, [phase, onPhaseChange]);
+
+
 
   useEffect(() => {
     const update = () => setCookieSize(menuCookieSize(window.innerWidth, window.innerHeight));
@@ -208,10 +229,11 @@ export const MainMenu = ({
   // top-level / play: smaller cookie parked in the settings–play gap
   const isCompact = phase !== 'idle';
   const hoverBoost = !reducedMotion && cookieHovered ? 1.08 : 1;
-  // Compact scale is tuned so the bar cookie stays the same physical size as
-  // before the idle cookie was enlarged (0.52×0.66 / 0.64 ≈ 0.536).
-  const targetScale = (isCompact ? 0.536 : 1.0) * hoverBoost;
+  // While idle cookie is 420-580px, compact bar cookie scales to 0.48 so it fits the horizontal bar neatly
+  const targetScale = (isCompact ? 0.48 : 1.0) * hoverBoost;
   const cookieX = isCompact ? lazerCompactCookieX() : 0;
+
+
 
   const cookieMoveEase = isCompact
     ? ([0.22, 1, 0.36, 1] as [number, number, number, number])

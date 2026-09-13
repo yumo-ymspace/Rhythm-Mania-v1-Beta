@@ -263,8 +263,8 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 |---|---|---|---|
 | **TASK-V-001** | **done** | Motion tokens + shared primitives | (all; no screen rebuild yet) |
 | **TASK-V-010** | **done** | Main menu idle | `hud/first menu 1.png` |
-| **TASK-V-011** | pending | Main menu button system | `hud/first menu 2.png`, `first menu 3.png`, `first menu on hover.png` |
-| **TASK-V-012** | pending | Toolbar + hover tooltips | `hud/first menu 2.png`, `songselct onhober playing.jpg`, `onhover smth else.jpg`, `on hover top bar smth.jpg` |
+| **TASK-V-011** | **done** | Main menu button system | `hud/first menu 2.png`, `first menu 3.png`, `first menu on hover.png` |
+| **TASK-V-012** | **done** | Toolbar + hover tooltips | `hud/first menu 2.png`, `songselct onhober playing.jpg`, `onhover smth else.jpg`, `on hover top bar smth.jpg` |
 | **TASK-V-013** | pending | Now-playing overlay | `hud/songselct onhover playing songs.jpg` |
 | **TASK-V-020** | pending | Song Select shell + footer + parked cookie | `song-select/song select.png`, `hud/songslect (2).jpg` |
 | **TASK-V-021** | pending | Carousel (collapsed + expanded) | `hud/songslect.jpg`, `hud/songselect.jpg`, `hud/songslect (2).jpg` |
@@ -284,7 +284,7 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 | **TASK-V-071** | pending | Fail overlay | `pause/failed.png` |
 | **TASK-V-080** | pending | Results | `results/osu_2026-09-12_19-51-20.jpg`, `19-51-31.jpg` |
 
-**Next visual task: TASK-V-011.**
+**Next visual task: TASK-V-013.**
 
 ---
 
@@ -390,6 +390,24 @@ Right: news, changelog, wiki, social, chat, world, **beatmap listing**, now-play
 Toolbar **hides** on menu Initial (idle cookie) and **shows** after the 200ms logo impact, matching lazer. Present on select, listing, mods, loader, results. Absent during live play (replay overlay is V-063).
 
 **Verify:** tooltips vs the three hover stills. Listing icon goes pink when the listing overlay is open (`hud/beatmaplisting.jpg`). 390×844: collapse to settings + home + listing + clock; do not overflow.
+
+**Verification (done):** `npm run lint` passed (0 errors); all unit tests passed (`363/363` across 30 suites, including `tests/task-v-012-toolbar.test.ts`).
+- Left cluster: settings gear, home button, and 4 ruleset buttons (osu!, taiko, catch, mania) with mania active and adorned with a glowing cyan underline.
+- Right cluster: aux tools (news, changelog, wiki, social, chat, world), listing button (opens catalog, turns pink when open, shortcut Ctrl+B), now-playing button (shortcut F6, turns pink when open), profile badge (displays user local display name + avatar), live updating clock (`h:mm:ss AM/PM` + `running hh:mm:ss`), and notifications bell with badge.
+- Tooltip panel: compact dark floating panel below hovered elements featuring bold title, description subtitle, and optional gold shortcut tag.
+- Visibility logic: hides during menu idle and live play; reveals on menu top-level, song select, history, results, and skins.
+- Mobile collapse: rulesets, aux tools, profile badge, and running timer collapse smoothly on narrow mobile screens (390×844) without overflow.
+
+**Notification system design (locked):**
+
+All in-game notifications (coming-soon toasts, system events, future real events) share one unified pipeline:
+
+1. **Visual style:** Use the existing `.lazer-coming-soon` pill from the first-menu horizontal bar — dark `rgb(48, 48, 51)` background, rounded pill with info icon, title + detail copy, dismiss × button.
+2. **Delivery:** A notification is pushed into the top-right notification panel's list (the bell drawer) immediately when it is created. The unread badge count on the bell increments.
+3. **Auto-dismiss toast:** The pill also appears as a floating auto-dismiss toast in the top-right corner (below the toolbar) for a short period (e.g. ~4 s). When the toast auto-disappears, the notification is **not** removed from the panel — it stays in the bell drawer as an unread item.
+4. **Manual dismiss:** The user must explicitly dismiss a notification inside the bell drawer (via the × button or "Clear all") for it to be permanently removed. Only then does the badge count decrement.
+5. **No fake/seed items:** No hardcoded placeholder notifications are pre-loaded. The panel starts empty. Real events populate it at runtime.
+6. **Future wiring:** Any new feature that emits a user-facing notification (e.g. screenshot saved, import completed, update available) must call `pushNotification(title, detail)` via the shared API so it flows through this single system.
 
 ---
 

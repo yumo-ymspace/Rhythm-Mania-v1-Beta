@@ -73,16 +73,19 @@ export const LAZER_DURATION = {
 } as const;
 
 export const LAZER_MENU_BUTTON_WIDTH_PX = 172;
-/** Settings, play, solo, and back rest wider than edit/browse/exit. */
+/** Play, solo rest at 216px; settings and back rest slightly shorter at 192px. */
 export const LAZER_MENU_LEAD_WIDTH_PX = 216;
+export const LAZER_MENU_SETTINGS_WIDTH_PX = 192;
 export const LAZER_MENU_OVERLAP_PX = 18;
 /** Visible gap between settings/back and play/solo; cookie parks in this slot. */
 export const LAZER_COOKIE_SLOT_PX = 128;
 
-/** Horizontal offset (px) to park the cookie in the settings–play gap. */
+/** Horizontal offset (px) to park the cookie in the settings–play gap, shifted slightly left for optimal balance. */
 export function lazerCompactCookieX(): number {
-  return -(LAZER_MENU_LEAD_WIDTH_PX - LAZER_MENU_OVERLAP_PX + LAZER_COOKIE_SLOT_PX / 2);
+  return -(LAZER_MENU_SETTINGS_WIDTH_PX - LAZER_MENU_OVERLAP_PX + LAZER_COOKIE_SLOT_PX / 2 + 24);
 }
+
+
 
 export const LAZER_HOVER_SCALE = 1.2;
 export const LAZER_BOUNCE_COMPRESSION = 0.9;

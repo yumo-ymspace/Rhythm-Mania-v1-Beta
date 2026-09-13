@@ -36,8 +36,10 @@ import {
   LAZER_DURATION,
   LAZER_EASE_OUT_QUINT,
   LAZER_MENU_LEAD_WIDTH_PX,
+  LAZER_MENU_SETTINGS_WIDTH_PX,
   useLazerReducedMotion,
 } from './motion';
+
 
 export type ButtonSystemPhase = 'top-level' | 'play';
 
@@ -200,7 +202,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="settings"
                   icon={<SettingsIcon className="w-6 h-6" />}
                   color={LAZER_SETTINGS}
-                  baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
+                  baseWidth={LAZER_MENU_SETTINGS_WIDTH_PX}
                   hoverScale={1.12}
                   onClick={onOpenSettings}
                 />
@@ -211,7 +213,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="back"
                   icon={<BackIcon className="w-6 h-6" />}
                   color={LAZER_BACK}
-                  baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
+                  baseWidth={LAZER_MENU_SETTINGS_WIDTH_PX}
                   hoverScale={1.12}
                   onClick={onBackToTopLevel}
                 />
