@@ -117,7 +117,7 @@ export function LazerCookie({
                   width={barWidth}
                   height={len}
                   rx={barWidth / 2}
-                  style={liveSpectrum ? undefined : { animationDelay: `${(i / LAZER_COOKIE_BAR_COUNT) * 1.4}s` }}
+                  style={liveSpectrum ? undefined : { animationDelay: `-${(i / LAZER_COOKIE_BAR_COUNT) * 1.6}s` }}
                 />
               </g>
             );

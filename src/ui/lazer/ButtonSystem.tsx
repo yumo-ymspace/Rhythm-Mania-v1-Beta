@@ -41,6 +41,19 @@ import {
 
 export type ButtonSystemPhase = 'top-level' | 'play';
 
+/** A single stackable toast notification. */
+type ToastNotification = {
+  id: string;
+  title: string;
+  detail?: string;
+  iconType: 'info' | 'ban';
+  /**
+   * Set to true just before removal on click, so that AnimatePresence
+   * captures the throw-left exit animation rather than the slide-right one.
+   */
+  clickDismissed: boolean;
+};
+
 export type ButtonSystemProps = {
   phase: ButtonSystemPhase;
   onSelectPlay: () => void;
@@ -63,33 +76,85 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
   className = '',
 }) => {
   const reducedMotion = useLazerReducedMotion();
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
-  const [showExitToast, setShowExitToast] = useState(false);
-  const comingSoonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const exitToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [notifications, setNotifications] = useState<ToastNotification[]>([]);
+
+  /** Per-notification auto-dismiss timers. */
+  const timerMapRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showComingSoon = useCallback((feature: string) => {
-    setComingSoon(feature);
-    if (comingSoonTimerRef.current) clearTimeout(comingSoonTimerRef.current);
-    comingSoonTimerRef.current = setTimeout(() => setComingSoon(null), 2400);
+  // --- Notification helpers ---
+
+  const clearNotifTimer = (id: string) => {
+    const t = timerMapRef.current.get(id);
+    if (t !== undefined) {
+      clearTimeout(t);
+      timerMapRef.current.delete(id);
+    }
+  };
+
+  const removeNotification = useCallback((id: string) => {
+    clearNotifTimer(id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const addNotification = useCallback(
+    (title: string, detail: string | undefined, iconType: 'info' | 'ban') => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setNotifications(prev => [
+        ...prev,
+        { id, title, detail, iconType, clickDismissed: false },
+      ]);
+      const t = setTimeout(() => removeNotification(id), 2400);
+      timerMapRef.current.set(id, t);
+    },
+    [removeNotification],
+  );
+
+  /**
+   * Dismiss a notification via click using a two-step approach:
+   * 1. Mark clickDismissed: true → React re-renders with the throw-left exit prop.
+   * 2. Remove in the next animation frame → AnimatePresence captures the updated exit.
+   */
+  const handleClickDismiss = useCallback(
+    (id: string) => {
+      clearNotifTimer(id);
+      setNotifications(prev =>
+        prev.map(n => (n.id === id ? { ...n, clickDismissed: true } : n)),
+      );
+      requestAnimationFrame(() => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      });
+    },
+    [],
+  );
+
+  // Cleanup all timers on unmount.
   useEffect(() => {
     return () => {
-      if (comingSoonTimerRef.current) clearTimeout(comingSoonTimerRef.current);
-      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
+      timerMapRef.current.forEach(t => clearTimeout(t));
+      timerMapRef.current.clear();
     };
   }, []);
 
+  // --- Feature actions ---
+
+  const showComingSoon = useCallback(
+    (feature: string) => {
+      addNotification('Coming soon', feature, 'info');
+    },
+    [addNotification],
+  );
+
+  const handleExitClick = useCallback(() => {
+    addNotification("You can't exit!", "You're not going nowhere!", 'ban');
+  }, [addNotification]);
+
+  // --- Idle timer ---
+
   const resetIdleTimer = useCallback(() => {
-    if (idleTimerRef.current) {
-      clearTimeout(idleTimerRef.current);
-    }
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (onIdleTimeout) {
-      idleTimerRef.current = setTimeout(() => {
-        onIdleTimeout();
-      }, 15000);
+      idleTimerRef.current = setTimeout(() => onIdleTimeout(), 15000);
     }
   }, [onIdleTimeout]);
 
@@ -99,7 +164,6 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('pointerdown', handleActivity);
-
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       window.removeEventListener('mousemove', handleActivity);
@@ -107,12 +171,6 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
       window.removeEventListener('pointerdown', handleActivity);
     };
   }, [resetIdleTimer]);
-
-  const handleExitClick = () => {
-    setShowExitToast(true);
-    if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
-    exitToastTimerRef.current = setTimeout(() => setShowExitToast(false), 2400);
-  };
 
   return (
     <div
@@ -245,50 +303,53 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
         </div>
       </motion.div>
 
-      <AnimatePresence>
-        {comingSoon && (
-          <motion.aside
-            id="lazer-coming-soon"
-            className="lazer-coming-soon"
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0, x: 48 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 48 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <span className="lazer-coming-soon-icon" aria-hidden="true">
-              <InfoIcon className="w-4 h-4" strokeWidth={2.4} />
-            </span>
-            <span className="lazer-coming-soon-copy">
-              <span className="lazer-coming-soon-title">Coming soon</span>
-              <span className="lazer-coming-soon-detail">{comingSoon}</span>
-            </span>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showExitToast && (
-          <motion.aside
-            id="lazer-exit-toast"
-            className="lazer-coming-soon is-left"
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0, x: -48 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -48 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <span className="lazer-coming-soon-icon" aria-hidden="true">
-              <BanIcon className="w-4 h-4" strokeWidth={2.4} />
-            </span>
-            <span className="lazer-coming-soon-copy">
-              <span className="lazer-coming-soon-title">You're not going nowhere!</span>
-            </span>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+      {/* Stacking notification area — fixed top-right, grows downward */}
+      <div className="lazer-notification-stack">
+        <AnimatePresence>
+          {notifications.map(notif => (
+            <motion.aside
+              key={notif.id}
+              className="lazer-coming-soon"
+              role="status"
+              aria-live="polite"
+              layout
+              initial={{ opacity: 0, x: 48 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={
+                notif.clickDismissed
+                  ? {
+                      opacity: 0,
+                      x: -340,
+                      y: 28,
+                      rotate: -14,
+                      transition: { duration: 0.42, ease: [0.4, 0, 0.9, 0.55] },
+                    }
+                  : {
+                      opacity: 0,
+                      x: 48,
+                      transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+                    }
+              }
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              onClick={() => handleClickDismiss(notif.id)}
+            >
+              <span className="lazer-coming-soon-icon" aria-hidden="true">
+                {notif.iconType === 'info' ? (
+                  <InfoIcon className="w-4 h-4" strokeWidth={2.4} />
+                ) : (
+                  <BanIcon className="w-4 h-4" strokeWidth={2.4} />
+                )}
+              </span>
+              <span className="lazer-coming-soon-copy">
+                <span className="lazer-coming-soon-title">{notif.title}</span>
+                {notif.detail && (
+                  <span className="lazer-coming-soon-detail">{notif.detail}</span>
+                )}
+              </span>
+            </motion.aside>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

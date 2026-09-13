@@ -88,7 +88,7 @@ export const RESOURCE_LINKS = [
 
 export function menuCookieSize(width: number, height: number): number {
   const vmin = Math.min(width, height);
-  return Math.round(Math.min(400, Math.max(200, vmin * 0.52)));
+  return Math.round(Math.min(480, Math.max(240, vmin * 0.64)));
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -208,7 +208,9 @@ export const MainMenu = ({
   // top-level / play: smaller cookie parked in the settings–play gap
   const isCompact = phase !== 'idle';
   const hoverBoost = !reducedMotion && cookieHovered ? 1.08 : 1;
-  const targetScale = (isCompact ? 0.66 : 1.0) * hoverBoost;
+  // Compact scale is tuned so the bar cookie stays the same physical size as
+  // before the idle cookie was enlarged (0.52×0.66 / 0.64 ≈ 0.536).
+  const targetScale = (isCompact ? 0.536 : 1.0) * hoverBoost;
   const cookieX = isCompact ? lazerCompactCookieX() : 0;
 
   const cookieMoveEase = isCompact

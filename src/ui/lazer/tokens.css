@@ -164,6 +164,7 @@ html[data-ui="lazer"] {
   height: var(--lazer-cookie-size, 280px);
   padding: 0;
   border: 0;
+  outline: none;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -171,11 +172,7 @@ html[data-ui="lazer"] {
   pointer-events: none;
 }
 
-.lazer-cookie:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 6px;
-  border-radius: 50%;
-}
+
 
 .lazer-cookie-pulse {
   position: relative;
@@ -540,12 +537,23 @@ html[data-ui="lazer"] {
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
 }
 
-.lazer-coming-soon {
+/* Notification stack container — fixed top-right, notifications flow downward. */
+.lazer-notification-stack {
   position: fixed;
   top: 52px;
   right: 16px;
   z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
   pointer-events: none;
+}
+
+/* Individual notification pill — position is managed by the stack container. */
+.lazer-coming-soon {
+  pointer-events: auto;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -555,11 +563,14 @@ html[data-ui="lazer"] {
   background: rgb(48, 48, 51);
   border-radius: 8px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  user-select: none;
 }
 
-.lazer-coming-soon.is-left {
-  right: auto;
-  left: 16px;
+@media (hover: hover) and (pointer: fine) {
+  .lazer-coming-soon:hover {
+    background: rgb(62, 62, 66);
+    transition: background 120ms ease;
+  }
 }
 
 .lazer-coming-soon-icon {
@@ -655,8 +666,11 @@ html[data-ui="lazer"] {
   .lazer-menu-button-label {
     font-size: 10px;
   }
-  .lazer-coming-soon {
+  .lazer-notification-stack {
     right: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .lazer-coming-soon {
     min-width: 140px;
     padding: 10px 12px;
   }
