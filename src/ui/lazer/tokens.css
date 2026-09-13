@@ -1,0 +1,523 @@
+/*
+ * RhythmMania - High-Performance Rhythm Game Platform
+ * Copyright (C) 2026 Yumo (yumo-ymspace). All rights reserved.
+ *
+ * This source code is licensed under the PolyForm Perimeter License 1.0.1.
+ * You may modify and use this file for non-competing purposes, provided
+ * that open and explicit attribution is maintained.
+ *
+ * For the full license terms, see the LICENSE file in the root directory
+ * from: https://github.com/yumo-ymspace/RhythmMania
+ */
+
+/* Lazer chrome tokens. Scoped so legacy skins are not restyled. */
+html[data-ui="lazer"] {
+  --lazer-ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --lazer-ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --lazer-ease-in-sine: cubic-bezier(0.12, 0, 0.39, 0);
+  --lazer-ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
+
+  --lazer-shear: -11.31deg;
+  --lazer-unshear: 11.31deg;
+  --lazer-menu-wedge: 0.2;
+
+  --lazer-pink: #e967a1;
+  --lazer-pink-light: #ff7db7;
+  --lazer-yellow: #ffcc22;
+  --lazer-yellow-dark: #eeaa00;
+  --lazer-green: #88b300;
+  --lazer-quit: rgb(170, 27, 39);
+  --lazer-play: rgb(102, 68, 204);
+  --lazer-edit: rgb(238, 170, 0);
+  --lazer-browse: rgb(165, 204, 0);
+  --lazer-exit: rgb(238, 51, 153);
+  --lazer-back: rgb(51, 58, 94);
+  --lazer-settings: rgb(85, 85, 85);
+  --lazer-bar-gray: rgb(50, 50, 50);
+  --lazer-back-footer: #e91e8a;
+  --lazer-menu-field: #0d1520;
+
+  --lazer-dur-menu-button: 500ms;
+  --lazer-dur-menu-button-fade: 83ms;
+  --lazer-dur-menu-explode: 200ms;
+  --lazer-dur-menu-hover: 500ms;
+  --lazer-dur-bar-fade: 300ms;
+  --lazer-dur-bar-flatten: 300ms;
+  --lazer-dur-bar-restore: 400ms;
+  --lazer-dur-logo-to-top: 200ms;
+  --lazer-dur-logo-to-idle: 800ms;
+  --lazer-dur-bar-delay: 150ms;
+  --lazer-dur-overlay: 200ms;
+  --lazer-dur-tooltip: 150ms;
+  --lazer-dur-popover: 180ms;
+  --lazer-dur-results-hero: 350ms;
+  --lazer-dur-carousel: 300ms;
+  --lazer-dur-click-flash: 800ms;
+  --lazer-dur-logo-park: 5000ms;
+  --lazer-dur-logo-park-fade: 300ms;
+
+  --lazer-overlay-bg-alpha: 0.75;
+  --lazer-hover-scale: 1.2;
+  --lazer-bounce-compression: 0.9;
+  --lazer-bounce-rotation: 8deg;
+  --lazer-menu-button-width: 140px;
+  --lazer-cookie-pulse-amp: 1.04;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="lazer"] {
+    --lazer-dur-menu-button: 0ms;
+    --lazer-dur-menu-button-fade: 0ms;
+    --lazer-dur-menu-explode: 0ms;
+    --lazer-dur-menu-hover: 0ms;
+    --lazer-dur-bar-fade: 0ms;
+    --lazer-dur-bar-flatten: 0ms;
+    --lazer-dur-bar-restore: 0ms;
+    --lazer-dur-logo-to-top: 0ms;
+    --lazer-dur-logo-to-idle: 0ms;
+    --lazer-dur-bar-delay: 0ms;
+    --lazer-dur-tooltip: 0ms;
+    --lazer-dur-popover: 0ms;
+    --lazer-dur-results-hero: 0ms;
+    --lazer-dur-carousel: 0ms;
+    --lazer-dur-click-flash: 0ms;
+    --lazer-dur-logo-park: 0ms;
+    --lazer-dur-logo-park-fade: 0ms;
+    --lazer-cookie-pulse-amp: 1;
+    /* Overlays may still fade. */
+    --lazer-dur-overlay: 200ms;
+  }
+
+  html[data-ui="lazer"] .lazer-cookie.is-pulsing .lazer-cookie-pulse,
+  html[data-ui="lazer"] .lazer-cookie-bar.is-idle {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  html[data-ui="lazer"] {
+    --lazer-shear: 0deg;
+    --lazer-unshear: 0deg;
+  }
+}
+
+.lazer-main-menu {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--lazer-menu-field, #0d1520);
+  user-select: none;
+}
+
+.lazer-triangle-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lazer-main-menu-cookie {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+
+.lazer-shear {
+  transform: skewX(var(--lazer-shear, -11.31deg));
+}
+
+.lazer-unshear {
+  transform: skewX(var(--lazer-unshear, 11.31deg));
+}
+
+.lazer-cookie {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--lazer-cookie-size, 280px);
+  height: var(--lazer-cookie-size, 280px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: none;
+}
+
+.lazer-cookie:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 6px;
+  border-radius: 50%;
+}
+
+.lazer-cookie-pulse {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.lazer-cookie.is-pulsing .lazer-cookie-pulse {
+  animation: lazer-cookie-pulse var(--lazer-beat-period, 1s) var(--lazer-ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)) infinite;
+}
+
+.lazer-cookie-spectrum {
+  position: absolute;
+  inset: -28%;
+  pointer-events: none;
+}
+
+.lazer-cookie-bar {
+  fill: rgba(255, 255, 255, 0.78);
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+.lazer-cookie-bar.is-idle {
+  animation: lazer-spectrum-idle 1.6s var(--lazer-ease-in-out-sine, cubic-bezier(0.37, 0, 0.63, 1)) infinite;
+}
+
+.lazer-cookie-disc {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--lazer-pink, #e967a1);
+  border: calc(var(--lazer-cookie-size, 280px) * 0.055) solid #fff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.lazer-cookie-triangles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lazer-cookie-mark {
+  position: relative;
+  z-index: 1;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--lazer-cookie-size, 280px) * 0.28);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+  user-select: none;
+}
+
+.lazer-footer-back {
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 210px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lazer-footer-back:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.lazer-footer-back-slab {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  background: var(--lazer-back-footer, #e91e8a);
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+}
+
+.lazer-footer-back-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 28px 0 22px;
+  color: #fff;
+  font-family: Inter, "Space Grotesk", sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.lazer-footer-back-inner svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.4;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lazer-footer-back:hover .lazer-footer-back-slab {
+    filter: brightness(1.08);
+    transition: filter 150ms var(--lazer-ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+}
+
+@keyframes lazer-cookie-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(var(--lazer-cookie-pulse-amp, 1.04)); }
+}
+
+@keyframes lazer-spectrum-idle {
+  0%, 100% { transform: scaleY(0.72); }
+  50% { transform: scaleY(1); }
+}
+
+/* ==========================================================================
+   TASK-V-011: Lazer Menu Button System
+   ========================================================================== */
+
+.lazer-button-system {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.lazer-button-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 100px;
+  background-color: var(--lazer-bar-gray, rgb(50, 50, 50));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  overflow: visible;
+  transform-origin: center center;
+}
+
+.lazer-button-system-layout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.lazer-button-group-left {
+  position: absolute;
+  right: calc(50% + 75px);
+  display: flex;
+  align-items: center;
+  height: 100%;
+  z-index: 10;
+}
+
+.lazer-button-group-right {
+  position: absolute;
+  left: calc(50% + 75px);
+  display: flex;
+  align-items: center;
+  height: 100%;
+  z-index: 10;
+}
+
+.lazer-button-system-spacer {
+  width: 150px;
+  height: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Individual Parallelogram Menu Button */
+.lazer-menu-button {
+  position: relative;
+  z-index: 10;
+  height: 100px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  cursor: pointer;
+  transform: skewX(var(--lazer-shear, -11.31deg));
+  transform-origin: center center;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.lazer-button-group-left .lazer-menu-button {
+  margin-right: -10px;
+}
+
+.lazer-button-group-right .lazer-menu-button {
+  margin-left: -20px;
+}
+
+.lazer-button-group-right #menu-btn-play,
+.lazer-button-group-right #menu-btn-solo {
+  margin-left: -10px;
+}
+
+.lazer-menu-button.is-disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+}
+
+.lazer-menu-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  z-index: 10;
+}
+
+.lazer-menu-button-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.lazer-menu-button-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+}
+
+.lazer-menu-button-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.lazer-menu-button-icon.is-bouncing {
+  animation: lazer-icon-beat-bounce 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes lazer-icon-beat-bounce {
+  0% {
+    transform: scale(var(--lazer-hover-scale, 1.2)) rotate(0deg);
+  }
+  50% {
+    transform: scale(calc(var(--lazer-hover-scale, 1.2) * var(--lazer-bounce-compression, 0.9))) rotate(calc(var(--lazer-bounce-rotation, 8deg) * -1));
+  }
+  100% {
+    transform: scale(var(--lazer-hover-scale, 1.2)) rotate(var(--lazer-bounce-rotation, 8deg));
+  }
+}
+
+.lazer-menu-button-label {
+  font-family: Inter, "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.lazer-menu-button-flash {
+  position: absolute;
+  inset: 0;
+  background-color: #ffffff;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Exit Dialog Modal */
+.lazer-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.lazer-dialog-box {
+  background-color: #1a2233;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 24px 28px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+  .lazer-button-strip {
+    height: 80px;
+  }
+  .lazer-button-group-left {
+    right: calc(50% + 50px);
+  }
+  .lazer-button-group-right {
+    left: calc(50% + 50px);
+  }
+  .lazer-button-system-spacer {
+    width: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .lazer-button-strip {
+    height: 70px;
+  }
+  .lazer-button-system-layout {
+    width: 100%;
+    justify-content: center;
+  }
+  .lazer-button-group-left {
+    right: calc(50% + 40px);
+  }
+  .lazer-button-group-right {
+    left: calc(50% + 40px);
+  }
+  .lazer-button-system-spacer {
+    width: 80px;
+  }
+  .lazer-menu-button {
+    height: 70px;
+    margin-left: -8px !important;
+  }
+  .lazer-menu-button-label {
+    font-size: 10px;
+  }
+}
+

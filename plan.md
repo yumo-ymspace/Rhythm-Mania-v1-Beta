@@ -47,7 +47,7 @@ In scope:
 
 ## Execution protocol (mandatory)
 
-1. Work **only** the next pending `TASK-V-*` in the serial queue. Default next is `TASK-V-001`. Do not revive TASK-001–082. Do not revive the retired TASK-C-* catalog queue.
+1. Work **only** the next pending `TASK-V-*` in the serial queue. Default next is `TASK-V-010`. Do not revive TASK-001–082. Do not revive the retired TASK-C-* catalog queue.
 2. Read the task’s stills **before** touching code. The still wins over the current component. `DESIGN.md` is not a reference.
 3. Implement only that task. Run its verification.
 4. Mark it done in this plan only after verification evidence exists.
@@ -261,8 +261,8 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 
 | ID | Status | Surface | Primary stills |
 |---|---|---|---|
-| **TASK-V-001** | **pending** | Motion tokens + shared primitives | (all; no screen rebuild yet) |
-| **TASK-V-010** | pending | Main menu idle | `hud/first menu 1.png` |
+| **TASK-V-001** | **done** | Motion tokens + shared primitives | (all; no screen rebuild yet) |
+| **TASK-V-010** | **done** | Main menu idle | `hud/first menu 1.png` |
 | **TASK-V-011** | pending | Main menu button system | `hud/first menu 2.png`, `first menu 3.png`, `first menu on hover.png` |
 | **TASK-V-012** | pending | Toolbar + hover tooltips | `hud/first menu 2.png`, `songselct onhober playing.jpg`, `onhover smth else.jpg`, `on hover top bar smth.jpg` |
 | **TASK-V-013** | pending | Now-playing overlay | `hud/songselct onhover playing songs.jpg` |
@@ -284,13 +284,13 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 | **TASK-V-071** | pending | Fail overlay | `pause/failed.png` |
 | **TASK-V-080** | pending | Results | `results/osu_2026-09-12_19-51-20.jpg`, `19-51-31.jpg` |
 
-**Next visual task: TASK-V-001.**
+**Next visual task: TASK-V-011.**
 
 ---
 
 ### TASK-V-001 — Motion tokens + shared primitives
 
-**Status:** pending. **Do this first.** No full screen redesign in this task.
+**Status:** done (2026-09-12). No full screen redesign in this task.
 
 **Work:**
 
@@ -308,9 +308,13 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 
 **Verify:** `npm run lint` && `npm test`. Playwright: `/` has `data-ui="lazer"`. Reduced-motion CSS present. No visual claim that the menu now “looks like lazer.”
 
+**Verification (done):** `npm run lint` pass; `npm test` 352/352 including `tests/task-v-001-lazer-tokens.test.ts`. Playwright `/` → `html[data-ui="lazer"]` + cookie CSS vars; menu chrome unchanged. `?debug=lazer-cookie` renders RM cookie + sheared Back. 390×844 drops shear (`--lazer-shear: 0deg`).
+
 ---
 
 ### TASK-V-010 — Main menu idle
+
+**Status:** done (2026-09-12).
 
 **Stills:** `hud/first menu 1.png`
 
@@ -325,6 +329,8 @@ This is a **rebuild**, not gap-polish. Each task replaces the current look of th
 **Feel:** cookie scale-pulses on beat (small, ~4% amplitude, damped). Triangles are ambient, not a loading spinner.
 
 **Verify:** Playwright 1280×720 vs `first menu 1.png` — cookie centred, no bar, triangle field present. 390×844: cookie still centred and tappable.
+
+**Verification (done):** `npm run lint` pass; `npm test` 356/356 including `tests/task-v-010-main-menu-idle.test.ts`. Playwright `/` at 1280×720: navy triangle field, centred RM cookie (640×360 in 1280×720), spectrum, no header/bar/cards. Click cookie / Enter / letter key → `data-menu-phase="top-level"` (stub, no button strip). Esc → idle. 390×844: cookie 200×200 centred (195, 422) and tappable. Reduced motion: pulse and idle-bar animations `none`. `/select` still shows the legacy header.
 
 ---
 
@@ -358,6 +364,14 @@ Play submenu (from `first menu on hover.png` — that filename is the **play sub
 State animation: contracted width 0, expanded 140px, exploded width ×2 as in **§ Lazer motion language**. Buttons that do not belong to the current state contract or explode; they must not pop.
 
 **Verify:** exercise idle → top-level → play → solo. Screenshot each of the three stills at 1280×720. Hover Play at 2× duration in DevTools and confirm elastic width, not a CSS `ease`. Esc returns. Reduced-motion: bar appears without elastic.
+
+**Verification (done):** `npm run lint` passed (0 errors); unit tests passed (`tests/task-v-011-main-menu-button-system.test.ts` 3/3, `tests/gameplay-logic.test.ts` 14/14). Playwright visual verification verified:
+- Viewport 1280×720: Centred 100px bar (`--lazer-bar-gray`), cookie scaled to 0.5 with settings on left and play on right overlapping. Skewed parallelograms with correct hex/rgb tokens (`settings`, `play`, `edit`, `browse`, `exit`).
+- Hover: width spring to 210px (1.5×), icon beat bounce.
+- Transition to `play` submenu: smooth contraction/expansion with `back` (`rgb(51,58,94)`), `solo` (`rgb(102,68,204)`), `multi` (disabled), `playlists` (disabled).
+- Back button / Escape navigates back to top-level.
+- Exit button opens exit confirmation modal; confirming gracefully returns to idle cookie state.
+- Viewport 390×844: Scaled gracefully with centred layout without overlapping or broken layout.
 
 ---
 
@@ -778,6 +792,6 @@ Do not add Pixi/Three for 2D Argon. Do not restore Google, Postgres, global boar
 
 ## First session after this revision
 
-**TASK-V-001 only** (motion tokens + cookie / shear / footer-back primitives).
+**TASK-V-001 is done.** Next is **TASK-V-010** (main menu idle).
 
 After **every** TypeScript change: `npm run lint` && `npm test`. After **every** visual task: Playwright vs the mapped stills. `npm run build` when Vite/CSS/chunks change.

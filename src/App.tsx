@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   Settings as SettingsIcon,
   Music2,
@@ -52,8 +52,8 @@ import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
 import { resolveSkinTheme } from './render/skinTheme';
-import { isArgonSkin } from './render/argonSkin';
 import { cssColorToHex, parseCssColor } from './render/color';
+import { applyLazerChrome, LazerDebugSmoke } from './ui/lazer';
 
 
 const DEFAULT_MENU_BACKGROUNDS = [
@@ -288,10 +288,9 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof document !== 'undefined') {
-      const activeSkin = isArgonSkin(settings) ? 'argon' : 'legacy';
-      document.documentElement.dataset.skin = activeSkin;
+      applyLazerChrome(settings);
     }
   }, [settings]);
 
@@ -1105,10 +1104,11 @@ export default function App() {
         (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results' || currentScreen === 'skins') ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden'
       }`}
     >
+      <LazerDebugSmoke />
       {/* UNIFIED DYNAMIC CROSS-FADING BACKGROUND LAYER */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none bg-[#050508]">
         <AnimatePresence initial={false}>
-          {currentScreen !== 'play' && activeBackgroundUrl && (
+          {currentScreen !== 'play' && currentScreen !== 'menu' && activeBackgroundUrl && (
             <motion.div
               key={activeBackgroundUrl}
               initial={{ opacity: 0, scale: 1.02 }}
@@ -1133,7 +1133,7 @@ export default function App() {
       </div>
 
       {/* 1. MASTER HEADER */}
-      {currentScreen !== 'play' && (
+      {currentScreen !== 'play' && currentScreen !== 'menu' && (
         <>
           <header
             id="main-header"
@@ -1459,6 +1459,7 @@ export default function App() {
                   leaveProfilePath(screen as GameScreen);
                 }} 
                 onOpenSettings={openSettings}
+                onOpenBrowse={() => setShowFindBeatmapOverlay(true)}
               />
             </motion.div>
           )}
