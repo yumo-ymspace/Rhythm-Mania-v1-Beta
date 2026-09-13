@@ -22,6 +22,8 @@ import {
   User as SoloIcon,
   Globe as MultiIcon,
   Trophy as PlaylistsIcon,
+  Info as InfoIcon,
+  Ban as BanIcon,
 } from 'lucide-react';
 import { MenuButton } from './MenuButton';
 import {
@@ -33,6 +35,7 @@ import {
   LAZER_BACK,
   LAZER_DURATION,
   LAZER_EASE_OUT_QUINT,
+  LAZER_MENU_LEAD_WIDTH_PX,
   useLazerReducedMotion,
 } from './motion';
 
@@ -60,8 +63,24 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
   className = '',
 }) => {
   const reducedMotion = useLazerReducedMotion();
-  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [comingSoon, setComingSoon] = useState<string | null>(null);
+  const [showExitToast, setShowExitToast] = useState(false);
+  const comingSoonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showComingSoon = useCallback((feature: string) => {
+    setComingSoon(feature);
+    if (comingSoonTimerRef.current) clearTimeout(comingSoonTimerRef.current);
+    comingSoonTimerRef.current = setTimeout(() => setComingSoon(null), 2400);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (comingSoonTimerRef.current) clearTimeout(comingSoonTimerRef.current);
+      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
+    };
+  }, []);
 
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) {
@@ -90,12 +109,9 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
   }, [resetIdleTimer]);
 
   const handleExitClick = () => {
-    setShowExitDialog(true);
-  };
-
-  const handleConfirmExit = () => {
-    setShowExitDialog(false);
-    onIdleTimeout?.();
+    setShowExitToast(true);
+    if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
+    exitToastTimerRef.current = setTimeout(() => setShowExitToast(false), 2400);
   };
 
   return (
@@ -126,6 +142,8 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="settings"
                   icon={<SettingsIcon className="w-6 h-6" />}
                   color={LAZER_SETTINGS}
+                  baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
+                  hoverScale={1.12}
                   onClick={onOpenSettings}
                 />
               ) : (
@@ -135,6 +153,8 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="back"
                   icon={<BackIcon className="w-6 h-6" />}
                   color={LAZER_BACK}
+                  baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
+                  hoverScale={1.12}
                   onClick={onBackToTopLevel}
                 />
               )}
@@ -154,6 +174,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="play"
                   icon={<PlayIcon className="w-6 h-6 fill-current" />}
                   color={LAZER_PLAY}
+                  baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
                   onClick={onSelectPlay}
                 />
               )}
@@ -164,8 +185,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="edit"
                   icon={<EditIcon className="w-6 h-6" />}
                   color={LAZER_EDIT}
-                  disabled
-                  disabledTooltip="Beatmap editor is coming in a future update"
+                  onClick={() => showComingSoon('Beatmap editor')}
                 />
               )}
               {phase === 'top-level' && (
@@ -196,6 +216,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="solo"
                   icon={<SoloIcon className="w-6 h-6" />}
                   color={LAZER_PLAY}
+                  baseWidth={LAZER_MENU_LEAD_WIDTH_PX}
                   onClick={onSelectSolo}
                 />
               )}
@@ -206,8 +227,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="multi"
                   icon={<MultiIcon className="w-6 h-6" />}
                   color="rgb(94, 63, 186)"
-                  disabled
-                  disabledTooltip="Multiplayer is coming in a future update"
+                  onClick={() => showComingSoon('Multiplayer')}
                 />
               )}
               {phase === 'play' && (
@@ -217,8 +237,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
                   label="playlists"
                   icon={<PlaylistsIcon className="w-6 h-6" />}
                   color="rgb(85, 55, 170)"
-                  disabled
-                  disabledTooltip="Playlists are coming in a future update"
+                  onClick={() => showComingSoon('Playlists')}
                 />
               )}
             </AnimatePresence>
@@ -226,49 +245,48 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
         </div>
       </motion.div>
 
-      {/* Exit Confirmation Dialog */}
       <AnimatePresence>
-        {showExitDialog && (
-          <motion.div
-            id="lazer-exit-dialog-overlay"
-            className="lazer-dialog-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+        {comingSoon && (
+          <motion.aside
+            id="lazer-coming-soon"
+            className="lazer-coming-soon"
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, x: 48 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 48 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
-            <motion.div
-              id="lazer-exit-dialog"
-              className="lazer-dialog-box"
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <h3 className="text-xl font-bold text-white mb-2">Quit RhythmMania?</h3>
-              <p className="text-slate-300 text-sm mb-6">
-                Are you sure you want to return to the idle screen?
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  id="lazer-exit-dialog-cancel"
-                  className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold transition-colors"
-                  onClick={() => setShowExitDialog(false)}
-                >
-                  Stay
-                </button>
-                <button
-                  type="button"
-                  id="lazer-exit-dialog-confirm"
-                  className="px-4 py-2 rounded-lg bg-[#ee3399] hover:bg-[#ff44aa] text-white text-sm font-bold shadow-lg transition-colors"
-                  onClick={handleConfirmExit}
-                >
-                  Exit
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+            <span className="lazer-coming-soon-icon" aria-hidden="true">
+              <InfoIcon className="w-4 h-4" strokeWidth={2.4} />
+            </span>
+            <span className="lazer-coming-soon-copy">
+              <span className="lazer-coming-soon-title">Coming soon</span>
+              <span className="lazer-coming-soon-detail">{comingSoon}</span>
+            </span>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showExitToast && (
+          <motion.aside
+            id="lazer-exit-toast"
+            className="lazer-coming-soon is-left"
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, x: -48 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -48 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <span className="lazer-coming-soon-icon" aria-hidden="true">
+              <BanIcon className="w-4 h-4" strokeWidth={2.4} />
+            </span>
+            <span className="lazer-coming-soon-copy">
+              <span className="lazer-coming-soon-title">You're not going nowhere!</span>
+            </span>
+          </motion.aside>
         )}
       </AnimatePresence>
     </div>

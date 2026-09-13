@@ -36,9 +36,8 @@ describe('TASK-V-011: main menu button system', () => {
     expect(html).toContain('id="menu-btn-browse"');
     expect(html).toContain('id="menu-btn-exit"');
 
-    // edit is disabled
-    expect(html).toContain('disabled=""');
-    expect(html).toContain('title="Beatmap editor is coming in a future update"');
+    // unimplemented actions stay pressable (coming-soon popup is client-side)
+    expect(html).not.toContain('disabled=""');
   });
 
   it('renders ButtonSystem in play phase with back, solo, multi, playlists', () => {
@@ -58,10 +57,7 @@ describe('TASK-V-011: main menu button system', () => {
     expect(html).toContain('id="menu-btn-solo"');
     expect(html).toContain('id="menu-btn-multi"');
     expect(html).toContain('id="menu-btn-playlists"');
-
-    // multi and playlists are disabled
-    expect(html).toContain('title="Multiplayer is coming in a future update"');
-    expect(html).toContain('title="Playlists are coming in a future update"');
+    expect(html).not.toContain('disabled=""');
   });
 
   it('renders MainMenu in idle by default without button strip', () => {

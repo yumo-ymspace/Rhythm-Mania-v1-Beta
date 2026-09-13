@@ -28,8 +28,8 @@ export type MenuButtonProps = {
   icon: ReactNode;
   color: string;
   onClick?: () => void;
-  disabled?: boolean;
-  disabledTooltip?: string;
+  baseWidth?: number;
+  hoverScale?: number;
   buttonState?: MenuButtonState;
   className?: string;
   style?: CSSProperties;
@@ -41,8 +41,8 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
   icon,
   color,
   onClick,
-  disabled = false,
-  disabledTooltip,
+  baseWidth = LAZER_MENU_BUTTON_WIDTH_PX,
+  hoverScale = 1.5,
   buttonState = 'normal',
   className = '',
   style,
@@ -52,29 +52,28 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
   const [isFlashing, setIsFlashing] = useState(false);
 
   const handleClick = useCallback(() => {
-    if (disabled) return;
     setIsFlashing(true);
     setTimeout(() => {
       setIsFlashing(false);
     }, (LAZER_DURATION.clickFlash || 0.8) * 1000);
     onClick?.();
-  }, [disabled, onClick]);
+  }, [onClick]);
 
   // Target width calculation:
-  // normal: 140px (or ×1.5 = 210px when hovered)
-  // exploding: 280px (×2)
+  // normal: 172px (or ×1.5 when hovered)
+  // exploding: ×2
   // contracting: 0px
-  let targetWidth = LAZER_MENU_BUTTON_WIDTH_PX;
-  let targetOpacity = disabled ? 0.6 : 1;
+  let targetWidth = baseWidth;
+  let targetOpacity = 1;
 
   if (buttonState === 'exploding') {
-    targetWidth = LAZER_MENU_BUTTON_WIDTH_PX * 2;
+    targetWidth = baseWidth * 2;
     targetOpacity = 0;
   } else if (buttonState === 'contracting') {
     targetWidth = 0;
     targetOpacity = 0;
-  } else if (isHovered && !disabled) {
-    targetWidth = LAZER_MENU_BUTTON_WIDTH_PX * 1.5;
+  } else if (isHovered) {
+    targetWidth = baseWidth * hoverScale;
   }
 
   const transition = reducedMotion
@@ -89,7 +88,7 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
     <motion.button
       id={id}
       type="button"
-      className={`lazer-menu-button ${disabled ? 'is-disabled' : ''} ${className}`}
+      className={`lazer-menu-button ${className}`}
       style={{
         ...style,
         backgroundColor: color,
@@ -99,18 +98,16 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
         opacity: targetOpacity,
       }}
       transition={transition}
-      onMouseEnter={() => !disabled && setIsHovered(true)}
+      onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleClick}
-      disabled={disabled}
-      title={disabled ? disabledTooltip : undefined}
       data-menu-button={label.toLowerCase()}
       aria-label={label}
     >
       <div className="lazer-menu-button-inner lazer-unshear">
         <div
           className={`lazer-menu-button-icon ${
-            isHovered && !disabled && !reducedMotion ? 'is-bouncing' : ''
+            isHovered && !reducedMotion ? 'is-bouncing' : ''
           }`}
         >
           {icon}

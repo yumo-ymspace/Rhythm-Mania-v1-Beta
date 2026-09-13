@@ -21,6 +21,7 @@ import {
   LAZER_DURATION,
   LAZER_EASE_IN_SINE,
   LAZER_EASE_OUT_EXPO,
+  lazerCompactCookieX,
   useLazerReducedMotion,
 } from '../ui/lazer';
 
@@ -87,7 +88,7 @@ export const RESOURCE_LINKS = [
 
 export function menuCookieSize(width: number, height: number): number {
   const vmin = Math.min(width, height);
-  return Math.round(Math.min(340, Math.max(200, vmin * 0.42)));
+  return Math.round(Math.min(400, Math.max(200, vmin * 0.52)));
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -129,6 +130,7 @@ export const MainMenu = ({
 }: MainMenuProps) => {
   const [phase, setPhase] = useState<LazerMenuPhase>('idle');
   const [cookieSize, setCookieSize] = useState(280);
+  const [cookieHovered, setCookieHovered] = useState(false);
   const reducedMotion = useLazerReducedMotion();
 
   useEffect(() => {
@@ -154,21 +156,34 @@ export const MainMenu = ({
     setPhase('idle');
   }, []);
 
+  const handleSelectSolo = useCallback(() => {
+    onNavigate('select');
+  }, [onNavigate]);
+
   const handleCookieClick = useCallback(() => {
     if (phase === 'idle') {
       openTopLevel();
     } else if (phase === 'top-level') {
       openPlay();
+    } else if (phase === 'play') {
+      handleSelectSolo();
     }
-  }, [phase, openTopLevel, openPlay]);
-
-  const handleSelectSolo = useCallback(() => {
-    onNavigate('select');
-  }, [onNavigate]);
+  }, [phase, openTopLevel, openPlay, handleSelectSolo]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target) || event.repeat) return;
+
+      if (
+        (event.key === 'Enter' || event.key === ' ') &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
+        event.preventDefault();
+        handleCookieClick();
+        return;
+      }
 
       if (phase === 'idle' && isIdleActivationKey(event)) {
         event.preventDefault();
@@ -187,19 +202,31 @@ export const MainMenu = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [phase, openTopLevel, returnTopLevel, returnIdle]);
+  }, [phase, openTopLevel, returnTopLevel, returnIdle, handleCookieClick]);
 
-  // Cookie scale & position logic
-  // idle: scale 1, sits in center
-  // top-level / play: scale 0.5, sits on the 100px strip in the center
+  // idle: scale 1, centred
+  // top-level / play: smaller cookie parked in the settings–play gap
   const isCompact = phase !== 'idle';
-  const targetScale = isCompact ? 0.5 : 1.0;
+  const hoverBoost = !reducedMotion && cookieHovered ? 1.08 : 1;
+  const targetScale = (isCompact ? 0.66 : 1.0) * hoverBoost;
+  const cookieX = isCompact ? lazerCompactCookieX() : 0;
+
+  const cookieMoveEase = isCompact
+    ? ([0.22, 1, 0.36, 1] as [number, number, number, number])
+    : ([0.16, 1, 0.3, 1] as [number, number, number, number]);
+  const cookieMoveDuration = isCompact ? 0.55 : LAZER_DURATION.logoToIdle;
 
   const cookieTransition = reducedMotion
     ? { duration: 0 }
-    : isCompact
-      ? { duration: LAZER_DURATION.logoToTopLevel, ease: [0.12, 0, 0.39, 0] as [number, number, number, number] }
-      : { duration: LAZER_DURATION.logoToIdle, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] };
+    : cookieHovered
+      ? {
+          scale: { duration: 0.22, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+          x: { duration: cookieMoveDuration, ease: cookieMoveEase },
+        }
+      : {
+          scale: { duration: cookieMoveDuration, ease: cookieMoveEase },
+          x: { duration: cookieMoveDuration, ease: cookieMoveEase },
+        };
 
   return (
     <div
@@ -212,7 +239,22 @@ export const MainMenu = ({
     >
       <TriangleField />
 
-      {/* Button System Strip (visible when top-level or play) */}
+      <motion.div
+        className="lazer-cookie-rays"
+        initial={false}
+        animate={{ scale: targetScale, x: cookieX }}
+        transition={cookieTransition}
+        style={{ transformOrigin: 'center center' }}
+        aria-hidden="true"
+      >
+        <LazerCookie
+          size={cookieSize}
+          bpm={60}
+          pulse={false}
+          showDisc={false}
+        />
+      </motion.div>
+
       <AnimatePresence>
         {phase !== 'idle' && (
           <ButtonSystem
@@ -228,24 +270,23 @@ export const MainMenu = ({
         )}
       </AnimatePresence>
 
-      {/* Cookie overlapping center */}
       <motion.div
         className="lazer-main-menu-cookie"
         initial={false}
-        animate={{
-          scale: targetScale,
-        }}
+        animate={{ scale: targetScale, x: cookieX }}
         transition={cookieTransition}
         style={{
-          zIndex: 4,
+          zIndex: 20,
           transformOrigin: 'center center',
         }}
       >
         <LazerCookie
           size={cookieSize}
           bpm={60}
-          pulse={phase === 'idle'}
+          pulse={false}
+          showSpectrum={false}
           onClick={handleCookieClick}
+          onHoverChange={setCookieHovered}
         />
       </motion.div>
     </div>

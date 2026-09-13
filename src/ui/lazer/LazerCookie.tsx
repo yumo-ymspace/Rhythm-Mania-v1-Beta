@@ -60,9 +60,11 @@ export type LazerCookieProps = {
   pulse?: boolean;
   spectrum?: readonly number[];
   showSpectrum?: boolean;
+  showDisc?: boolean;
   className?: string;
   style?: CSSProperties;
   onClick?: (event: MouseEvent<HTMLElement>) => void;
+  onHoverChange?: (hovered: boolean) => void;
 };
 
 export function LazerCookie({
@@ -72,9 +74,11 @@ export function LazerCookie({
   pulse = true,
   spectrum,
   showSpectrum = true,
+  showDisc = true,
   className,
   style,
   onClick,
+  onHoverChange,
 }: LazerCookieProps) {
   const reduced = useLazerReducedMotion();
   const pulsing = pulse && !reduced;
@@ -94,7 +98,7 @@ export function LazerCookie({
   const cx = 50;
   const cy = 50;
   const innerR = 32.4;
-  const barWidth = 0.48;
+  const barWidth = 1.0;
   const maxLen = 21;
 
   const content = (
@@ -120,6 +124,7 @@ export function LazerCookie({
           })}
         </svg>
       )}
+      {showDisc && (
       <div className="lazer-cookie-disc">
         <svg className="lazer-cookie-triangles" viewBox="0 0 100 100" aria-hidden="true">
           {INNER_TRIANGLES.map((tri, i) => (
@@ -135,6 +140,7 @@ export function LazerCookie({
         </svg>
         <span className="lazer-cookie-mark">{mark}</span>
       </div>
+      )}
     </div>
   );
 
@@ -154,7 +160,13 @@ export function LazerCookie({
 
   if (onClick) {
     return (
-      <button type="button" {...shared} onClick={onClick}>
+      <button
+        type="button"
+        {...shared}
+        onClick={onClick}
+        onMouseEnter={() => onHoverChange?.(true)}
+        onMouseLeave={() => onHoverChange?.(false)}
+      >
         {content}
       </button>
     );
