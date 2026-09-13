@@ -93,6 +93,13 @@ export const ROWS: RowDef[] = [
     keywords: ['name', 'player', 'display', 'local', 'guest'],
   },
   {
+    id: 'menuCursorEnabled', section: 'general', label: 'Lazer menu cursor',
+    description: 'Replace the system pointer with the osu!(lazer)-style arrow cursor. Drop cursor.png + cursor-additive.png into public/cursor/ to use your own pictures.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.menuCursorEnabled,
+    keywords: ['cursor', 'lazer', 'osu', 'pointer', 'mouse', 'arrow'],
+  },
+  {
     id: 'progressBarTop', section: 'general', label: 'Progress bar position',
     description: 'Show the song progress bar at the top of the screen instead of the bottom.',
     control: { kind: 'select', options: [

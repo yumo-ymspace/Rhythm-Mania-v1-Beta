@@ -325,6 +325,7 @@ export interface GameSettings {
   showFpsCounter?: boolean; // render a small FPS readout during gameplay
   showPenarDuringPlay?: boolean; // display PENAR slot below accuracy during gameplay
   localDisplayName?: string; // optional device-local player name; not an account
+  menuCursorEnabled?: boolean; // lazer-style menu arrow cursor overlay
   difficultyAdjust?: DifficultyAdjustSettings; // Difficulty Adjust (DA) mod overrides
 }
 

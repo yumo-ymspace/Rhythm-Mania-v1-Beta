@@ -55,6 +55,7 @@ import { resolveSkinTheme } from './render/skinTheme';
 import { cssColorToHex, parseCssColor } from './render/color';
 import { applyLazerChrome, resolveLazerChrome, LazerDebugSmoke, LazerToolbar } from './ui/lazer';
 import type { LazerMenuPhase } from './components/MainMenu';
+import LazerCursor from './components/LazerCursor';
 
 
 const DEFAULT_MENU_BACKGROUNDS = [
@@ -940,6 +941,7 @@ export default function App() {
         disableLaneShake: Boolean(updated.disableLaneShake),
         enableSongPreview: updated.enableSongPreview !== false,
         showFpsCounter: Boolean(updated.showFpsCounter),
+        menuCursorEnabled: updated.menuCursorEnabled !== false,
         showPenarDuringPlay: updated.showPenarDuringPlay !== undefined ? Boolean(updated.showPenarDuringPlay) : true,
         localDisplayName: updated.localDisplayName !== undefined ? String(updated.localDisplayName).slice(0, 32) : '',
         difficultyAdjust: updated.difficultyAdjust,
@@ -1686,6 +1688,8 @@ export default function App() {
         customMaps={customMaps}
         onImportPackage={handleImportPackage}
       />
+
+      <LazerCursor enabled={settings.menuCursorEnabled !== false} />
     </div>
   );
 }

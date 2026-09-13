@@ -19,6 +19,8 @@ import { MainMenu, menuCookieSize } from '../src/components/MainMenu';
 import {
   filledTriangleAimCount,
   LAZER_COOKIE_MARK,
+  LAZER_COOKIE_TITLE,
+  LAZER_COOKIE_VERSION,
   LAZER_FILLED_MAX,
   LAZER_OUTLINE_FADE_MS,
   LAZER_OUTLINE_SPAWN_LAZER_MS,
@@ -46,7 +48,8 @@ describe('TASK-V-010: main menu idle', () => {
     expect(html).toContain('data-menu-phase="idle"');
     expect(html).toContain('id="lazer-cookie"');
     expect(html).toContain('id="lazer-triangle-field"');
-    expect(html).toContain(LAZER_COOKIE_MARK);
+    expect(html).toContain(LAZER_COOKIE_TITLE);
+    expect(html).toContain(LAZER_COOKIE_VERSION);
     expect(html).toContain('lazer-cookie-spectrum');
     expect(html.toLowerCase()).not.toContain('osu');
   });

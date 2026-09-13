@@ -11,7 +11,7 @@
  */
 
 export { FooterBackButton } from './FooterBackButton';
-export { LazerCookie, LAZER_COOKIE_BAR_COUNT, LAZER_COOKIE_MARK, idleSpectrum } from './LazerCookie';
+export { LazerCookie, LAZER_COOKIE_BAR_COUNT, LAZER_COOKIE_MARK, LAZER_COOKIE_TITLE, LAZER_COOKIE_VERSION, idleSpectrum } from './LazerCookie';
 export { LazerDebugSmoke } from './LazerDebugSmoke';
 export {
   filledTriangleAimCount,

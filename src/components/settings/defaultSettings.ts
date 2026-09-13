@@ -90,6 +90,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   showFpsCounter: false,
   showPenarDuringPlay: true,
   localDisplayName: '',
+  menuCursorEnabled: true,
 }) satisfies GameSettings;
 
 /** True when a setting's value differs from its default. */

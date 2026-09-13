@@ -231,14 +231,35 @@ html[data-ui="lazer"] {
 .lazer-cookie-mark {
   position: relative;
   z-index: 1;
-  font-family: "Space Grotesk", Inter, sans-serif;
-  font-weight: 700;
-  font-size: calc(var(--lazer-cookie-size, 280px) * 0.28);
-  letter-spacing: -0.04em;
-  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--lazer-cookie-size, 280px) * 0.012);
+  max-width: 78%;
+  text-align: center;
+  user-select: none;
   color: #fff;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
-  user-select: none;
+}
+
+.lazer-cookie-title {
+  font-family: "Torus", "Baloo 2", "Space Grotesk", Inter, sans-serif;
+  font-weight: 800;
+  font-size: calc(var(--lazer-cookie-size, 280px) * 0.17);
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.lazer-cookie-version {
+  font-family: "Torus", "Baloo 2", "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--lazer-cookie-size, 280px) * 0.05);
+  letter-spacing: 0.18em;
+  line-height: 1;
+  opacity: 0.9;
 }
 
 .lazer-footer-back {

@@ -1,0 +1,57 @@
+/*
+ * RhythmMania - High-Performance Rhythm Game Platform
+ * Copyright (C) 2026 Yumo (yumo-ymspace). All rights reserved.
+ *
+ * Lazer-style menu cursor overlay. Port of the solstice23/osu-cursor
+ * behavior (itself a port of ppy/osu MenuCursorContainer) to React
+ * with requestAnimationFrame instead of anime.js.
+ */
+
+#lazer-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 2147483647;
+  will-change: transform;
+}
+
+#lazer-cursor > .lazer-cursor-inner {
+  position: relative;
+  will-change: transform, opacity;
+  transform-origin: left top;
+}
+
+#lazer-cursor > .lazer-cursor-inner > img,
+#lazer-cursor > .lazer-cursor-inner > svg,
+#lazer-cursor > .lazer-cursor-inner > div > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Never stretch the artwork: fit inside the box, tip pinned top-left. */
+  object-fit: contain;
+  object-position: left top;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#lazer-cursor > .lazer-cursor-inner > .lazer-cursor-additive {
+  opacity: 0;
+}
+
+/* Hide the native cursor while the lazer cursor is active. */
+html.lazer-cursor-on,
+html.lazer-cursor-on *,
+html.lazer-cursor-on *::before,
+html.lazer-cursor-on *::after {
+  cursor: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #lazer-cursor > .lazer-cursor-inner {
+    transition: none !important;
+  }
+}

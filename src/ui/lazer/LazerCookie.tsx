@@ -11,10 +11,20 @@
  */
 
 import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
+import metadata from '../../../metadata.json';
 import { beatPeriodSeconds, LAZER_PINK_LIGHT, useLazerReducedMotion } from './motion';
 
 export const LAZER_COOKIE_BAR_COUNT = 72;
-export const LAZER_COOKIE_MARK = 'RM';
+export const LAZER_COOKIE_TITLE = 'Rhythm Mania';
+export const LAZER_COOKIE_VERSION = metadata.version;
+export const LAZER_COOKIE_MARK = `${LAZER_COOKIE_TITLE} ${LAZER_COOKIE_VERSION}`;
+
+function splitCookieLabel(label: string): { title: string; version: string } {
+  const trimmed = label.trim();
+  const match = trimmed.match(/^(.*?)\s+(v\d[\w.-]*)\s*$/i);
+  if (match) return { title: match[1].trim() || trimmed, version: match[2].trim() };
+  return { title: trimmed, version: '' };
+}
 
 type TriangleSpec = { cx: number; cy: number; r: number; rot: number; opacity: number };
 
@@ -86,6 +96,7 @@ export function LazerCookie({
   const classes = ['lazer-cookie', pulsing ? 'is-pulsing' : '', className].filter(Boolean).join(' ');
   const liveSpectrum = spectrum != null;
   const mark = label.trim() || LAZER_COOKIE_MARK;
+  const { title, version } = splitCookieLabel(mark);
 
   const bars = Array.from({ length: LAZER_COOKIE_BAR_COUNT }, (_, i) => {
     if (liveSpectrum) {
@@ -138,7 +149,10 @@ export function LazerCookie({
             />
           ))}
         </svg>
-        <span className="lazer-cookie-mark">{mark}</span>
+        <span className="lazer-cookie-mark">
+          <span className="lazer-cookie-title">{title}</span>
+          {version && <span className="lazer-cookie-version">{version}</span>}
+        </span>
       </div>
       )}
     </div>

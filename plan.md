@@ -107,7 +107,7 @@ The previous visual queue (TASK-V-001 tokens, V-043 Exit label, V-050 filled arr
 4. **One ruleset module** in `src/ruleset/mania/`. Visual tasks must not change windows, score, HP, or holds.
 5. **Canvas2D Argon is the reference renderer.** Babylon is an extra skin, not the visual source of truth.
 6. **PENAR occupies the Argon PP slot.** Never label it pp. Stub stays `—` until TASK-090.
-7. **Settings still sanitize.** New fields go through `GameSettings` + `sanitizeSettings` + registry + consumers together.
+7. **Settings still sanitize.** New fields go through `GameSettings` + `sanitizeSettings` + registry + consumers together. **Warning:** `updateSettings` in `src/App.tsx` rebuilds state through the explicit `safePayload` allowlist — every new option MUST also be added there, otherwise the settings UI writes it and it is silently dropped (the toggle/slider appears to do nothing). This bit us with `menuCursorEnabled`.
 8. **Argon tokens stay scoped** to `html[data-skin="argon"]` (and the new lazer chrome tokens live on `html[data-ui="lazer"]` or equivalent). Do not globally restyle legacy skins.
 
 ---

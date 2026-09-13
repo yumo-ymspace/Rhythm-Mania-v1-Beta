@@ -23,6 +23,8 @@ import {
   LAZER_BACK_FOOTER,
   LAZER_COOKIE_BAR_COUNT,
   LAZER_COOKIE_MARK,
+  LAZER_COOKIE_TITLE,
+  LAZER_COOKIE_VERSION,
   LAZER_CSS_VARS,
   LAZER_DURATION,
   LAZER_EASE_IN_OUT_SINE,
@@ -86,7 +88,9 @@ describe('TASK-V-001: lazer motion tokens and primitives', () => {
     const html = renderToStaticMarkup(React.createElement(LazerCookie, { size: 280, pulse: false }));
     expect(html).toContain('id="lazer-cookie"');
     expect(html).toContain('data-lazer-cookie');
-    expect(html).toContain(LAZER_COOKIE_MARK);
+    expect(html).toContain(LAZER_COOKIE_MARK.split(' ')[0]);
+    expect(html).toContain(LAZER_COOKIE_TITLE);
+    expect(html).toContain(LAZER_COOKIE_VERSION);
     expect(html).toContain('lazer-cookie-spectrum');
     expect(html).toContain('lazer-cookie-triangles');
     expect(html).toContain('aria-label="RhythmMania"');
