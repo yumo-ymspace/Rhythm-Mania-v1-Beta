@@ -4023,9 +4023,10 @@ export default function GameplayCanvas({
                               border-radius: 50%;
                               background: #ffffff;
                               box-shadow: 0 0 10px rgba(6, 182, 212, 0.9), 0 0 4px rgba(255, 255, 255, 0.5);
-                              border: 2px solid #06b6d4;
-                              cursor: pointer;
-                              transition: transform 0.15s ease-in-out, background-color 0.1s;
+                               border: 2px solid #06b6d4;
+                               /* No cursor here: the thumb inherits the track cursor so the
+                                  lazer-cursor none override applies to the thumb too. */
+                               transition: transform 0.15s ease-in-out, background-color 0.1s;
                             }
                             input[type=range]:hover::-webkit-slider-thumb, 
                             input[type=range]:active::-webkit-slider-thumb {

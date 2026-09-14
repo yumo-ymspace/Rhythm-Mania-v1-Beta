@@ -40,7 +40,6 @@ import { DEFAULT_SETTINGS, HISTORY_LIMIT_UNLIMITED } from './settings/defaultSet
 import metadata from '../../metadata.json';
 import { resolveStarRating } from '../utils/starRating';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
-import { hasOsuConnection } from '../utils/osuTokenManager';
 import { findMatchingBeatmap } from '../utils/replayManager';
 import { formatPenar } from '../utils/penar';
 
@@ -344,13 +343,6 @@ export default function PersonalHistoryScreen({
   }, [showSettingsMenu, openFilterMenu]);
 
   const handleImportFile = async (file: File) => {
-    if (!hasOsuConnection()) {
-      setImportNotice({
-        text: 'Please connect your osu! account in Settings or Online Catalog before importing replays so matching beatmapsets can be searched and downloaded.',
-        isError: true,
-      });
-      return;
-    }
     if (file.size > MAX_IMPORT_FILE_BYTES) {
       setImportNotice({ text: 'Import failed: file exceeds the 64 MB limit.', isError: true });
       return;
@@ -518,13 +510,6 @@ export default function PersonalHistoryScreen({
   };
 
   const handleTriggerImport = () => {
-    if (!hasOsuConnection()) {
-      setImportNotice({
-        text: 'Please connect your osu! account in Settings or Online Catalog before importing replays so matching beatmapsets can be searched and downloaded.',
-        isError: true,
-      });
-      return;
-    }
     importInputRef.current?.click();
   };
 
@@ -549,13 +534,6 @@ export default function PersonalHistoryScreen({
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
-    if (!hasOsuConnection()) {
-      setImportNotice({
-        text: 'Please connect your osu! account in Settings or Online Catalog before importing replays so matching beatmapsets can be searched and downloaded.',
-        isError: true,
-      });
-      return;
-    }
     const f = e.dataTransfer.files?.[0];
     if (f) await handleImportFile(f);
   };

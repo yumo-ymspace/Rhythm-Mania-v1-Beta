@@ -364,7 +364,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                     return (
                       <div
                         key={row.id}
-                        className={`relative bg-[#0e121b]/90 border border-white/[0.08] p-4 rounded-xl flex ${
+                        className={`relative bg-[#0e121b]/90 border border-white/[0.08] px-4 py-2.5 rounded-xl flex ${
                           isVertical ? 'flex-col gap-4' : 'flex-row items-center justify-between gap-4'
                         } text-left`}
                       >

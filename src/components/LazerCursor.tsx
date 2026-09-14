@@ -155,11 +155,21 @@ export default function LazerCursor({ enabled }: LazerCursorProps) {
       if (el) el.style.opacity = String(opacity);
     };
 
-    // Native text-entry controls keep the system cursor so hiring, caret
-    // positioning, and touch behaviors stay intact.
-    const wantsNativeCursor = (target: HTMLElement): boolean =>
+    // Opt-out surfaces that want no custom cursor at all (native cursor only).
+    const wantsCustomHidden = (target: HTMLElement): boolean =>
+      !!target.closest('[data-lazer-cursor="hidden"]');
+
+    // True text-entry controls: the custom cursor stays visible here too
+    // (all native cursors are hidden via CSS). This only suppresses the
+    // additive hover flash so text fields keep the plain arrow.
+    // Deliberately excludes range sliders, checkboxes, radios, color
+    // pickers, and buttons — those are pointer-driven controls.
+    const isTextEntry = (target: HTMLElement): boolean =>
       !!target.closest(
-        'input, textarea, select, [contenteditable="true"], [data-lazer-cursor="hidden"]',
+        'textarea, select, [contenteditable="true"], ' +
+          'input:not([type]), input[type="text"], input[type="search"], ' +
+          'input[type="password"], input[type="email"], input[type="url"], ' +
+          'input[type="number"], input[type="tel"]',
       );
 
     // Pointer intent is detected structurally: Tailwind v4 buttons/links
@@ -198,9 +208,18 @@ export default function LazerCursor({ enabled }: LazerCursorProps) {
       if (dragState === 1) return;
       const t = e.target as HTMLElement | null;
       if (!t || !(t instanceof HTMLElement)) return;
-      if (!wantsNativeCursor(t) && isPointerLike(t)) {
-        visible = true;
-        document.documentElement.classList.add('lazer-cursor-on');
+      if (wantsCustomHidden(t)) {
+        // Explicit opt-out: no custom cursor at all, native cursor only.
+        visible = false;
+        document.documentElement.classList.remove('lazer-cursor-on');
+        markDirty();
+        return;
+      }
+      // The custom cursor stays visible everywhere else — including text
+      // boxes and range sliders. Native cursors stay hidden via CSS.
+      visible = true;
+      document.documentElement.classList.add('lazer-cursor-on');
+      if (!isTextEntry(t) && isPointerLike(t)) {
         if (dragState === 0) {
           dragState = 3;
           additiveAnim && (additiveAnim.cancelled = true);
@@ -209,9 +228,7 @@ export default function LazerCursor({ enabled }: LazerCursorProps) {
           animateValue(200, outQuint, (k) => setAdditive(k), undefined, sig);
           markDirty();
         }
-      } else if (!wantsNativeCursor(t)) {
-        visible = true;
-        document.documentElement.classList.add('lazer-cursor-on');
+      } else {
         if (dragState === 3) {
           dragState = 0;
           additiveAnim && (additiveAnim.cancelled = true);
@@ -220,11 +237,6 @@ export default function LazerCursor({ enabled }: LazerCursorProps) {
           additiveAnim = aSig;
           animateValue(200, outQuint, (k) => setAdditive(aFrom * (1 - k)), undefined, aSig);
         }
-        markDirty();
-      } else {
-        // Text entry and other native-cursor surfaces: show the system cursor.
-        visible = false;
-        document.documentElement.classList.remove('lazer-cursor-on');
         markDirty();
       }
     };
@@ -261,7 +273,7 @@ export default function LazerCursor({ enabled }: LazerCursorProps) {
       // first hovered element in DOM order (usually <html>), not what's under
       // the cursor.
       const under = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-      const releaseOnPointer = !!under && !wantsNativeCursor(under) && isPointerLike(under);
+      const releaseOnPointer = !!under && !wantsCustomHidden(under) && !isTextEntry(under) && isPointerLike(under);
       dragState = releaseOnPointer ? 3 : 0;
       scaleAnim && (scaleAnim.cancelled = true);
       additiveAnim && (additiveAnim.cancelled = true);

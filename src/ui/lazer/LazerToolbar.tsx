@@ -260,7 +260,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
   return (
     <div
       id="lazer-toolbar"
-      className={`lazer-toolbar ${visible ? 'is-visible' : 'is-hidden'} ${className}`}
+      className={`lazer-toolbar ${visible ? 'is-visible' : 'is-hidden'} ${isListingOpen ? 'is-above-listing' : ''} ${className}`}
       data-lazer-toolbar=""
       role="banner"
       aria-label="osu! lazer top toolbar"

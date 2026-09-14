@@ -794,7 +794,7 @@ export default function App() {
       return { success: true };
     }
 
-    // Auto-download missing osu! mirror beatmaps for replay playback (browser → Catboy/osudl).
+    // Auto-download missing osu! mirror beatmaps for replay playback (browser → Catboy/Nekoha).
     // Catalog chart/set APIs were removed in the offline cut (TASK-009).
     const catalogSetId = record.catalogSetId;
     const chartRevisionId = record.chartRevisionId;

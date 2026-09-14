@@ -47,7 +47,7 @@ export default function SettingsSearchBar({ value, onChange, onClose, shaking }:
   }, [value, onChange, onClose]);
 
   return (
-    <div className="sticky top-0 z-20 -mx-5 px-5 py-3 bg-[#191919]/95 backdrop-blur-sm border-b border-black/20">
+    <div className="sticky top-0 z-20 -mx-5 px-5 py-3 bg-[#26252d] backdrop-blur-sm border-b border-black/20">
       <div className={`flex items-center gap-2 ${shaking ? 'settings-shake' : ''}`}>
         <div className="relative flex-1">
           <input

@@ -42,11 +42,24 @@
   opacity: 0;
 }
 
-/* Hide the native cursor while the lazer cursor is active. */
+/* Hide the native cursor while the lazer cursor is active — including text
+   fields and sliders — so only the custom arrow is ever visible. */
 html.lazer-cursor-on,
 html.lazer-cursor-on *,
 html.lazer-cursor-on *::before,
 html.lazer-cursor-on *::after {
+  cursor: none !important;
+}
+
+/* Range-slider vendor pseudo-elements don't match `*`, so they escape the
+   rule above and show their own pointer hand (settings sliders and the
+   gameplay seek bar both set `cursor: pointer` on the thumb). Hide it
+   there too. */
+html.lazer-cursor-on input[type="range"],
+html.lazer-cursor-on input[type="range"]::-webkit-slider-thumb,
+html.lazer-cursor-on input[type="range"]::-webkit-slider-runnable-track,
+html.lazer-cursor-on input[type="range"]::-moz-range-thumb,
+html.lazer-cursor-on input[type="range"]::-moz-range-track {
   cursor: none !important;
 }
 

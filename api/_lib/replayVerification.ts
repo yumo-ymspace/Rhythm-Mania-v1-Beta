@@ -51,7 +51,7 @@ const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 const MAX_ARCHIVE_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 500;
 const MAX_ARCHIVE_ENTRY_BYTES = 80 * 1024 * 1024;
-const MIRROR_HOSTS = new Set(['catboy.best', 'osudl.org']);
+const MIRROR_HOSTS = new Set(['catboy.best', 'mirror.nekoha.moe']);
 const MIRROR_CONNECT_TIMEOUT_MS = 5_000;
 const MIRROR_READ_TIMEOUT_MS = 5_000;
 const MIRROR_TOTAL_TIMEOUT_MS = 20_000;
@@ -311,7 +311,7 @@ export function parseCanonicalOsu(content: string, chartRevisionId: string, chec
 }
 
 export async function verifyMirrorArchive(sourceSetId: number, expectations: readonly MirrorChartExpectation[]): Promise<CanonicalChart[]> {
-  const sources = [`https://catboy.best/d/${sourceSetId}`, `https://osudl.org/s/${sourceSetId}`];
+  const sources = [`https://catboy.best/d/${sourceSetId}`, `https://mirror.nekoha.moe/api/download/${sourceSetId}`];
   let bytes: Uint8Array | null = null;
   for (const source of sources) {
     try { bytes = await fetchArchive(source); break; } catch (error) {

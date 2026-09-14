@@ -10,12 +10,14 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import JSZip from 'jszip';
 import {
-  Search, X, Music, Music2, Check, Loader, Download, Info, KeyRound, LogOut, ChevronDown,
+  Search, X, Music, Check, Loader, Download, Info, ChevronDown,
+  LayoutGrid, ListMusic,
 } from 'lucide-react';
+import { FooterBackButton } from '../ui/lazer/FooterBackButton';
 import { Beatmap } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
 import { storageManager } from '../utils/storageManager';
@@ -25,14 +27,12 @@ import { extractZipEntry } from '../utils/zipResolver';
 import { computeChecksum, inferChecksumAlgorithm } from '../utils/checksum';
 import { saveCatalogSetMetadata } from '../utils/catalogSetMetadata';
 import {
-  clearOsuConnection,
-  connectByoCredentials,
   downloadBeatmapsetArchive,
-  getValidOsuAccessToken,
-  hasOsuConnection,
-  initiateOsuAuthCode,
-  waitForOsuSlot,
 } from '../utils/osuTokenManager';
+import {
+  MIRROR_SEARCH_STATUSES,
+  searchCatboy,
+} from '../../api/_lib/mirrorCatalog';
 
 interface OnlineBeatmapCatalogProps {
   open: boolean;
@@ -69,7 +69,6 @@ type CatalogSet = {
   bpm?: number;
 };
 
-const SEARCH_STATUSES = ['ranked', 'loved', 'graveyard'] as const;
 const SEARCH_CATEGORIES = ['Any', 'Loved', 'Ranked', 'Graveyard'] as const;
 
 export default function OnlineBeatmapCatalog({
@@ -84,7 +83,9 @@ export default function OnlineBeatmapCatalog({
   const [searchTerm, setSearchTerm] = useState('');
   const [submittedSearchTerm, setSubmittedSearchTerm] = useState('');
   const [filterSearchTerm, setFilterSearchTerm] = useState('');
-  const [searchCategory, setSearchCategory] = useState<(typeof SEARCH_CATEGORIES)[number]>('Any');
+  const [searchCategory, setSearchCategory] = useState<(typeof SEARCH_CATEGORIES)[number]>('Ranked');
+  const [sortBy, setSortBy] = useState<'Title' | 'Artist' | 'Difficulty'>('Title');
+  const [showFilters, setShowFilters] = useState(false);
   const [downloadingMapId, setDownloadingMapId] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{ loaded: number; total: number; percentage: number } | null>(null);
   const [downloadQueue, setDownloadQueue] = useState<CatalogSet[]>([]);
@@ -92,26 +93,16 @@ export default function OnlineBeatmapCatalog({
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [osuConnected, setOsuConnected] = useState(false);
-  const [byoClientId, setByoClientId] = useState('');
-  const [byoClientSecret, setByoClientSecret] = useState('');
-  const [byoBusy, setByoBusy] = useState(false);
-  const [showByo, setShowByo] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [expandedSetId, setExpandedSetId] = useState<string | null>(null);
-
-  const refreshAuthState = useCallback(async () => {
-    setOsuConnected(hasOsuConnection());
-  }, []);
 
   useEffect(() => {
     if (!open) return;
     setIsLoading(false);
-    void refreshAuthState();
-  }, [open, refreshAuthState]);
+  }, [open]);
 
   useEffect(() => {
-    if (!open || !submittedSearchTerm.trim() || !osuConnected) {
+    if (!open || !submittedSearchTerm.trim()) {
       if (open && !submittedSearchTerm.trim()) {
         setMirrorManifest([]);
         setCatalogRequestState('idle');
@@ -129,44 +120,55 @@ export default function OnlineBeatmapCatalog({
       setCatalogError(null);
       setMirrorManifest([]);
       try {
-        const merged = new Map<number, CatalogSet>();
-        const statuses = searchCategory === 'Any'
-          ? SEARCH_STATUSES
-          : [searchCategory.toLowerCase() as (typeof SEARCH_STATUSES)[number]];
-        for (const status of statuses) {
-          if (controller.signal.aborted) return;
-          await waitForOsuSlot('api');
-          const accessToken = await getValidOsuAccessToken();
+        // Server searches catboy.best first, Nekoha fallback. No login needed.
+        // Bare `vite dev` serves no /api/* routes, and the mirrors can be
+        // down independently, so fall back to querying catboy.best directly
+        // from the browser when the first-party API is unreachable.
+        const status = searchCategory === 'Any' ? 'any' : searchCategory.toLowerCase();
+        let rows: any[] = [];
+        let apiError: string | null = null;
+        try {
           const response = await fetch(
             `/api/catalog/search?q=${encodeURIComponent(requestTerm)}&s=${status}`,
             {
-              headers: {
-                Accept: 'application/json',
-                Authorization: `Bearer ${accessToken}`,
-              },
+              headers: { Accept: 'application/json' },
               signal: controller.signal,
             },
           );
-          const result = await response.json().catch(() => ({ data: [] }));
-          if (!response.ok) throw new Error(result.error || 'osu! catalog search failed');
-          const rows = Array.isArray(result.data) ? result.data : [];
-          for (const item of rows) {
-            const sourceSetId = Number(item.sourceSetId);
-            if (!Number.isInteger(sourceSetId) || sourceSetId < 1) continue;
-            if (merged.has(sourceSetId)) continue;
-            merged.set(sourceSetId, {
-              id: item.id || `osuapi_${sourceSetId}`,
-              sourceSetId,
-              title: item.title || 'Unknown Title',
-              artist: item.artist || 'Unknown Artist',
-              creator: item.creator || 'Unknown Mapper',
-              status: item.status,
-              coverUrl: item.coverUrl,
-              slimCoverUrl: item.slimCoverUrl,
-              charts: Array.isArray(item.charts) ? item.charts : [],
-              bpm: item.bpm,
-            });
+          const result = await response.json().catch(() => null);
+          if (!response.ok) throw new Error((result && result.error) || 'Mirror catalog search failed');
+          rows = result && Array.isArray(result.data) ? result.data : [];
+        } catch (err) {
+          if (controller.signal.aborted) throw err;
+          apiError = err instanceof Error ? err.message : 'Mirror catalog search failed';
+          // Same search path as the API route: catboy serves its JSON with
+          // CORS `*`, so the browser can query it directly.
+          const statuses = searchCategory === 'Any'
+            ? [...MIRROR_SEARCH_STATUSES]
+            : [searchCategory.toLowerCase()];
+          try {
+            rows = await searchCatboy(requestTerm, new Set<string>(statuses));
+          } catch {
+            throw new Error(apiError);
           }
+        }
+        const merged = new Map<number, CatalogSet>();
+        for (const item of rows) {
+          const sourceSetId = Number(item.sourceSetId);
+          if (!Number.isInteger(sourceSetId) || sourceSetId < 1) continue;
+          if (merged.has(sourceSetId)) continue;
+          merged.set(sourceSetId, {
+            id: item.id || `osuapi_${sourceSetId}`,
+            sourceSetId,
+            title: item.title || 'Unknown Title',
+            artist: item.artist || 'Unknown Artist',
+            creator: item.creator || 'Unknown Mapper',
+            status: item.status,
+            coverUrl: item.coverUrl,
+            slimCoverUrl: item.slimCoverUrl,
+            charts: Array.isArray(item.charts) ? item.charts : [],
+            bpm: item.bpm,
+          });
         }
         if (controller.signal.aborted) return;
         setMirrorManifest(Array.from(merged.values()));
@@ -174,7 +176,7 @@ export default function OnlineBeatmapCatalog({
         if (controller.signal.aborted) return;
         console.warn('Unable to load online beatmap manifest.', err);
         setMirrorManifest([]);
-        setCatalogError(err instanceof Error ? err.message : 'osu! catalog search failed');
+        setCatalogError(err instanceof Error ? err.message : 'Mirror catalog search failed');
       } finally {
         if (controller.signal.aborted) return;
         setIsLoading(false);
@@ -184,7 +186,7 @@ export default function OnlineBeatmapCatalog({
 
     void fetchManifest();
     return () => controller.abort();
-  }, [open, submittedSearchTerm, searchCategory, osuConnected]);
+  }, [open, submittedSearchTerm, searchCategory]);
 
   useEffect(() => {
     if (!open || searchTerm === submittedSearchTerm) return;
@@ -206,39 +208,6 @@ export default function OnlineBeatmapCatalog({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
-
-  const handleConnectOsu = () => {
-    void initiateOsuAuthCode(
-      () => {
-        setOsuConnected(true);
-        setCatalogError(null);
-      },
-      (msg) => setCatalogError(msg),
-    );
-  };
-
-  const handleByoConnect = async () => {
-    setByoBusy(true);
-    setCatalogError(null);
-    try {
-      await connectByoCredentials(byoClientId, byoClientSecret);
-      setOsuConnected(true);
-      setShowByo(false);
-      setByoClientSecret('');
-    } catch (err) {
-      setCatalogError(err instanceof Error ? err.message : 'BYO osu! connect failed');
-    } finally {
-      setByoBusy(false);
-    }
-  };
-
-  const handleDisconnectOsu = () => {
-    clearOsuConnection();
-    setOsuConnected(false);
-    setMirrorManifest([]);
-    setSubmittedSearchTerm('');
-    setCatalogRequestState('idle');
-  };
 
   const handleDownload = async (s: CatalogSet) => {
     const mirrorSetId = s.id;
@@ -415,27 +384,100 @@ export default function OnlineBeatmapCatalog({
     );
   });
 
+  const sortedManifest = [...filteredManifest].sort((a, b) => {
+    if (sortBy === 'Artist') return (a.artist || '').localeCompare(b.artist || '');
+    if (sortBy === 'Difficulty') {
+      const chartsA = a.charts || a.difficulties || [];
+      const chartsB = b.charts || b.difficulties || [];
+      const maxA = chartsA.reduce((m, c) => Math.max(m, Number(c.starRating ?? 0) || 0), 0);
+      const maxB = chartsB.reduce((m, c) => Math.max(m, Number(c.starRating ?? 0) || 0), 0);
+      if (maxB !== maxA) return maxB - maxA;
+      return (a.title || '').localeCompare(b.title || '');
+    }
+    return (a.title || '').localeCompare(b.title || '');
+  });
+
   const revealSet = (setId: string) => {
     setExpandedSetId((current) => current === setId ? null : setId);
   };
 
   const getDifficultyBadge = (rating: number) => {
-    if (rating < 2.0) return 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30';
-    if (rating < 3.0) return 'text-cyan-400 bg-cyan-500/15 border-cyan-500/30';
-    if (rating < 4.0) return 'text-amber-400 bg-amber-500/15 border-amber-500/30';
-    if (rating < 5.0) return 'text-orange-400 bg-orange-500/15 border-orange-500/30';
-    if (rating < 6.5) return 'text-rose-400 bg-rose-500/15 border-rose-500/30';
-    return 'text-purple-400 bg-purple-500/15 border-purple-500/30';
+    if (rating < 2.0) return 'text-emerald-300 bg-emerald-500/20 border-emerald-400/30';
+    if (rating < 3.0) return 'text-cyan-300 bg-cyan-500/20 border-cyan-400/30';
+    if (rating < 4.0) return 'text-amber-300 bg-amber-500/20 border-amber-400/30';
+    if (rating < 5.0) return 'text-orange-300 bg-orange-500/20 border-orange-400/30';
+    if (rating < 6.5) return 'text-rose-300 bg-rose-500/20 border-rose-400/30';
+    return 'text-purple-300 bg-purple-500/20 border-purple-400/30';
   };
 
-  const statusStyle = (status?: string) => {
-    if (status === 'ranked') return 'bg-[#48c6ff]/15 text-[#48c6ff] border border-[#48c6ff]/30 shadow-[0_0_10px_rgba(72,198,255,0.15)]';
-    if (status === 'loved') return 'bg-[#d5235a]/15 text-pink-300 border border-[#d5235a]/30 shadow-[0_0_10px_rgba(213,35,90,0.15)]';
-    return 'bg-white/5 text-slate-300 border border-white/10';
+  const statusPillClass = (status?: string) => {
+    if (status === 'ranked') return 'lazer-status-pill is-ranked';
+    if (status === 'loved') return 'lazer-status-pill is-loved';
+    return 'lazer-status-pill is-graveyard';
+  };
+
+  const setMaxStars = (s: CatalogSet): number => {
+    const charts = s.charts || s.difficulties || [];
+    let max = 0;
+    for (const c of charts) {
+      const r = Number(c.starRating ?? 0);
+      if (Number.isFinite(r) && r > max) max = r;
+    }
+    return max;
+  };
+
+  // Lazer difficulty tick spectrum (green -> yellow -> orange -> red -> purple).
+  const diffTickColor = (index: number, filled: number): string => {
+    if (index >= filled) return 'rgba(255,255,255,0.18)';
+    const t = filled <= 1 ? 0 : index / (filled - 1);
+    if (t < 0.25) return '#88b300';
+    if (t < 0.45) return '#ffcc22';
+    if (t < 0.65) return '#ff9933';
+    if (t < 0.85) return '#ff4d6d';
+    return '#c77dff';
+  };
+
+  const DifficultyTicks = ({ stars }: { stars: number }) => {
+    const filled = Math.max(1, Math.min(10, Math.round(stars)));
+    return (
+      <span className="flex items-center gap-[2px]" aria-label={`${stars.toFixed(2)} stars`}>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <span
+            key={i}
+            className="lazer-diff-dot"
+            style={{ background: diffTickColor(i, filled) }}
+          />
+        ))}
+      </span>
+    );
   };
 
   const headerDownloadMessage = importStatus?.msg
     || (downloadingMapId ? 'Downloading beatmap…' : downloadQueue.length > 0 ? `${downloadQueue.length} beatmap${downloadQueue.length === 1 ? '' : 's'} queued…` : null);
+
+  // ---- Lazer filter row: only selectable Categories (Any/Ranked/Loved/Graveyard).
+  // Sort row: Title / Artist / Difficulty only.
+  const SORT_WIRED: ('Title' | 'Artist' | 'Difficulty')[] = ['Title', 'Artist', 'Difficulty'];
+
+  const FilterMatrix = () => (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-start gap-2">
+        <span className="lazer-filter-label w-[92px] shrink-0 pt-[3px]">Categories</span>
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+          {SEARCH_CATEGORIES.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSearchCategory(category)}
+              className={`lazer-filter-chip is-wired ${searchCategory === category ? 'is-selected' : ''}`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   const closedDownloadNotice = !open && downloadNotice ? (
     <motion.div
@@ -470,28 +512,28 @@ export default function OnlineBeatmapCatalog({
           <motion.div
             key="catalog-panel"
             ref={containerRef}
-            className="fixed inset-x-0 top-0 z-[110] w-full max-h-[85vh] md:max-h-[90vh] bg-gradient-to-b from-[#141522]/98 via-[#10111a]/98 to-[#0c0d14]/98 border-b border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl flex flex-col rounded-b-3xl overflow-hidden font-sans text-slate-200"
+            role="dialog"
+            aria-label="beatmap listing"
+            className="lazer-listing-panel fixed z-[110] top-[38px] min-[481px]:top-[50px] bottom-0 inset-x-2 lg:left-[102px] lg:right-[102px] flex flex-col overflow-hidden font-sans text-slate-200"
             initial={{ y: '-100%', opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '-100%', opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             style={{ willChange: 'transform, opacity' }}
           >
-            <div className="relative flex-none px-6 md:px-12 py-3.5 border-b border-white/10 flex items-center justify-between bg-[#161724]/90 backdrop-blur-md">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#ffcc22]/30 bg-[#ffcc22]/10 text-[#ffcc22] shadow-[0_0_12px_rgba(255,204,34,0.2)]" aria-hidden="true">
-                  <Music2 className="h-4 w-4 stroke-[2.2]" />
-                </div>
-                <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                  Beatmap <span className="text-[#ffcc22]">Listing</span>
-                </h1>
+            <div className="relative flex-none px-4 md:px-8 pt-4 pb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-slate-300" aria-hidden="true">
+                  <ListMusic className="h-6 w-6" />
+                </span>
+                <h1 className="lazer-listing-title">beatmap listing</h1>
               </div>
 
               {headerDownloadMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`pointer-events-none absolute left-1/2 top-1/2 flex w-[42%] -translate-x-1/2 -translate-y-1/2 flex-col items-stretch justify-center gap-1 truncate rounded-xl border px-3 py-2 text-center text-[10px] font-mono sm:text-xs shadow-lg backdrop-blur-md ${
+                  className={`pointer-events-none absolute left-1/2 top-1/2 hidden w-[42%] -translate-x-1/2 -translate-y-1/2 flex-col items-stretch justify-center gap-1 truncate rounded-xl border px-3 py-2 text-center text-[10px] font-mono sm:flex sm:text-xs shadow-lg backdrop-blur-md ${
                     importStatus?.type !== 'err'
                       ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'
                       : 'bg-rose-950/80 text-rose-300 border-rose-500/40 shadow-rose-950/40'
@@ -511,79 +553,17 @@ export default function OnlineBeatmapCatalog({
 
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/10 hover:border-[#ffcc22]/40 text-slate-400 hover:text-white transition duration-150 cursor-pointer shadow-md"
-                title="Close catalog"
+                className="p-2 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/10 text-slate-400 hover:text-white transition duration-150 cursor-pointer"
+                title="Close listing"
+                aria-label="Close listing"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {!osuConnected ? (
-              <div className="flex-1 overflow-y-auto px-6 md:px-12 py-10">
-                <div className="max-w-xl mx-auto px-6 py-6 space-y-5 rounded-2xl border border-white/10 bg-[#161724]/85 shadow-2xl backdrop-blur-md">
-                  <div>
-                    <h2 className="text-xl font-black uppercase tracking-wider text-white">Connect osu! to search</h2>
-                    <p className="text-xs text-slate-400 leading-relaxed mt-1.5">
-                      Search uses your personal osu! API token (1 request/second). Downloads use Catboy mirror (Mino),
-                      with osudl.org as fallback.
-                    </p>
-                  </div>
-                  {catalogError && (
-                    <div className="p-3.5 rounded-xl text-xs font-mono border bg-rose-950/30 text-rose-400 border-rose-500/30">
-                      {catalogError}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleConnectOsu}
-                    className="w-full py-3.5 rounded-xl bg-[#d5235a]/20 hover:bg-[#d5235a]/30 border border-[#d5235a]/40 text-pink-100 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(213,35,90,0.15)] active:scale-[0.99] cursor-pointer"
-                  >
-                    Sign in with osu!
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowByo((v) => !v)}
-                    className="w-full py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 hover:text-white text-[10px] font-mono uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <KeyRound className="h-3.5 w-3.5" />
-                    Advanced: use my own OAuth app
-                  </button>
-                  {showByo && (
-                    <div className="space-y-3 pt-3 border-t border-white/10">
-                      <p className="text-[10px] text-amber-300/90 leading-relaxed">
-                        Your Client Secret stays only in this browser (localStorage). XSS or a shared PC can leak it.
-                        Prefer Sign in with osu! when possible.
-                      </p>
-                      <input
-                        type="text"
-                        placeholder="Client ID"
-                        value={byoClientId}
-                        onChange={(e) => setByoClientId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-[#10111a] border border-white/15 focus:border-[#ffcc22] focus:ring-2 focus:ring-[#ffcc22]/20 rounded-xl text-xs text-white placeholder-slate-500 transition-all outline-none"
-                      />
-                      <input
-                        type="password"
-                        placeholder="Client Secret"
-                        value={byoClientSecret}
-                        onChange={(e) => setByoClientSecret(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-[#10111a] border border-white/15 focus:border-[#ffcc22] focus:ring-2 focus:ring-[#ffcc22]/20 rounded-xl text-xs text-white placeholder-slate-500 transition-all outline-none"
-                      />
-                      <button
-                        type="button"
-                        disabled={byoBusy || !byoClientId.trim() || !byoClientSecret.trim()}
-                        onClick={() => void handleByoConnect()}
-                        className="w-full py-2.5 rounded-xl bg-[#ffcc22]/20 hover:bg-[#ffcc22] text-xs font-black uppercase tracking-widest text-[#ffcc22] hover:text-slate-950 border border-[#ffcc22]/30 hover:border-[#ffcc22] disabled:opacity-40 transition cursor-pointer"
-                      >
-                        {byoBusy ? 'Connecting…' : 'Save & connect'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="relative flex-none px-6 md:px-12 py-4 border-b border-white/10 bg-[#12131c]/90 flex flex-col items-center gap-3">
-                  <div className="relative w-full md:w-[68%] lg:w-[64%]">
+            <>
+                <div className="relative flex-none px-4 md:px-8 pt-3 pb-4">
+                  <div className="lazer-listing-search relative flex items-center">
                     <input
                       type="text"
                       placeholder="type in keywords..."
@@ -595,7 +575,8 @@ export default function OnlineBeatmapCatalog({
                           setSubmittedSearchTerm(searchTerm);
                         }
                       }}
-                      className="w-full pl-4 pr-14 py-3 bg-[#1a1b27] border border-white/10 rounded-xl font-sans text-base font-bold text-white placeholder-slate-400 focus:outline-none focus:border-[#ffcc22]/80 focus:ring-2 focus:ring-[#ffcc22]/20 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]"
+                      aria-label="Search beatmaps"
+                      className="w-full bg-transparent pl-4 pr-12 py-2.5 font-sans text-sm text-white placeholder-[#8b909b] focus:outline-none"
                     />
                     <button
                       type="button"
@@ -603,72 +584,82 @@ export default function OnlineBeatmapCatalog({
                         setFilterSearchTerm(searchTerm);
                         setSubmittedSearchTerm(searchTerm);
                       }}
-                      className="absolute right-2 top-2 bottom-2 rounded-lg bg-[#ffcc22]/15 hover:bg-[#ffcc22] text-[#ffcc22] hover:text-slate-950 border border-[#ffcc22]/30 hover:border-[#ffcc22] px-3 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-[#e967a1] transition-colors cursor-pointer"
                       title="Search"
+                      aria-label="Search"
                     >
                       <Search className="h-5 w-5" />
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-center gap-2 overflow-x-auto max-w-full text-xs font-medium py-0.5">
-                    <span className="mr-1 text-slate-300 font-bold uppercase text-[11px] tracking-wider font-mono">Categories:</span>
-                    {SEARCH_CATEGORIES.map((category) => {
-                      const active = searchCategory === category;
-                      return (
-                        <button
-                          key={category}
-                          onClick={() => setSearchCategory(category)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                            active
-                              ? 'bg-[#ffcc22]/20 text-[#ffcc22] border border-[#ffcc22]/40 shadow-[0_0_12px_rgba(255,204,34,0.25)] font-bold'
-                              : 'bg-white/[0.04] text-slate-400 border border-white/5 hover:bg-white/[0.08] hover:text-white'
-                          }`}
-                        >
-                          {category}
-                        </button>
-                      );
-                    })}
+                  <div className="hidden md:block mt-3">
+                    <FilterMatrix />
                   </div>
-                  <div className="absolute right-6 top-4 md:right-12 hidden sm:block">
+                  <div className="md:hidden mt-3">
                     <button
                       type="button"
-                      onClick={handleDisconnectOsu}
-                      className="flex h-[44px] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 text-xs font-mono uppercase text-slate-300 hover:bg-rose-500/15 hover:text-rose-300 hover:border-rose-500/30 transition-all shrink-0 cursor-pointer"
-                      title="Disconnect osu!"
+                      onClick={() => setShowFilters((v) => !v)}
+                      aria-expanded={showFilters}
+                      className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-200 cursor-pointer"
                     >
-                      <LogOut className="h-3.5 w-3.5" />
-                      Logout
+                      Filters
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                     </button>
+                    {showFilters && (
+                      <div className="mt-2 rounded-md border border-white/10 bg-black/25 p-3">
+                        <FilterMatrix />
+                      </div>
+                    )}
                   </div>
+
+                  {/* lazer wave divider */}
+                  <svg className="mt-3 block h-[10px] w-full text-black/40" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M0 6 Q 25 0 50 5 T 100 4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                  </svg>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 min-h-0 bg-[#0c0d14]/70">
+                <div className="lazer-listing-sortbar flex-none px-4 md:px-8 py-1.5 flex items-center gap-1 overflow-x-auto">
+                  <span className="lazer-filter-label shrink-0 mr-1">Sort by</span>
+                  {SORT_WIRED.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setSortBy(opt)}
+                      className={`lazer-sort-btn shrink-0 ${sortBy === opt ? 'is-selected' : ''}`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                  <span className="ml-auto flex items-center gap-2 shrink-0 pl-2">
+                    <span className="text-slate-300" title="Grid view">
+                      <LayoutGrid className="h-4 w-4" />
+                    </span>
+                  </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 min-h-0">
                   {catalogError && (
-                    <div className="p-3.5 mb-5 rounded-xl text-xs font-mono border bg-rose-950/30 text-rose-300 border-rose-500/30 shadow-lg">
+                    <div className="p-3 mb-4 rounded-md text-xs font-mono border bg-rose-950/30 text-rose-300 border-rose-500/30">
                       {catalogError}
                     </div>
                   )}
                   {isLoading ? (
-                    <div className="py-16 text-center text-slate-500">
-                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-[#ffcc22]" />
-                      <p className="text-xs font-mono font-black uppercase tracking-widest text-white">
-                        Searching osu! (ranked → loved → graveyard)…
-                      </p>
+                    <div className="py-16 text-center">
+                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-slate-300" />
+                      <p className="lazer-listing-empty">Searching beatmaps…</p>
                     </div>
-                  ) : !filterSearchTerm.trim() ? (
-                    <div className="py-16 text-center text-slate-500">
-                      <Search className="h-10 w-10 mx-auto mb-3 text-slate-600" />
-                      <p className="text-lg font-mono font-black uppercase tracking-widest text-white">Search a song!</p>
-                      <p className="text-xs text-slate-400 font-sans mt-1">Enter a song title, artist, or mapper above</p>
+                  ) : !submittedSearchTerm.trim() ? (
+                    <div className="py-16 text-center">
+                      <p className="lazer-listing-empty">Type in keywords above to browse for new beatmaps.</p>
                     </div>
                   ) : catalogRequestState !== 'loaded' ? (
-                    <div className="py-16 text-center text-slate-500">
-                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-[#ffcc22]" />
-                      <p className="text-xs font-mono font-black uppercase tracking-widest text-white">Searching beatmaps...</p>
+                    <div className="py-16 text-center">
+                      <Loader className="h-8 w-8 mx-auto mb-3 animate-spin text-slate-300" />
+                      <p className="lazer-listing-empty">Searching beatmaps…</p>
                     </div>
-                  ) : filteredManifest.length > 0 ? (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 items-start gap-3 pb-6">
-                      {filteredManifest.map((s) => {
+                  ) : sortedManifest.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 items-start gap-3 pb-4">
+                      {sortedManifest.map((s) => {
                         const isDownloading = downloadingMapId === s.id;
                         const isQueued = downloadQueue.some((queued) => queued.id === s.id);
                         const isDownloaded = customMaps.some(
@@ -682,85 +673,79 @@ export default function OnlineBeatmapCatalog({
                         return (
                           <div
                             key={s.id}
-                            className={`border rounded-2xl overflow-hidden relative shadow-lg transition-all duration-200 group ${
-                              isDownloaded
-                                ? 'border-emerald-500/40 bg-[#101c18]/85 hover:bg-[#14241e]/95 shadow-[0_0_20px_rgba(16,185,129,0.08)]'
-                                : 'border-white/10 bg-[#161724]/80 hover:bg-[#1d1e2e]/95 hover:border-[#ffcc22]/35 shadow-[0_8px_24px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_30px_rgba(255,204,34,0.08)]'
-                            }`}
+                            className={`lazer-listing-card group ${expanded ? 'is-expanded' : ''}`}
                             onClick={() => revealSet(s.id)}
                           >
-                            <div className="flex gap-3 p-3 min-h-[118px] items-stretch cursor-pointer">
-                              <div className="h-[104px] w-[104px] shrink-0 self-center overflow-hidden rounded-xl bg-black/40 border border-white/10 shadow-inner">
-                                {s.coverUrl ? (
-                                  <img src={s.coverUrl} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" referrerPolicy="no-referrer" />
+                            <div className="flex gap-2.5 p-2.5 items-stretch cursor-pointer">
+                              <div className="h-14 w-20 shrink-0 self-center overflow-hidden rounded bg-black/40">
+                                {(s.slimCoverUrl || s.coverUrl) ? (
+                                  <img src={s.slimCoverUrl || s.coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
                                 ) : (
                                   <div className="flex h-full w-full items-center justify-center">
-                                    <Music className="h-8 w-8 text-[#ffcc22]/40" />
+                                    <Music className="h-6 w-6 text-white/30" />
                                   </div>
                                 )}
                               </div>
-                              <div className="flex-1 min-w-0 text-left py-1">
-                                <h4 className="font-black text-lg text-white leading-tight truncate group-hover:text-[#ffcc22] transition-colors">
+                              <div className="flex-1 min-w-0 text-left">
+                                <h4 className="font-semibold text-[14px] text-white leading-tight truncate">
                                   {s.title}
                                 </h4>
-                                <p className="text-xs text-slate-300 font-bold truncate mt-1">
-                                  {s.artist}
+                                <p className="text-[12px] text-[#cfd3da] truncate">
+                                  by {s.artist}
                                 </p>
-                                <p className="text-xs text-slate-400 truncate mt-1">Mapped by <span className="text-slate-300 font-medium">{s.creator || 'Unknown'}</span></p>
-                                <div className="flex items-center gap-2 mt-3">
-                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase font-mono ${statusStyle(s.status)}`}>
-                                    {s.status || 'graveyard'}
+                                <p className="text-[11px] text-[#9aa0ab] truncate">mapped by {s.creator || 'Unknown'}</p>
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <span className={statusPillClass(s.status)}>
+                                    {(s.status || 'graveyard').toUpperCase()}
                                   </span>
-                                  <span className="text-[10px] font-bold text-slate-400">
-                                    {charts.length} {charts.length === 1 ? 'difficulty' : 'difficulties'}
-                                  </span>
-                                  <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 group-hover:text-[#ffcc22] transition-all ${expanded ? 'rotate-180 text-[#ffcc22]' : ''}`} />
+                                  <DifficultyTicks stars={setMaxStars(s)} />
+                                  <ChevronDown className={`ml-auto h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                                 </div>
                               </div>
-                              <div className="shrink-0 self-center pl-1" onClick={(event) => event.stopPropagation()}>
+                              <div className="shrink-0 self-center" onClick={(event) => event.stopPropagation()}>
                                 {isDownloaded ? (
-                                  <div className="flex flex-col items-center gap-0.5 text-emerald-300 shrink-0 select-none bg-emerald-500/15 border border-emerald-400/30 px-3 py-2 rounded-xl shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                                  <div className="flex flex-col items-center gap-0.5 text-emerald-300 select-none bg-emerald-500/15 border border-emerald-400/30 px-2.5 py-1.5 rounded-md" title="Downloaded">
                                     <Check className="h-4 w-4 stroke-[2.5]" />
-                                    <span className="text-[8px] font-mono font-black uppercase tracking-wider">READY</span>
+                                    <span className="text-[8px] font-bold uppercase tracking-wider">READY</span>
                                   </div>
                                 ) : isDownloading ? (
-                                  <div className="flex flex-col items-center gap-1 text-[#ffcc22] shrink-0 bg-[#ffcc22]/15 border border-[#ffcc22]/40 px-3 py-2 rounded-xl animate-pulse shadow-[0_0_15px_rgba(255,204,34,0.2)]">
-                                    <Loader className="h-4 w-4 animate-spin text-[#ffcc22]" />
-                                    <span className="text-[8px] font-mono uppercase font-black">{downloadProgress?.percentage || 0}%</span>
+                                  <div className="flex flex-col items-center gap-1 text-cyan-300 bg-cyan-500/10 border border-cyan-400/30 px-2.5 py-1.5 rounded-md animate-pulse" title="Downloading">
+                                    <Loader className="h-4 w-4 animate-spin" />
+                                    <span className="text-[8px] font-bold uppercase">{downloadProgress?.percentage || 0}%</span>
                                   </div>
                                 ) : isQueued ? (
-                                  <div className="flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-amber-500/15 px-3 py-2 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.2)]">
-                                    <Loader className="h-4 w-4 animate-spin text-amber-400" />
-                                    <span className="text-[8px] font-mono font-black uppercase tracking-wider">QUEUED</span>
+                                  <div className="flex flex-col items-center gap-1 rounded-md border border-white/15 bg-white/[0.06] px-2.5 py-1.5 text-slate-300" title="Queued">
+                                    <Loader className="h-4 w-4 animate-spin" />
+                                    <span className="text-[8px] font-bold uppercase tracking-wider">QUEUED</span>
                                   </div>
                                 ) : (
                                   <button
                                     onClick={() => enqueueDownload(s)}
-                                    className="p-3 bg-[#ffcc22]/15 hover:bg-[#ffcc22] text-[#ffcc22] hover:text-slate-950 rounded-xl border border-[#ffcc22]/30 hover:border-[#ffcc22] shadow-[0_0_15px_rgba(255,204,34,0.15)] hover:shadow-[0_0_20px_rgba(255,204,34,0.4)] transition-all duration-150 active:scale-95 flex items-center justify-center cursor-pointer"
-                                    title="Queue map pack"
+                                    className="p-2.5 bg-white/[0.07] hover:bg-[#00e5ff]/25 text-white rounded-md border border-white/15 hover:border-[#00e5ff]/50 transition-all duration-150 active:scale-95 flex items-center justify-center cursor-pointer"
+                                    title="Download map pack"
+                                    aria-label={`Download ${s.title}`}
                                   >
                                     <Download className="h-4 w-4 stroke-[2.2]" />
                                   </button>
                                 )}
                               </div>
                             </div>
-                            {isDownloaded && <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />}
                             {isDownloading && downloadProgress && (
-                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
-                                <div className="h-full bg-gradient-to-r from-[#ffcc22] to-amber-300 shadow-[0_0_8px_rgba(255,204,34,0.6)] transition-[width] duration-200" style={{ width: `${downloadProgress.percentage}%` }} />
+                              <div className="h-[3px] bg-black/40">
+                                <div className="h-full bg-[#00e5ff] transition-[width] duration-200" style={{ width: `${downloadProgress.percentage}%` }} />
                               </div>
                             )}
                             {expanded && (
-                              <div className="border-t border-white/10 bg-black/40 px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2" onClick={(event) => event.stopPropagation()}>
+                              <div className="border-t border-white/10 bg-black/35 px-2.5 py-2.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5" onClick={(event) => event.stopPropagation()}>
                                 {charts.length > 0 ? charts.map((chart, index) => {
                                   const rating = Number(chart.starRating ?? 0);
                                   return (
-                                    <div key={`${chart.id}-${index}`} className="flex items-center justify-between gap-2 rounded-xl bg-[#10111a]/90 border border-white/[0.08] hover:border-[#ffcc22]/30 px-3 py-2 text-xs text-slate-200 transition-colors">
+                                    <div key={`${chart.id}-${index}`} className="flex items-center justify-between gap-2 rounded bg-white/[0.05] border border-white/10 hover:border-[#00e5ff]/50 px-2.5 py-1.5 text-xs text-slate-200 transition-colors">
                                       <span className="truncate">
-                                        <b className="text-[#ffcc22] font-mono font-bold mr-1">{chart.keyCount ? `${chart.keyCount}K` : ''}</b>
+                                        <b className="text-white font-bold mr-1">{chart.keyCount ? `${chart.keyCount}K` : ''}</b>
                                         {chart.version || chart.name || 'Unknown'}
                                       </span>
-                                      <span className={`shrink-0 rounded-md px-2 py-0.5 font-mono font-bold text-[10px] border uppercase ${getDifficultyBadge(rating)}`}>
+                                      <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono font-bold text-[10px] border ${getDifficultyBadge(rating)}`}>
                                         ★ {rating.toFixed(2)}
                                       </span>
                                     </div>
@@ -774,26 +759,23 @@ export default function OnlineBeatmapCatalog({
                         );
                       })}
                     </div>
-                  ) : mirrorManifest.length === 0 ? (
-                    <div className="bg-[#161724]/60 border border-white/10 py-16 px-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-500 max-w-md mx-auto shadow-2xl backdrop-blur-md">
-                      <Info className="h-10 w-10 mb-3 text-slate-600" />
-                      <p className="text-xs font-sans font-black tracking-widest uppercase text-white">No maps found</p>
-                      <p className="text-[10px] text-slate-400 font-mono max-w-xs mt-1 leading-relaxed uppercase">
-                        Try a different song title, artist, or mapper
-                      </p>
-                    </div>
                   ) : (
-                    <div className="py-16 px-8 flex flex-col items-center justify-center text-center text-slate-500 max-w-md mx-auto">
-                      <Info className="h-10 w-10 mb-3 text-slate-600" />
-                      <p className="text-base font-sans font-black tracking-widest uppercase text-white">No matching beatmaps</p>
-                      <p className="text-sm text-slate-400 font-sans max-w-xs mt-2 leading-relaxed">
-                        Try a different song title, artist, or mapper
-                      </p>
+                    <div className="py-16 px-8 flex flex-col items-center justify-center text-center">
+                      <p className="lazer-listing-empty">… nope, nothing found.</p>
                     </div>
                   )}
                 </div>
+                <div className="flex-none flex items-center justify-between px-4 md:px-8 py-2.5 border-t border-white/10 bg-black/25">
+                  <FooterBackButton onClick={onClose} label="back" />
+                  {(sortedManifest.length > 0 || submittedSearchTerm.trim()) && (
+                    <span className="text-[11px] text-[#9aa0ab]">
+                      {sortedManifest.length > 0
+                        ? `${sortedManifest.length} ${sortedManifest.length === 1 ? 'match' : 'matches'}`
+                        : 'no matches'}
+                    </span>
+                  )}
+                </div>
               </>
-            )}
           </motion.div>
         </>
       )}

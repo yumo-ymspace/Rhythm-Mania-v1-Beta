@@ -289,6 +289,16 @@ html[data-ui="lazer"] {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
 }
 
+/* The unshear wrapper is a stretched flex item; center the label inside it
+   so the back text sits in the middle of the 50px slab, not at its top. */
+.lazer-footer-back-slab > .lazer-unshear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
 .lazer-footer-back-inner {
   display: flex;
   align-items: center;
@@ -736,6 +746,13 @@ html[data-ui="lazer"] {
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
+}
+
+/* While the beatmap listing is open the toolbar stays on top of the
+   listing overlay (backdrop z-100, panel z-110) with the listing icon
+   highlighted pink. */
+.lazer-toolbar.is-above-listing {
+  z-index: 120;
 }
 
 .lazer-toolbar-section {
@@ -1537,4 +1554,178 @@ html[data-ui="lazer"] {
 .lazer-star-meter-dot.is-filled {
   background: #ffcc22;
   box-shadow: 0 0 4px rgba(255, 204, 34, 0.6);
+}
+
+/* ==========================================================================
+   TASK-V-040: Lazer Beatmap Listing overlay (hud/beatmaplisting.jpg)
+   Panel inset 102-1264 du desktop, 8px compact. Grid only, no shear.
+   ========================================================================== */
+
+.lazer-listing-panel {
+  background: #2d3236;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.lazer-listing-title {
+  font-family: Inter, "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  color: #fff;
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+
+.lazer-listing-search {
+  background: #23252e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+}
+
+.lazer-listing-search:focus-within {
+  border-color: rgba(233, 103, 161, 0.6);
+  box-shadow: 0 0 0 2px rgba(233, 103, 161, 0.18);
+}
+
+.lazer-filter-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9aa0ab;
+  white-space: nowrap;
+}
+
+.lazer-filter-chip {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #b9bec7;
+  background: transparent;
+  border: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lazer-filter-chip.is-wired:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.lazer-filter-chip.is-selected {
+  color: #fff;
+  font-weight: 700;
+}
+
+.lazer-filter-chip.is-soon {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lazer-filter-chip.is-locked {
+  color: #fff;
+  font-weight: 700;
+  cursor: default;
+}
+
+.lazer-filter-chip.is-soon:hover {
+  color: #b9bec7;
+  background: transparent;
+}
+
+.lazer-listing-sortbar {
+  background: #3a3d47;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.lazer-sort-btn {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #b9bec7;
+  background: transparent;
+  border: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lazer-sort-btn.is-selected {
+  color: #fff;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lazer-sort-btn.is-soon {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lazer-listing-card {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #454b5c;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 150ms ease,
+    box-shadow 200ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lazer-listing-card:hover {
+    border-color: rgba(0, 229, 255, 0.55);
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.22), 0 6px 18px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.lazer-listing-card.is-expanded {
+  border-color: rgba(0, 229, 255, 0.65);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.28), 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+.lazer-status-pill {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.lazer-status-pill.is-ranked {
+  background: #88b300;
+  color: #fff;
+}
+
+.lazer-status-pill.is-loved {
+  background: #d5235a;
+  color: #fff;
+}
+
+.lazer-status-pill.is-graveyard {
+  background: rgba(255, 255, 255, 0.16);
+  color: #cfd3da;
+}
+
+.lazer-diff-dot {
+  width: 5px;
+  height: 10px;
+  border-radius: 2.5px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.lazer-listing-empty {
+  font-size: 14px;
+  font-weight: 400;
+  color: #cfd3da;
 }

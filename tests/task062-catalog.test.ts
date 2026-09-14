@@ -2,7 +2,7 @@
  * Tests for TASK-062: Catalog overlay Argon tokens & offline catalog boundaries
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   saveCatalogSetMetadata,
   getCatalogSetMetadata,
@@ -92,12 +92,80 @@ describe('TASK-062: Catalog Router & Offline Boundaries', () => {
       }
     });
 
-    it('routes search to the search handler (which requires Authorization bearer)', async () => {
+    it('routes search to the mirror handler without requiring an osu! token', async () => {
+      // No query: 400, not 401. Search is unauthenticated (catboy.best primary).
       const { req, res, getStatusCode, getData } = createMockReqRes({ _route: 'search' });
       await catalogRouter(req, res);
-      // Without token, search returns 401
-      expect(getStatusCode()).toBe(401);
-      expect(getData()?.error).toMatch(/Connect osu!/i);
+      expect(getStatusCode()).toBe(400);
+      expect(getData()?.error).toMatch(/query is required/i);
+    });
+
+    it('rejects unsupported search statuses', async () => {
+      const { req, res, getStatusCode, getData } = createMockReqRes({ _route: 'search', q: 'x', s: 'wip' });
+      await catalogRouter(req, res);
+      expect(getStatusCode()).toBe(400);
+      expect(getData()?.error).toMatch(/ranked, loved, graveyard, or any/i);
+    });
+
+    it('returns mirror sets with stable osuapi_ ids and mania-only charts', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              SetID: 424242,
+              RankedStatus: 1,
+              Title: 'Router Song',
+              Artist: 'Router Artist',
+              Creator: 'Router Mapper',
+              ChildrenBeatmaps: [
+                {
+                  BeatmapID: 777,
+                  DiffName: '7K Extra',
+                  FileMD5: 'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE',
+                  Mode: 3,
+                  CS: 7,
+                  DifficultyRating: 4.4,
+                  BPM: 190,
+                },
+                {
+                  BeatmapID: 778,
+                  DiffName: 'Insane',
+                  FileMD5: 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+                  Mode: 0,
+                  CS: 4,
+                  DifficultyRating: 4.0,
+                  BPM: 190,
+                },
+              ],
+            },
+          ],
+        })),
+      );
+      try {
+        const { req, res, getStatusCode, getData } = createMockReqRes({
+          _route: 'search',
+          q: 'router song',
+          s: 'ranked',
+        });
+        await catalogRouter(req, res);
+        expect(getStatusCode()).toBe(200);
+        const data = getData();
+        expect(data?.success).toBe(true);
+        expect(data?.data).toHaveLength(1);
+        expect(data?.data[0]).toMatchObject({
+          id: 'osuapi_424242',
+          sourceSetId: 424242,
+          source: 'mirror',
+          status: 'ranked',
+        });
+        expect(data?.data[0]?.charts).toHaveLength(1);
+        expect(data?.data[0]?.charts[0]).toMatchObject({ id: 777, keyCount: 7 });
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 

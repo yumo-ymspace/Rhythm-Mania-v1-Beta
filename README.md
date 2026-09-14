@@ -49,7 +49,7 @@ RhythmMania is an **18+ service**. Minors may not use the game or any connected 
 
 ### Beatmap Support
 - **Drag & drop `.osu` / `.osz` import** — the app parses standard osu! mania format directly in-browser via JSZip
-- **Beatmap sources**: Users can import `.osu`/`.osz` files into local browser storage, or connect an osu! API token to search ranked/loved/graveyard mania sets. Archives download in-browser from Catboy mirror (Mino) with osudl.org fallback. Google sign-in enables register/activate for online scores.
+- **Beatmap sources**: Users can import `.osu`/`.osz` files into local browser storage, or search ranked/loved/graveyard mania sets with no login (catboy.best primary, Nekoha mirror fallback). Archives download in-browser from Catboy with Nekoha fallback. Google sign-in enables register/activate for online scores.
 - **Strain-based star estimation** on imported maps using an exponential decay model balanced between peak and sustained note density
 - **Song previews** — a toggleable audio preview plays while browsing Song Select, using a lightweight HTMLAudio path kept deliberately independent of the Web Audio gameplay clock
 - **Favorites** — star songs on Song Select for quick access; persisted locally
@@ -143,7 +143,7 @@ The API surface is:
 | `POST /api/replays/upload` | Upload an eligible replay |
 | `GET /api/replays/list` | List the top replays for one exact chart revision |
 | `GET /api/replays/get` | Retrieve a replay by ID |
-| `GET /api/catalog/search` | Proxy osu!mania search with the user's osu! token |
+| `GET /api/catalog/search` | Unauthenticated mirror search (catboy.best, Nekoha fallback) |
 | `POST /api/catalog/register-download` | Pending catalog registration (Google + osu! token) |
 | `POST /api/catalog/activate-download` | Activate charts after private mirror verification; returns pending when verification cannot complete |
 | `GET, PATCH /api/profile/me` | Read or update the signed-in user's profile |

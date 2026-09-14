@@ -163,13 +163,12 @@ Persistent browser keys currently used by the source are:
 | `rhythm_mania_v1_last_selected_map_id` | Song Select selection |
 | `rhythm_mania_v1_last_diff_by_song` | Last difficulty per song group |
 | `rhythm_mania_v1_favorite_songs` | Favorited Song Select groups |
-| `rhythm_mania_v1_osu_oauth` | osu! token state and, for BYO mode, client credentials |
 | `rhythm_mania_v1_catalog_set_metadata` | Local catalog title/artist/creator/approved cover metadata |
 
-Google and osu! OAuth handoffs also use short-lived localStorage keys with the
-`rhythm_mania_google_auth_` and `rhythm_mania_osu_auth_` prefixes.
-Browser localStorage storage of osu! access/refresh tokens and BYO client
-credentials is an accepted product tradeoff in the current SPA design.
+Google OAuth handoffs also use short-lived localStorage keys with the
+`rhythm_mania_google_auth_` prefix. Catalog search/download needs no account:
+`GET /api/catalog/search` is unauthenticated (catboy.best primary, Nekoha
+fallback) and archive downloads fetch public mirror bytes directly.
 
 `src/utils/storageManager.ts` opens IndexedDB database `RhythmManiaDB` version
 3 with two object stores:
@@ -421,7 +420,7 @@ Catalog router:
 
 | Route | Method | Behavior |
 | --- | --- | --- |
-| `/api/catalog/search` | GET | Bearer osu! token proxy for ranked/loved/graveyard mania search |
+| `/api/catalog/search` | GET | Unauthenticated mirror search (catboy.best primary, Nekoha fallback) for ranked/loved/graveyard mania |
 | `/api/catalog/set` | GET | Authenticated cloud-set descriptor |
 | `/api/catalog/chart` | GET | Authenticated chart-revision descriptor |
 | `/api/catalog/register-download` | POST | Authenticated Google session plus osu! bearer token; registers/replaces a pending set token |
@@ -443,14 +442,16 @@ generic database diagnostic while logging only the error class.
 
 ### Catalog Flow
 
-The browser stores either an osu! authorization-code token or a BYO token state
-in localStorage. Search sends the token as a Bearer header to the API. The API
-queries osu! API v2 in mania mode and only returns sets with ranked, loved, or
-graveyard status and eligible 2K-9K mania charts.
+Catalog search needs no account. `GET /api/catalog/search` queries catboy.best
+(`https://catboy.best/api/search?query=`) first and falls back to Nekoha
+(`https://mirror.nekoha.moe/api/search`) when catboy errors or has no eligible
+sets. The API only returns sets with ranked, loved, or graveyard status and
+eligible 2K-9K mania charts (mania key count is read from the mirror `CS`/`cs`
+field, checksums are mirror .osu MD5s).
 
 Browser archives are downloaded directly from `https://catboy.best/d/<id>`.
-The client retries `https://osudl.org/s/<id>` only when Catboy returns HTTP 404;
-network and other HTTP failures are not broad fallback triggers. Google-linked
+The client falls back to `https://mirror.nekoha.moe/api/download/<id>` when the
+Catboy request fails or returns a non-OK status. Google-linked
 downloads first register a 30-minute pending server catalog token. Activation
 privately fetches from the approved mirrors, verifies the archive/checksums,
 parses server canonical mania charts, and marks matching PostgreSQL revisions
