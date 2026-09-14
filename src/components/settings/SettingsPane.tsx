@@ -112,8 +112,8 @@ export default function SettingsPane({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 pb-6 bg-[#302e29]">
-      <div className="pt-5 pb-1 flex items-start justify-between gap-3">
+    <div className="flex-1 overflow-y-auto px-5 pb-6 bg-[#302e39]">
+      <div className="-mx-5 px-5 pt-5 pb-3 bg-[#26252d] flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[28px] leading-none font-sans font-semibold text-white">settings</h1>
           <p className="text-xs text-[#a3a3c2] font-sans mt-1.5">change the way RhythmMania behaves</p>

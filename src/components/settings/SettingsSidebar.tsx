@@ -25,7 +25,7 @@ interface SettingsSidebarProps {
 
 export default function SettingsSidebar({ activeSection, onSelect, onRestoreAll, settings }: SettingsSidebarProps) {
   return (
-    <div className="w-full md:w-[210px] flex-none border-r border-black/30 bg-[#1a1926] flex flex-col h-[200px] md:h-auto shrink-0 md:shrink select-none">
+    <div className="w-full md:w-[210px] flex-none border-r border-black/30 bg-[#23222a] flex flex-col h-[200px] md:h-auto shrink-0 md:shrink select-none">
       <div className="flex-1 overflow-y-auto px-2 py-3 flex flex-col gap-0.5">
         {SECTIONS.filter((s) => !s.showWhen || s.showWhen(settings)).map((s) => {
           const Icon = s.icon;
@@ -56,7 +56,7 @@ export default function SettingsSidebar({ activeSection, onSelect, onRestoreAll,
         })}
       </div>
       
-      <div className="p-3 border-t border-black/30 bg-[#15141f]">
+      <div className="p-3 border-t border-black/30 bg-[#23222a]">
         <button
           onClick={onRestoreAll}
           className="w-full py-2 px-3 rounded-md bg-[#e0497a]/15 hover:bg-[#e0497a]/25 text-[#f0a3b5] border border-[#e0497a]/30 transition-colors text-xs font-sans font-semibold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
