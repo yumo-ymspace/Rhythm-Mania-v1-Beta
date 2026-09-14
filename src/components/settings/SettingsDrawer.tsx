@@ -10,11 +10,10 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { GameSettings } from '../../types';
 import SettingsSidebar from './SettingsSidebar';
-import SettingsSearchBar from './SettingsSearchBar';
 import SettingsPane from './SettingsPane';
 import OffsetWizardModal from './OffsetWizardModal';
 import ConfirmModal from './controls/ConfirmModal';
@@ -65,11 +64,73 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !confirmOpen && !wizardOpen) onClose();
+    // Drop focus from any background control so Space/Enter can't re-trigger
+    // it while the settings menu is open.
+    const active = document.activeElement as HTMLElement | null;
+    if (active && !active.closest?.('[data-settings-drawer], [role="dialog"]')) {
+      active.blur();
+    }
+    // Text fields handle their own keys (Enter applies a manual value edit,
+    // Escape cancels it). Capture-phase stopPropagation below would otherwise
+    // swallow those keys before React ever sees them, so leave them alone.
+    // Background listeners already ignore typing targets on their own.
+    const isTextEditingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target.isContentEditable) return true;
+      const tag = target.tagName;
+      if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (tag === 'INPUT') {
+        const type = (target as HTMLInputElement).type;
+        return type === 'text' || type === 'search' || type === 'number';
+      }
+      return false;
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    // Capture-phase trap: while settings are open, Space/Enter belong only to
+    // the settings menu, and Escape closes settings instead of the menu behind.
+    // stopPropagation here runs before background window listeners (main menu,
+    // song select, etc.) so they never see these keys.
+    const trap = (e: KeyboardEvent) => {
+      if (isTextEditingTarget(e.target)) return;
+      if (e.key === 'Escape') {
+        if (confirmOpen || wizardOpen) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      // The offset wizard listens for Space on window to register taps.
+      if (wizardOpen && e.key === ' ') return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        const target = e.target as HTMLElement | null;
+        const inside = Boolean(target?.closest?.('[data-settings-drawer], [role="dialog"]'));
+        // Always hide the key from background listeners.
+        e.stopPropagation();
+        if (!inside) {
+          // Focus is still on the menu behind: swallow so Space/Enter can't
+          // trigger it. Native settings controls keep their default behavior.
+          e.preventDefault();
+        }
+      }
+    };
+    // Also swallow Space keyup from a background focused button (native click
+    // activation happens on keyup for Space).
+    const trapKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      if (isTextEditingTarget(e.target)) return;
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest?.('[data-settings-drawer], [role="dialog"]')) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', trap, true);
+    window.addEventListener('keyup', trapKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', trap, true);
+      window.removeEventListener('keyup', trapKeyUp, true);
+    };
   }, [open, onClose, confirmOpen, wizardOpen]);
 
   const resetRow = (id: string) => {
@@ -80,6 +141,41 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
       val = JSON.parse(JSON.stringify(dv));
     }
     updateSettings({ [id]: val });
+  };
+
+  // Bouncy purely-visual reset animation: the setting itself jumps to its
+  // default instantly while the slider display springs there over ~280ms.
+  const sliderAnimRef = useRef<number | null>(null);
+  const [sliderFlash, setSliderFlash] = useState<{ id: string; from: number; to: number; progress: number } | null>(null);
+  useEffect(() => () => {
+    if (sliderAnimRef.current !== null) cancelAnimationFrame(sliderAnimRef.current);
+  }, []);
+  const cancelSliderFlash = () => {
+    if (sliderAnimRef.current !== null) {
+      cancelAnimationFrame(sliderAnimRef.current);
+      sliderAnimRef.current = null;
+    }
+    setSliderFlash(null);
+  };
+  const flashSliderReset = (rowId: string, from: number, to: number) => {
+    if (sliderAnimRef.current !== null) cancelAnimationFrame(sliderAnimRef.current);
+    if (from === to) return;
+    const durationMs = 280;
+    const start = performance.now();
+    setSliderFlash({ id: rowId, from, to, progress: 0 });
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const c = 1.70158;
+      const eased = 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+      if (t < 1) {
+        setSliderFlash({ id: rowId, from, to, progress: eased });
+        sliderAnimRef.current = requestAnimationFrame(tick);
+      } else {
+        sliderAnimRef.current = null;
+        setSliderFlash(null);
+      }
+    };
+    sliderAnimRef.current = requestAnimationFrame(tick);
   };
 
   const handleRestoreRequest = () => {
@@ -110,6 +206,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
           {open && (
             <motion.div
               key="mobile-settings"
+              data-settings-drawer
               className="fixed inset-0 z-50 bg-gradient-to-b from-[#0e121b] via-[#0b0e14] to-[#07090e] flex flex-col font-sans select-none overflow-hidden"
               initial={{ x: '100vw' }}
               animate={{ x: 0 }}
@@ -165,9 +262,12 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                 <div className="flex flex-col gap-3">
                   {rows.map((row) => {
                     const currentValue = settings[row.id as keyof GameSettings];
-                    const isChanged = !isAtDefault(row.id, currentValue);
+                    // Action buttons (e.g. the offset wizard opener) have no
+                    // stored value, so they are never marked changed.
+                    const isChanged = row.control.kind === 'button' ? false : !isAtDefault(row.id, currentValue);
 
                     let controlNode = null;
+                    let handleMobileSliderReset: (() => void) | null = null;
                     if (row.control.kind === 'toggle') {
                       controlNode = (
                         <div className="scale-95 origin-right">
@@ -179,27 +279,47 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                         </div>
                       );
                     } else if (row.control.kind === 'slider') {
-                      const sliderMin = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
+                      const isPercent = row.control.percent === true;
+                      const baseMin = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
                         ? BABYLON_PLAYFIELD_WIDTH_MIN
                         : (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
                           ? 0.60
                         : row.control.min;
-                      const sliderMax = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
+                      const baseMax = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
                         ? BABYLON_PLAYFIELD_WIDTH_MAX
                         : (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
                           ? 1.00
                         : row.control.max;
+                      // Percent sliders show whole 0-100 integers and parse back to 0-1.
+                      const sliderMin = isPercent ? Math.round(baseMin * 100) : baseMin;
+                      const sliderMax = isPercent ? Math.round(baseMax * 100) : baseMax;
+                      const sliderStep = isPercent ? 1 : row.control.step;
+                      const toDisplay = (v: number) => isPercent ? Math.round(v * 100) : Math.round(v);
+                      const fromDisplay = (d: number) => isPercent ? Math.round(d) / 100 : Math.round(d);
+                      const sliderVal = Number(currentValue);
+                      const sliderDefault = Number(DEFAULT_SETTINGS[row.id as keyof GameSettings] ?? baseMin);
+                      const flash = sliderFlash && sliderFlash.id === row.id ? sliderFlash : null;
+                      const displayVal = flash
+                        ? Math.round(flash.from + (flash.to - flash.from) * flash.progress)
+                        : toDisplay(sliderVal);
+                      handleMobileSliderReset = () => {
+                        resetRow(row.id);
+                        flashSliderReset(row.id, toDisplay(sliderVal), toDisplay(sliderDefault));
+                      };
                       controlNode = (
                         <div className="w-full">
                           <SettingsSlider
                             id={`setting-mobile-${row.id}`}
-                            value={Number(currentValue)}
+                            value={displayVal}
                             min={sliderMin}
                             max={sliderMax}
-                            step={row.control.step}
-                            format={row.control.format}
-                            suffix={row.control.suffix}
-                            onChange={(v) => updateSettings({ [row.id]: v })}
+                            step={sliderStep}
+                            format={isPercent ? (v: number) => `${v}%` : row.control.format}
+                            suffix={isPercent ? undefined : row.control.suffix}
+                            onChange={(d) => {
+                              cancelSliderFlash();
+                              updateSettings({ [row.id]: fromDisplay(d) });
+                            }}
                           />
                         </div>
                       );
@@ -239,6 +359,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
 
                      const isCustomOrComplex = row.id === 'bindings' || row.control.kind === 'color-grid';
                     const isVertical = isCustomOrComplex || row.control.kind === 'slider';
+                    const isResettable = row.control.kind !== 'button' && row.control.kind !== 'custom';
 
                     return (
                       <div
@@ -247,20 +368,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                           isVertical ? 'flex-col gap-4' : 'flex-row items-center justify-between gap-4'
                         } text-left`}
                       >
-                        {isChanged && (
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              resetRow(row.id);
-                            }}
-                            className="absolute left-0 top-2 bottom-2 w-1.5 bg-amber-400 rounded-r shadow-[0_0_8px_rgba(251,191,36,0.7)] cursor-pointer z-10 before:absolute before:-inset-x-3 before:inset-y-0 before:content-['']"
-                            title="Reset to default"
-                            role="button"
-                            tabIndex={0}
-                          />
-                        )}
-                        
-                        <label htmlFor={`setting-mobile-${row.id}`} className={`flex flex-col justify-center min-w-0 flex-1 cursor-pointer ${isChanged ? 'pl-2' : ''}`}>
+                        <label htmlFor={`setting-mobile-${row.id}`} className="flex flex-col justify-center min-w-0 flex-1 cursor-pointer">
                           <span className="text-sm font-sans font-bold text-white leading-tight uppercase tracking-wider">
                             {row.label}
                           </span>
@@ -271,8 +379,30 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                           )}
                         </label>
 
-                        <div className={`${isVertical ? 'w-full' : 'shrink-0'}`}>
-                          {controlNode}
+                        <div className={`flex items-center gap-1 ${isVertical ? 'w-full' : 'shrink-0'}`}>
+                          <div className="min-w-0 flex-1">
+                            {controlNode}
+                          </div>
+                          {isResettable ? (
+                            isChanged ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (handleMobileSliderReset) handleMobileSliderReset();
+                                  else resetRow(row.id);
+                                }}
+                                title={`Reset "${row.label}" to default`}
+                                aria-label={`Reset "${row.label}" to default`}
+                                className="flex w-7 h-9 shrink-0 items-center justify-center rounded-lg border border-[#a99bff]/40 bg-[#8a7dff]/30 text-white hover:bg-[#8a7dff]/45 active:scale-95 transition cursor-pointer"
+                              >
+                                <LucideIcons.RotateCcw className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <span aria-hidden="true" className="w-7 h-9 shrink-0" />
+                            )
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -330,7 +460,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
               key="backdrop"
               className="fixed inset-0 z-40 backdrop-blur-sm"
               style={{
-                backgroundColor: `rgba(0, 0, 0, ${settings.backgroundDim !== undefined ? settings.backgroundDim : 0.60})`
+                backgroundColor: `rgba(0, 0, 0, ${settings.settingsMenuBackgroundDim !== undefined ? settings.settingsMenuBackgroundDim : 0.60})`
               }}
               onClick={onClose} 
               aria-hidden 
@@ -339,9 +469,10 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             />
-            <motion.aside 
+            <motion.aside
               key="drawer"
-              className="settings-shell fixed inset-y-0 left-0 z-50 w-full md:w-[860px] md:max-w-[90vw] flex flex-col md:flex-row"
+              data-settings-drawer
+              className="settings-shell fixed inset-y-0 left-0 z-50 w-full md:w-[640px] md:max-w-[92vw] flex flex-col md:flex-row"
               initial={{ x: '-100%', opacity: 0.6 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '-100%', opacity: 0 }}
@@ -354,20 +485,17 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                 settings={settings}
               />
               <div className="flex-1 flex flex-col min-w-0">
-                <SettingsSearchBar 
-                  value={query} 
-                  onChange={setQuery} 
-                  onClose={onClose}
-                  shaking={shaking} 
-                />
-                <SettingsPane 
-                  activeSection={activeSection} 
+                <SettingsPane
+                  activeSection={activeSection}
                   query={query}
-                  settings={settings} 
+                  onQueryChange={setQuery}
+                  onClose={onClose}
+                  shaking={shaking}
+                  settings={settings}
                   update={updateSettings}
                   resetRow={resetRow}
                   onNoResults={() => setShaking(true)}
-                  openWizard={() => setWizardOpen(true)} 
+                  openWizard={() => setWizardOpen(true)}
                   restoreAll={handleRestoreRequest}
                   isAtDefault={isAtDefault}
                 />

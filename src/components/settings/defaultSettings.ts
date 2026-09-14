@@ -48,6 +48,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   videoOpacity: 1.0,
   backgroundDim: 0.60,
   menuBackgroundDim: 0.30,
+  settingsMenuBackgroundDim: 0.60,
   disableVideo: false,
   videoOffset: 0,
   disableParticles: false,

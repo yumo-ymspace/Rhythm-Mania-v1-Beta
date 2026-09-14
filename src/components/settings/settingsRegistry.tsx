@@ -52,7 +52,7 @@ export const SECTIONS: SectionDef[] = [
 ];
 
 export type Control =
-  | { kind: 'slider';    min: number; max: number; step: number; suffix?: string; format?: (v: number) => string }
+  | { kind: 'slider';    min: number; max: number; step: number; suffix?: string; format?: (v: number) => string; percent?: boolean }
   | { kind: 'toggle' }
   | { kind: 'text';      maxLength?: number; placeholder?: string }
   | { kind: 'select';    options: { value: string; label: string }[] }
@@ -127,16 +127,23 @@ export const ROWS: RowDef[] = [
   {
     id: 'backgroundDim', section: 'graphics', label: 'Gameplay Background Dim',
     description: 'How much to dim the background while playing.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.backgroundDim,
     keywords: ['gameplay', 'background', 'dim', 'play', 'shield', 'darken', 'opacity'],
   },
   {
     id: 'menuBackgroundDim', section: 'graphics', label: 'Menus Background Dim',
     description: 'How much to darken the background picture across the menus and selection screens.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.menuBackgroundDim,
     keywords: ['menu', 'menus', 'background', 'song', 'select', 'replay', 'history', 'artwork', 'dim', 'darken', 'brightness', 'opacity'],
+  },
+  {
+    id: 'settingsMenuBackgroundDim', section: 'graphics', label: 'Settings menu background dim',
+    description: 'How much to dim and blur the background behind the settings menu.',
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
+    defaultValue: DEFAULT_SETTINGS.settingsMenuBackgroundDim,
+    keywords: ['settings', 'menu', 'background', 'dim', 'darken', 'brightness', 'opacity', 'blur', 'backdrop', 'overlay'],
   },
   {
     id: 'disableVideo', section: 'graphics', label: 'Disable background video',
@@ -235,32 +242,32 @@ export const ROWS: RowDef[] = [
   {
     id: 'musicVolume', section: 'audio', label: 'Music volume',
     description: 'Volume of the playing track before the master volume.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.musicVolume,
   },
   {
     id: 'previewVolume', section: 'audio', label: 'Song preview volume',
     description: 'Volume multiplier for Song Select previews. Default is 70% of music volume.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.previewVolume,
   },
   {
     id: 'launchMusicVolume', section: 'audio', label: 'Game Launch Music Volume',
     description: 'Volume multiplier for the song that plays on the game launch menu. Default is 10% of music volume.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.launchMusicVolume,
     keywords: ['launch', 'menu', 'startup', 'title', 'music'],
   },
   {
     id: 'masterVolume', section: 'audio', label: 'Master volume',
     description: 'Overall volume applied to music and hitsounds during gameplay.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.masterVolume,
   },
   {
     id: 'hitsoundVolume', section: 'audio', label: 'Hitsound volume',
     description: 'Volume of the system hitsounds on note hits.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct },
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.hitsoundVolume,
   },
   {

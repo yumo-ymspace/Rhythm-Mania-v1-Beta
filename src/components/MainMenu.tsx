@@ -129,6 +129,8 @@ export type MainMenuProps = {
   onOpenBrowse?: () => void;
   phase?: LazerMenuPhase;
   onPhaseChange?: (phase: LazerMenuPhase) => void;
+  /** When true, ignore all menu hotkeys (settings overlay owns Space/Enter/Escape). */
+  inputDisabled?: boolean;
 };
 
 export const MainMenu = ({
@@ -137,6 +139,7 @@ export const MainMenu = ({
   onOpenBrowse,
   phase: controlledPhase,
   onPhaseChange,
+  inputDisabled = false,
 }: MainMenuProps) => {
   const [internalPhase, setInternalPhase] = useState<LazerMenuPhase>('idle');
   const phase = controlledPhase !== undefined ? controlledPhase : internalPhase;
@@ -269,6 +272,8 @@ export const MainMenu = ({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Settings overlay owns Space/Enter/Escape while open.
+      if (inputDisabled) return;
       if (isTypingTarget(event.target) || event.repeat) return;
 
       // Focused cookie button already fires a native click on Enter/Space;
@@ -304,7 +309,7 @@ export const MainMenu = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openTopLevel, returnTopLevel, returnIdle, handleCookieClick]);
+  }, [openTopLevel, returnTopLevel, returnIdle, handleCookieClick, inputDisabled]);
 
   // idle: scale 1, centred
   // top-level / play: smaller cookie parked in the settings–play gap

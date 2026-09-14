@@ -176,22 +176,22 @@ export default function OffsetWizardModal({ initial, onApply, onClose }: OffsetW
       aria-modal="true"
     >
       <div 
-        className="bg-[#071932] border border-[#1b3b64]/80 rounded-xl w-[400px] max-w-[90vw] p-6 shadow-2xl flex flex-col gap-4"
+        className="bg-[#35344e] border border-black/30 rounded-md w-[400px] max-w-[90vw] p-6 shadow-2xl flex flex-col gap-4"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center pb-3 border-b border-white/[0.08]">
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+        <div className="flex justify-between items-center pb-3 border-b border-black/30">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2 font-sans">
             <Volume2 className="w-5 h-5 text-[var(--skin-accent)]" />
-            Offset Wizard
+            Offset wizard
           </h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#193454] rounded-full text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-md text-[#9d9dbd] hover:text-white transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
         
         {step === 'start' && (
           <>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p className="text-sm text-[#cfcfe4] leading-relaxed font-sans">
               When you click Start, you will hear a metronome beat. Tap the pad (or press <strong>Spacebar</strong>) in time with the sound.
               <br/><br/>
               Do this 8 times consistently to calculate your hardware&apos;s audio latency offset.
@@ -212,16 +212,16 @@ export default function OffsetWizardModal({ initial, onApply, onClose }: OffsetW
             <button
               type="button"
               onPointerDown={handleTapSurface}
-              className="w-full min-h-[180px] rounded-xl border-2 border-[var(--skin-accent)]/40 bg-[#051428]/80 active:bg-[var(--skin-accent)]/15 flex flex-col items-center justify-center gap-4 select-none touch-manipulation cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--skin-accent)]"
+              className="w-full min-h-[180px] rounded-md border-2 border-[var(--skin-accent)]/40 bg-[#232234] active:bg-[var(--skin-accent)]/15 flex flex-col items-center justify-center gap-4 select-none touch-manipulation cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--skin-accent)]"
               aria-label="Tap to the beat"
             >
-              <div className="w-24 h-24 rounded-full border-4 border-[#1b3b64] flex flex-col items-center justify-center relative shadow-[0_0_20px_rgba(0,0,0,0.5)] pointer-events-none">
+              <div className="w-24 h-24 rounded-full border-4 border-[#4a4980] flex flex-col items-center justify-center relative shadow-[0_0_20px_rgba(0,0,0,0.5)] pointer-events-none">
                  <div 
                     className="absolute inset-0 rounded-full bg-[var(--skin-accent)] opacity-20"
                     style={{ transform: `scale(${1 + Math.sin(beatProgress * Math.PI) * 0.15})` }}
                  />
                  <span className="text-3xl font-black text-white relative z-10">{tapTimes.length}</span>
-                 <span className="text-[10px] text-slate-400 font-bold uppercase relative z-10">of 8 taps</span>
+                  <span className="text-[10px] text-[#8f8fa8] font-semibold relative z-10">of 8 taps</span>
               </div>
               <p className="text-sm text-[var(--skin-accent)] font-medium animate-pulse pointer-events-none px-4 text-center">
                 Tap here (or Spacebar) to the beat!
@@ -232,14 +232,14 @@ export default function OffsetWizardModal({ initial, onApply, onClose }: OffsetW
         
         {step === 'apply' && (
           <>
-            <div className="flex flex-col items-center py-4 bg-[#051428]/80 rounded-lg border border-[#1b3b64]/60">
-              <span className="text-sm text-slate-400">Calculated Audio Offset:</span>
+            <div className="flex flex-col items-center py-4 bg-[#232234] rounded-md border border-black/30">
+              <span className="text-sm text-[#8f8fa8] font-sans">Calculated audio offset:</span>
               <span className={`text-4xl font-black tracking-tight mt-1 ${
                 displayResult > 0 ? 'text-red-400' : 'text-emerald-400'
               }`}>
                 {displayResult > 0 ? '+' : ''}{displayResult}ms
               </span>
-              <span className="text-xs text-slate-500 mt-2">
+              <span className="text-xs text-[#6f6f92] mt-2 font-sans">
                 Previous value: {initial > 0 ? '+' : ''}{initial}ms
               </span>
             </div>
@@ -247,7 +247,7 @@ export default function OffsetWizardModal({ initial, onApply, onClose }: OffsetW
             <div className="flex justify-end gap-3 pt-2">
               <button 
                 onClick={startMetronome}
-                className="px-4 py-2 rounded text-sm font-medium bg-[#193454]/70 text-slate-200 hover:bg-[#193454] hover:text-white border border-[#2d5584]/60 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-md text-sm font-medium bg-white/[0.06] text-[#ececf5] hover:bg-white/[0.12] transition-colors cursor-pointer"
               >
                 Retry
               </button>

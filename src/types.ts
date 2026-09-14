@@ -293,6 +293,7 @@ export interface GameSettings {
   videoOpacity: number; // background video opacity (0 to 1)
   backgroundDim: number; // gameplay background dim / solid-black lane background shielding opacity (0 to 1)
   menuBackgroundDim?: number; // menus background dim overlay opacity across menus and selection screens (0 to 1)
+  settingsMenuBackgroundDim?: number; // settings drawer backdrop dim overlay opacity (0 to 1)
   disableVideo?: boolean; // whether background video playback is completely disabled
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
   disableParticles?: boolean; // completely disable particle visual burst generator

@@ -316,6 +316,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     videoOpacity: 1.0,
     backgroundDim: clamp(settings.backgroundDim, 0, 1, defaultSettings.backgroundDim),
     menuBackgroundDim: clamp(settings.menuBackgroundDim, 0, 1, defaultSettings.menuBackgroundDim ?? 0.3),
+    settingsMenuBackgroundDim: clamp(settings.settingsMenuBackgroundDim, 0, 1, defaultSettings.settingsMenuBackgroundDim ?? 0.6),
     disableVideo: Boolean(settings.disableVideo),
     videoOffset: clamp(settings.videoOffset, -10000, 10000, defaultSettings.videoOffset || 0),
     disableParticles: Boolean(settings.disableParticles),

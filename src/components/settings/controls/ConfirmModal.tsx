@@ -37,18 +37,18 @@ export default function ConfirmModal({ isOpen, message, onConfirm, onCancel }: C
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-[#0b0e15] border border-white/10 rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
-        <div className="flex items-center gap-3 text-amber-400">
+      <div className="bg-[#232230] border border-black/30 rounded-md shadow-2xl max-w-sm w-full p-5 space-y-4 animate-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
+        <div className="flex items-center gap-3 text-[#e8b400]">
           <AlertCircle className="w-5 h-5" />
-          <h3 id="settings-confirm-title" className="text-base font-black uppercase tracking-wider text-white font-sans">Confirm Action</h3>
+          <h3 id="settings-confirm-title" className="text-base font-semibold text-white font-sans">Confirm action</h3>
         </div>
-        <p className="text-slate-300 text-sm leading-relaxed font-sans">
+        <p className="text-[#cfcfe4] text-sm leading-relaxed font-sans">
           {message}
         </p>
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="flex justify-end gap-2 pt-2">
           <button
             onClick={onCancel}
-            className="px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer text-xs font-bold uppercase tracking-wider font-sans"
+            className="px-4 py-2 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[#ececf5] transition-colors cursor-pointer text-[13px] font-semibold font-sans"
           >
             Cancel
           </button>
@@ -57,7 +57,7 @@ export default function ConfirmModal({ isOpen, message, onConfirm, onCancel }: C
               onConfirm();
               onCancel(); // Close modal
             }}
-            className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white transition-all shadow-lg shadow-rose-950/50 cursor-pointer text-xs font-bold uppercase tracking-wider font-sans active:scale-95"
+            className="px-4 py-2 rounded-md bg-[#e0497a] hover:bg-[#f05e8d] text-white transition-colors cursor-pointer text-[13px] font-semibold font-sans active:scale-[0.98]"
           >
             Reset
           </button>

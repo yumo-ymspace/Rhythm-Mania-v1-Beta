@@ -10,21 +10,26 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 import type { GameSettings } from '../../types';
 import type { SectionId } from './settingsRegistry';
 import { SECTIONS, ROWS } from './settingsRegistry';
 import { BABYLON_PLAYFIELD_WIDTH_MAX, BABYLON_PLAYFIELD_WIDTH_MIN } from './defaultSettings';
 import SettingsRow from './SettingsRow';
 import SettingsToggle from './controls/SettingsToggle';
-import SettingsSlider from './controls/SettingsSlider';
+import SettingsSlider, { SliderValue } from './controls/SettingsSlider';
 import SettingsSelect from './controls/SettingsSelect';
 import SettingsButton from './controls/SettingsButton';
 import SettingsText from './controls/SettingsText';
+import SettingsSearchBar from './SettingsSearchBar';
 
 interface SettingsPaneProps {
   activeSection: SectionId;
   query: string;
+  onQueryChange: (v: string) => void;
+  onClose: () => void;
+  shaking: boolean;
   settings: GameSettings;
   update: (patch: Partial<GameSettings>) => void;
   resetRow: (id: string) => void;
@@ -37,6 +42,9 @@ interface SettingsPaneProps {
 export default function SettingsPane({
   activeSection,
   query,
+  onQueryChange,
+  onClose,
+  shaking,
   settings,
   update,
   resetRow,
@@ -68,27 +76,81 @@ export default function SettingsPane({
 
   const sectionDef = SECTIONS.find(s => s.id === activeSection);
 
+  // Bouncy purely-visual reset animation: the setting itself jumps to its
+  // default instantly while the slider display springs there over ~280ms.
+  const sliderAnimRef = useRef<number | null>(null);
+  const [sliderFlash, setSliderFlash] = useState<{ id: string; from: number; to: number; progress: number } | null>(null);
+  useEffect(() => () => {
+    if (sliderAnimRef.current !== null) cancelAnimationFrame(sliderAnimRef.current);
+  }, []);
+  const cancelSliderFlash = () => {
+    if (sliderAnimRef.current !== null) {
+      cancelAnimationFrame(sliderAnimRef.current);
+      sliderAnimRef.current = null;
+    }
+    setSliderFlash(null);
+  };
+  const flashSliderReset = (rowId: string, from: number, to: number) => {
+    if (sliderAnimRef.current !== null) cancelAnimationFrame(sliderAnimRef.current);
+    if (from === to) return;
+    const durationMs = 280;
+    const start = performance.now();
+    setSliderFlash({ id: rowId, from, to, progress: 0 });
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const c = 1.70158;
+      const eased = 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+      if (t < 1) {
+        setSliderFlash({ id: rowId, from, to, progress: eased });
+        sliderAnimRef.current = requestAnimationFrame(tick);
+      } else {
+        sliderAnimRef.current = null;
+        setSliderFlash(null);
+      }
+    };
+    sliderAnimRef.current = requestAnimationFrame(tick);
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-7">
+    <div className="flex-1 overflow-y-auto px-5 pb-6 bg-[#302e29]">
+      <div className="pt-5 pb-1 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[28px] leading-none font-sans font-semibold text-white">settings</h1>
+          <p className="text-xs text-[#a3a3c2] font-sans mt-1.5">change the way RhythmMania behaves</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-2 text-[#9d9dbd] hover:text-white bg-white/[0.05] hover:bg-white/[0.1] rounded-md transition-colors flex-none cursor-pointer active:scale-95"
+          title="Close (Esc)"
+          aria-label="Close settings"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <SettingsSearchBar value={query} onChange={onQueryChange} onClose={onClose} shaking={shaking} />
       {!q && sectionDef && (
-        <div className="mb-7 pb-4 border-b border-white/[0.06]">
-          <h2 className="text-2xl font-black uppercase tracking-wider text-white font-sans">{sectionDef.label}</h2>
-          <p className="text-xs text-slate-400 font-mono uppercase tracking-wide mt-1.5 leading-relaxed">{sectionDef.description}</p>
+        <div className="mt-3 mb-3">
+          <h2 className="text-xl font-sans font-semibold text-white">{sectionDef.label}</h2>
+          <p className="text-xs text-[#a3a3c2] font-sans mt-1">{sectionDef.description}</p>
         </div>
       )}
 
       {q && rows.length === 0 ? (
-        <div className="text-slate-400 font-mono text-sm mt-8">
+        <div className="text-[#a3a3c2] font-sans text-sm mt-8">
           No settings match &ldquo;{query}&rdquo;.
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
           {rows.map((row) => {
-            // Need to pass the isChanged value
+            // Need to pass the isChanged value. Action buttons (e.g. the
+            // offset wizard opener) have no stored value, so they are never
+            // marked changed.
             const currentValue = settings[row.id as keyof GameSettings];
-            const isChanged = !isAtDefault(row.id, currentValue);
+            const isChanged = row.control.kind === 'button' ? false : !isAtDefault(row.id, currentValue);
 
             let controlNode = null;
+            let valueNode: ReactNode = null;
+            let handleSliderReset: (() => void) | null = null;
             if (row.control.kind === 'toggle') {
               controlNode = (
                 <SettingsToggle
@@ -98,30 +160,61 @@ export default function SettingsPane({
                 />
               );
             } else if (row.control.kind === 'slider') {
-              const sliderMin = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
+              const isPercent = row.control.percent === true;
+              const baseMin = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
                 ? BABYLON_PLAYFIELD_WIDTH_MIN
                 : (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
                   ? 0.60
                 : row.control.min;
-              const sliderMax = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
+              const baseMax = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
                 ? BABYLON_PLAYFIELD_WIDTH_MAX
                 : (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
                   ? 1.00
                 : row.control.max;
+              // Percent sliders show whole 0-100 integers and parse back to 0-1.
+              const sliderMin = isPercent ? Math.round(baseMin * 100) : baseMin;
+              const sliderMax = isPercent ? Math.round(baseMax * 100) : baseMax;
+              const sliderStep = isPercent ? 1 : row.control.step;
+              const toDisplay = (v: number) => isPercent ? Math.round(v * 100) : Math.round(v);
+              const fromDisplay = (d: number) => isPercent ? Math.round(d) / 100 : Math.round(d);
               const sliderVal = currentValue === undefined || currentValue === null || Number.isNaN(Number(currentValue))
                 ? Number(row.defaultValue ?? 0)
                 : Number(currentValue);
-              controlNode = (
-                <SettingsSlider
-                  id={`setting-${row.id}`}
-                  value={sliderVal}
-                   min={sliderMin}
-                   max={sliderMax}
-                  step={row.control.step}
-                  format={row.control.format}
-                  suffix={row.control.suffix}
-                  onChange={(v) => update({ [row.id]: v })}
+              const sliderDefault = Number(row.defaultValue ?? baseMin);
+              const flash = sliderFlash && sliderFlash.id === row.id ? sliderFlash : null;
+              const displayVal = flash
+                ? Math.round(flash.from + (flash.to - flash.from) * flash.progress)
+                : toDisplay(sliderVal);
+              handleSliderReset = () => {
+                resetRow(row.id);
+                flashSliderReset(row.id, toDisplay(sliderVal), toDisplay(sliderDefault));
+              };
+              const cancelAndUpdateSlider = (d: number) => {
+                cancelSliderFlash();
+                update({ [row.id]: fromDisplay(d) });
+              };
+              valueNode = (
+                <SliderValue
+                  value={displayVal}
+                  min={sliderMin}
+                  max={sliderMax}
+                  format={isPercent ? (v: number) => `${v}%` : row.control.format}
+                  suffix={isPercent ? undefined : row.control.suffix}
+                  onChange={cancelAndUpdateSlider}
                 />
+              );
+              controlNode = (
+                <div className="w-32 sm:w-40">
+                  <SettingsSlider
+                    id={`setting-${row.id}`}
+                    value={displayVal}
+                    min={sliderMin}
+                    max={sliderMax}
+                    step={sliderStep}
+                    onChange={cancelAndUpdateSlider}
+                    bare
+                  />
+                </div>
               );
             } else if (row.control.kind === 'text') {
               controlNode = (
@@ -169,6 +262,7 @@ export default function SettingsPane({
               }
             }
 
+            const isResettable = row.control.kind !== 'button' && row.control.kind !== 'custom';
             return (
               <SettingsRow
                 key={row.id}
@@ -176,7 +270,10 @@ export default function SettingsPane({
                 label={row.label}
                 description={row.description}
                 isChanged={isChanged}
-                onReset={() => resetRow(row.id)}
+                onReset={handleSliderReset ?? (() => resetRow(row.id))}
+                valueNode={valueNode}
+                showReset={isResettable}
+                alignInfoRight={row.control.kind === 'slider'}
               >
                 {controlNode}
               </SettingsRow>

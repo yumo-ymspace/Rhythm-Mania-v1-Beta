@@ -24,10 +24,10 @@ export default function SettingsButton({ label, onClick, danger, id }: SettingsB
     <button
       id={id}
       onClick={onClick}
-      className={`px-4 py-2 rounded-xl text-xs font-bold font-sans uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm ${
+      className={`px-4 py-2 rounded-md text-[13px] font-semibold font-sans transition-colors active:scale-[0.98] cursor-pointer ${
         danger
-          ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30'
-          : 'bg-white/[0.06] text-white hover:bg-white/[0.12] hover:border-cyan-400/40 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+          ? 'bg-[#e0497a]/15 text-[#f0a3b5] hover:bg-[#e0497a]/25 border border-[#e0497a]/30'
+          : 'bg-[#6b5cff] text-white hover:bg-[#7d70ff]'
       }`}
     >
       {label}

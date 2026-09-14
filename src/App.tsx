@@ -1058,6 +1058,7 @@ export default function App() {
         videoOpacity: 1.0,
         backgroundDim: Number(updated.backgroundDim !== undefined ? updated.backgroundDim : 0.60),
         menuBackgroundDim: Number(updated.menuBackgroundDim !== undefined ? updated.menuBackgroundDim : 0.30),
+        settingsMenuBackgroundDim: Number(updated.settingsMenuBackgroundDim !== undefined ? updated.settingsMenuBackgroundDim : 0.60),
         disableVideo: Boolean(updated.disableVideo),
         videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
         disableParticles: Boolean(updated.disableParticles),
@@ -1640,14 +1641,15 @@ export default function App() {
               exit="exit"
               className="w-full h-full relative"
             >
-              <MainMenu 
+              <MainMenu
                 onNavigate={(screen) => {
                   leaveProfilePath(screen as GameScreen);
-                }} 
+                }}
                 onOpenSettings={openSettings}
                 onOpenBrowse={() => setShowFindBeatmapOverlay(true)}
                 phase={menuPhase}
                 onPhaseChange={setMenuPhase}
+                inputDisabled={showSettings || showFindBeatmapOverlay}
               />
             </motion.div>
           )}

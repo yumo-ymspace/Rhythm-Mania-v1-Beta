@@ -37,7 +37,7 @@ export default function SettingsText({
       autoComplete="off"
       spellCheck={false}
       onChange={(e) => onChange(e.target.value)}
-      className="w-44 max-w-[min(11rem,40vw)] bg-[#121622] border border-white/10 text-white placeholder-slate-400 text-xs font-sans rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 shadow-sm transition-all"
+      className="w-44 max-w-[min(11rem,40vw)] bg-[#232234] border border-black/30 text-white placeholder-[#6f6f92] text-[13px] font-sans rounded-md px-3 py-2 focus:outline-none focus:border-[#8a7dff]/60 transition-colors"
     />
   );
 }

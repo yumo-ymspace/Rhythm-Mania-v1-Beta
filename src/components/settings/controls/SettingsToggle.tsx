@@ -20,7 +20,7 @@ interface SettingsToggleProps {
 
 export default function SettingsToggle({ checked, onChange, id }: SettingsToggleProps) {
   return (
-    <label className="relative inline-flex items-center cursor-pointer select-none h-5 w-9 shrink-0">
+    <label className="relative inline-flex items-center cursor-pointer select-none h-6 w-11 shrink-0">
       <input
         type="checkbox"
         id={id}
@@ -29,15 +29,15 @@ export default function SettingsToggle({ checked, onChange, id }: SettingsToggle
         className="sr-only peer"
       />
       <span
-        className={`w-9 h-5 rounded-full transition-all duration-150 flex-shrink-0 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-400/50 ${
-          checked 
-            ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]' 
-            : 'bg-[#151a26] border border-white/15 hover:border-white/25'
+        className={`w-11 h-6 rounded-full transition-colors duration-100 flex-shrink-0 peer-focus:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-[#8a7dff]/60 border-2 ${
+          checked
+            ? 'bg-[#8a7dff] border-[#8a7dff]'
+            : 'bg-transparent border-[#5b5a8a] hover:border-[#8a7dff]'
         }`}
       >
         <span
-          className={`block mt-0.5 ml-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-150 shadow-sm ${
-            checked ? 'translate-x-4' : 'translate-x-0'
+          className={`block mt-[1px] ml-[1px] bg-white w-[18px] h-[18px] rounded-full transition-transform duration-100 ${
+            checked ? 'translate-x-5' : 'translate-x-0'
           }`}
         />
       </span>
