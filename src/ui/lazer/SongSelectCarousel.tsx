@@ -56,6 +56,69 @@ function getStarDotCount(starRating: number): number {
 }
 
 /**
+ * osu!lazer-style difficulty tint. Matches hud/songselect refs:
+ * ~0-1.5 blue, 1.5-2.5 teal/green, 2.5-3.5 olive/yellow,
+ * 3.5-4.5 orange, 4.5+ pink/red.
+ */
+export function getDiffTint(starRating: number): { bg: string; edge: string; pill: string } {
+  if (starRating < 1.5) return {
+    bg: 'linear-gradient(90deg, rgba(56,130,190,0.92) 0%, rgba(43,95,150,0.88) 100%)',
+    edge: '#7dd3fc',
+    pill: 'bg-sky-950/70 text-sky-200 border border-sky-300/40',
+  };
+  if (starRating < 2.5) return {
+    bg: 'linear-gradient(90deg, rgba(46,160,140,0.92) 0%, rgba(34,120,115,0.88) 100%)',
+    edge: '#5eead4',
+    pill: 'bg-teal-950/70 text-teal-100 border border-teal-300/40',
+  };
+  if (starRating < 3.5) return {
+    bg: 'linear-gradient(90deg, rgba(150,150,60,0.90) 0%, rgba(110,110,45,0.88) 100%)',
+    edge: '#fde047',
+    pill: 'bg-yellow-950/70 text-yellow-100 border border-yellow-300/40',
+  };
+  if (starRating < 4.5) return {
+    bg: 'linear-gradient(90deg, rgba(180,120,50,0.92) 0%, rgba(140,90,35,0.88) 100%)',
+    edge: '#fdba74',
+    pill: 'bg-orange-950/70 text-orange-100 border border-orange-300/40',
+  };
+  return {
+    bg: 'linear-gradient(90deg, rgba(170,60,110,0.92) 0%, rgba(120,40,85,0.88) 100%)',
+    edge: '#f9a8d4',
+    pill: 'bg-pink-950/70 text-pink-100 border border-pink-300/40',
+  };
+}
+
+/**
+ * Small per-difficulty color dots shown on the set card (hud refs).
+ * Same hue ramp as the expanded rows.
+ */
+function getDiffDotColor(starRating: number): string {
+  if (starRating < 1.5) return '#7dd3fc';
+  if (starRating < 2.5) return '#5eead4';
+  if (starRating < 3.5) return '#fde047';
+  if (starRating < 4.5) return '#fdba74';
+  return '#f9a8d4';
+}
+
+function getGradeCircleClass(grade: string): string {
+  switch (grade) {
+    case 'SS':
+    case 'S':
+      return 'bg-amber-300 text-amber-950';
+    case 'A':
+      return 'bg-emerald-300 text-emerald-950';
+    case 'B':
+      return 'bg-sky-300 text-sky-950';
+    case 'C':
+      return 'bg-violet-300 text-violet-950';
+    case 'D':
+      return 'bg-rose-300 text-rose-950';
+    default:
+      return 'bg-slate-300 text-slate-800';
+  }
+}
+
+/**
  * Returns color classes for key count badge dots
  */
 function getKeyDotColor(keyCount: number): string {
@@ -79,15 +142,15 @@ function getRankStatusBadge(group: CarouselSongGroup): { label: string; bgClass:
     const status = (firstMap as any).rankStatus || (firstMap as any).status;
     if (status) {
       const s = String(status).toLowerCase();
-      if (s === 'ranked') return { label: 'RANKED', bgClass: 'bg-emerald-500/90 text-white' };
-      if (s === 'loved') return { label: 'LOVED', bgClass: 'bg-pink-500/90 text-white' };
-      if (s === 'graveyard') return { label: 'GRAVEYARD', bgClass: 'bg-slate-600/90 text-slate-200' };
+      if (s === 'ranked') return { label: 'RANKED', bgClass: 'lazer-status-pill is-ranked' };
+      if (s === 'loved') return { label: 'LOVED', bgClass: 'lazer-status-pill is-loved' };
+      if (s === 'graveyard') return { label: 'GRAVEYARD', bgClass: 'lazer-status-pill is-graveyard' };
     }
     if (firstMap.catalogMapId || firstMap.isServerMap) {
-      return { label: 'RANKED', bgClass: 'bg-emerald-500/90 text-white' };
+      return { label: 'RANKED', bgClass: 'lazer-status-pill is-ranked' };
     }
   }
-  return { label: 'LOCAL', bgClass: 'bg-[#00e5ff]/25 text-[#00e5ff] border border-[#00e5ff]/40' };
+  return { label: 'LOCAL', bgClass: 'lazer-status-pill is-graveyard' };
 }
 
 export function SongSelectCarousel({
@@ -126,11 +189,12 @@ export function SongSelectCarousel({
       {songGroups.map((group) => {
         const isGroupActive = selectedGroupKey === group.songKey;
         const isExpanded = expandedSongKey === group.songKey || isGroupActive;
-        const groupBannerUrl = group.coverUrl || DEFAULT_BANNER;
+        const groupBannerUrl = group.coverUrl || group.bgUrl || DEFAULT_BANNER;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
         const uniqueKeys = Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
           .sort((a, b) => Number(a) - Number(b));
+        const diffDots = sortedDiffs.slice(0, 12).map((m) => getDiffDotColor(getStarRating(m)));
 
         return (
           <motion.div
@@ -140,7 +204,7 @@ export function SongSelectCarousel({
             className="flex flex-col gap-1.5"
             ref={isGroupActive ? activeItemRef : undefined}
           >
-            {/* SET CARD (Compact Header) */}
+            {/* SET CARD — hud/songselect.jpg: tall art card, status pill, title/artist, mode icon + diff dots */}
             <div
               role="button"
               tabIndex={0}
@@ -154,49 +218,56 @@ export function SongSelectCarousel({
               onClick={() => onSelectGroup(group)}
               className={`lazer-carousel-card ${isGroupActive ? 'is-active' : ''}`}
             >
-              {/* Background Art with cover gradient */}
+              {/* Left active arrow + white edge */}
+              {isGroupActive && <div className="lazer-carousel-active-edge" aria-hidden="true" />}
               <div
-                className="absolute inset-0 bg-cover bg-center pointer-events-none opacity-45 transition-transform duration-300 group-hover:scale-105"
+                className="absolute inset-0 bg-cover bg-center pointer-events-none"
                 style={{ backgroundImage: `url("${sanitizeCssUrl(groupBannerUrl)}")` }}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#0d1017]/95 via-[#0d1017]/75 to-transparent pointer-events-none" />
+              <div className="absolute inset-0 pointer-events-none lazer-carousel-card-shade" />
 
               {/* Set Card Content */}
-              <div className="relative flex items-center justify-between px-3.5 py-2.5 gap-3">
-                <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    {/* Status Pill (Ranked / Loved / Graveyard / Local) */}
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-black uppercase tracking-wider ${rankBadge.bgClass}`}>
-                      {rankBadge.label}
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-300 font-bold truncate">
+              <div className="relative flex items-center justify-between px-3.5 py-2.5 gap-3 min-h-[64px]">
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  {isGroupActive && (
+                    <span className="mt-0.5 text-white/90 text-sm font-black shrink-0" aria-hidden="true">›</span>
+                  )}
+                  <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
+                    <h4 className="font-extrabold font-sans text-[15px] sm:text-base text-white tracking-tight truncate leading-tight order-first">
+                      {group.title}
+                    </h4>
+                    <span className="text-[11px] font-sans text-slate-200/90 truncate">
                       {group.artist || 'Unknown Artist'}
                     </span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className={`px-1.5 py-px rounded text-[9px] font-mono font-black uppercase tracking-wider ${rankBadge.bgClass}`}>
+                        {rankBadge.label}
+                      </span>
+                      {/* mania mode icon */}
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/50 text-[8px] font-black text-white/90" title="mania mode">
+                        M
+                      </span>
+                      <span className="flex items-center gap-[3px]" aria-hidden="true">
+                        {diffDots.map((c, i) => (
+                          <span key={i} className="inline-block w-[5px] h-[10px] rounded-[2.5px]" style={{ background: c }} />
+                        ))}
+                      </span>
+                      {uniqueKeys.length > 0 && (
+                        <span className="flex items-center gap-1" aria-hidden="true">
+                          {uniqueKeys.map((k) => (
+                            <span key={k} title={`${k}K`} className={`w-2 h-2 rounded-full inline-block ${getKeyDotColor(k)}`} />
+                          ))}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <h4 className="font-extrabold font-sans text-sm sm:text-base text-white tracking-tight truncate leading-tight">
-                    {group.title}
-                  </h4>
                 </div>
 
-                {/* Right side of card: Key dots, Diffs count, Favorite */}
+                {/* Right side: diff count + favorite */}
                 <div className="flex items-center gap-2 shrink-0 select-none">
-                  {/* Key Count Color Dots */}
-                  {uniqueKeys.length > 0 && (
-                    <div className="flex items-center gap-1 px-1.5 py-1 bg-black/40 border border-white/10 rounded">
-                      {uniqueKeys.map((k) => (
-                        <span
-                          key={k}
-                          title={`${k}K`}
-                          className={`w-2 h-2 rounded-full inline-block ${getKeyDotColor(k)}`}
-                        />
-                      ))}
-                    </div>
-                  )}
-
                   <span className="px-2 py-0.5 bg-white/10 border border-white/15 rounded text-[10px] font-mono font-bold text-slate-200">
                     {group.maps.length} {group.maps.length === 1 ? 'diff' : 'diffs'}
                   </span>
-
                   <button
                     type="button"
                     onClick={(e) => {
@@ -210,7 +281,7 @@ export function SongSelectCarousel({
                       className={`h-4 w-4 transition-colors ${
                         favoriteSongs.includes(group.songKey)
                           ? 'fill-rose-500 text-rose-500'
-                          : 'text-slate-500 hover:text-slate-300'
+                          : 'text-slate-300/70 hover:text-slate-100'
                       }`}
                     />
                   </button>
@@ -232,6 +303,7 @@ export function SongSelectCarousel({
                     const isDiffSelected = selectedMapId === diff.id;
                     const rating = getStarRating(diff);
                     const dotCount = getStarDotCount(rating);
+                    const tint = getDiffTint(rating);
                     const bestRecord = playHistory
                       .filter((r) => r.beatmapId === diff.id || (diff.beatmapHash && r.beatmapHash === diff.beatmapHash))
                       .sort((a, b) => (b.score !== a.score ? b.score - a.score : b.accuracy - a.accuracy))[0];
@@ -259,53 +331,52 @@ export function SongSelectCarousel({
                           }
                         }}
                         className={`lazer-carousel-diff-row ${isDiffSelected ? 'is-selected' : ''}`}
+                        style={{ background: tint.bg, borderColor: isDiffSelected ? tint.edge : undefined }}
                       >
-                        {/* Selected cyan indicator bar */}
-                        {isDiffSelected && <div className="lazer-carousel-diff-bar" />}
+                        {/* Selected edge indicator */}
+                        {isDiffSelected && <div className="lazer-carousel-diff-bar" style={{ background: tint.edge, boxShadow: `0 0 8px ${tint.edge}` }} />}
 
-                        <div className="flex items-center justify-between px-3.5 py-2 gap-2 relative z-10">
-                          {/* Left: Star Pill, Key count, Diff Name + Mapper */}
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            {/* Star rating on coloured pill */}
-                            <span className={`px-2 py-0.5 rounded font-mono font-black text-xs shrink-0 ${getDifficultyColor(rating)}`}>
-                              ★ {rating.toFixed(2)}
-                            </span>
-
-                            {/* 10-dot star meter */}
-                            <div className="lazer-star-meter hidden sm:flex" aria-hidden="true">
-                              {Array.from({ length: 10 }, (_, i) => (
-                                <span
-                                  key={i}
-                                  className={`lazer-star-meter-dot ${i < dotCount ? 'is-filled' : ''}`}
-                                />
-                              ))}
-                            </div>
-
-                            {/* [4K] Easy mapped by ... */}
-                            <div className="flex items-center gap-1.5 truncate text-xs sm:text-sm">
-                              <span className="font-mono font-bold text-slate-400 shrink-0">
-                                [{diff.keyCount || 4}K]
+                        <div className="flex items-center justify-between px-3 py-2 gap-2 relative z-10">
+                          {/* Left: grade circle, [4K] name, mapper */}
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {bestRecord ? (
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${getGradeCircleClass(bestRecord.grade)}`}>
+                                {bestRecord.grade}
                               </span>
-                              <span className="font-extrabold text-white truncate">
-                                {diff.difficulty}
+                            ) : (
+                              <span className="w-6 h-6 rounded-full border border-white/40 flex items-center justify-center text-[9px] font-black text-white/70 shrink-0">
+                                {diff.keyCount || 4}K
+                              </span>
+                            )}
+
+                            <div className="flex items-center gap-1.5 truncate text-xs sm:text-[13px]">
+                              <span className="font-sans font-bold text-white/95 truncate">
+                                [{diff.keyCount || 4}K] {diff.difficulty}
                               </span>
                               {diff.creator && (
-                                <span className="text-[10px] font-mono text-slate-400 truncate hidden md:inline">
+                                <span className="text-[10px] font-sans text-white/70 truncate hidden md:inline">
                                   mapped by {diff.creator}
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Right: Local Grade badge + Ready status */}
-                          <div className="flex items-center gap-2 shrink-0 font-mono text-xs">
-                            {bestRecord && (
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${getGradeBadgeClass(bestRecord.grade)}`}>
-                                {bestRecord.grade}
-                              </span>
-                            )}
+                          {/* Right: star pill + dots + READY */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${tint.pill}`}>
+                              ★ {rating.toFixed(2)}
+                            </span>
+                            <span className="lazer-star-meter hidden sm:flex items-center gap-[2px]" aria-hidden="true">
+                              {Array.from({ length: 10 }, (_, i) => (
+                                <span
+                                  key={i}
+                                  className={`lazer-star-meter-dot ${i < dotCount ? 'is-filled' : ''}`}
+                                  style={i < dotCount ? undefined : { background: 'rgba(255,255,255,0.25)', boxShadow: 'none' }}
+                                />
+                              ))}
+                            </span>
                             {isDiffSelected && (
-                              <span className="text-[10px] text-[#00e5ff] font-black tracking-wider uppercase animate-pulse">
+                              <span className="text-[10px] text-white font-black tracking-wider uppercase animate-pulse">
                                 READY
                               </span>
                             )}

@@ -123,7 +123,7 @@ export function SongSelectFooter({
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
           <LazerCookie
-            size={96}
+            size={148}
             bpm={previewBpm || 120}
             pulse={true}
             showSpectrum={true}

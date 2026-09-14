@@ -236,8 +236,9 @@ export default function SongSelect({
   const [minStar, setMinStar] = useState<number>(0.0);
   const [maxStar, setMaxStar] = useState<number>(10.0);
   const [sortBy, setSortBy] = useState<string>('Title');
-  const [collectionFilter, setCollectionFilter] = useState<string>('Downloaded');
-  const [openFilterMenu, setOpenFilterMenu] = useState<'sort' | 'star' | null>(null);
+  const [groupBy, setGroupBy] = useState<string>('None');
+  const [collectionFilter, setCollectionFilter] = useState<string>('All beatmaps');
+  const [openFilterMenu, setOpenFilterMenu] = useState<'sort' | 'group' | 'collection' | 'star' | null>(null);
   const [showModsModal, setShowModsModal] = useState<boolean>(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'details' | 'ranking'>('ranking');
 
@@ -398,6 +399,13 @@ export default function SongSelect({
 
       return true;
     }).sort((a, b) => {
+      if (groupBy === 'Artist') {
+        const c = a.artist.localeCompare(b.artist);
+        if (c !== 0) return c;
+      } else if (groupBy === 'Creator') {
+        const c = (a.creator || '').localeCompare(b.creator || '');
+        if (c !== 0) return c;
+      }
       if (sortBy === 'Title') return a.title.localeCompare(b.title);
       if (sortBy === 'Artist') return a.artist.localeCompare(b.artist);
       if (sortBy === 'Difficulty') return getStarRating(b) - getStarRating(a);
@@ -409,7 +417,7 @@ export default function SongSelect({
       }
       return 0;
     });
-  }, [mergedCustomMaps, searchTerm, minStar, maxStar, collectionFilter, sortBy, favoriteSongs]);
+  }, [mergedCustomMaps, searchTerm, minStar, maxStar, collectionFilter, sortBy, groupBy, favoriteSongs]);
 
   const persistLastDifficultyForMap = (map: any) => {
     if (!map?.id) return;
@@ -997,12 +1005,12 @@ export default function SongSelect({
           }}
         />
       )}
-      {/* Dark left wedge gradient + subtle overall tint matching songslect (2).jpg */}
-      <div 
+      {/* Dark wedge + overall tint matching hud/songselect.jpg: solid left panel fading into art */}
+      <div
         className="absolute inset-0 pointer-events-none"
         style={{
           zIndex: 1,
-          background: 'linear-gradient(90deg, rgba(6, 8, 14, 0.92) 0%, rgba(6, 8, 14, 0.82) 420px, rgba(6, 8, 14, 0.45) 750px, rgba(6, 8, 14, 0.3) 100%)',
+          background: 'linear-gradient(100deg, rgba(20,22,28,0.96) 0%, rgba(20,22,28,0.94) 30%, rgba(20,22,28,0.55) 52%, rgba(20,22,28,0.15) 72%, rgba(20,22,28,0.25) 100%)',
         }}
       />
 
@@ -1065,9 +1073,9 @@ export default function SongSelect({
       <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-16 min-h-0">
         
         {/* =======================================================
-            LEFT COLUMN: INFO WEDGE & LOCAL RANKING PANEL (TASK-V-022)
+            LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className={`w-full lg:w-[480px] xl:w-[520px] flex-col h-full min-h-0 border-r border-white/10 bg-[#06060a]/60 backdrop-blur-md p-4 lg:p-6 gap-4 overflow-y-auto ${
+        <div className={`w-full lg:w-[460px] xl:w-[500px] flex-col h-full min-h-0 p-4 lg:p-6 lg:pr-8 gap-4 overflow-y-auto lazer-left-scroll ${
           isMobile && mobileTab !== 'ranking' ? 'hidden' : 'flex'
         }`}>
           <SongSelectLeftPanel
@@ -1091,140 +1099,141 @@ export default function SongSelect({
         </div>
 
         {/* =======================================================
-            RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL WITH EXPANDABLE DIFF PILLS
+            RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className={`flex-1 flex-col h-full min-h-0 p-4 lg:p-6 gap-3 overflow-hidden ${
+        <div className={`flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-6 lg:pr-3 py-3 gap-2 overflow-hidden ${
           isMobile && mobileTab !== 'carousel' ? 'hidden' : 'flex'
         }`}>
-          
-          {/* SEARCH INTERFACE */}
-          <div className="relative flex-shrink-0">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input 
+
+          {/* SEARCH BOX — dark rounded, italic placeholder, yellow matches, magnifier */}
+          <div className="relative flex-shrink-0 lazer-song-search">
+            <input
               id="song-search-input"
               type="text"
-              placeholder="Search by title, artist, creator..."
+              placeholder="search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-24 py-3 bg-[#0d0e14]/90 border border-white/10 rounded-xl font-sans text-sm font-bold text-white placeholder-slate-500 focus:outline-none focus:border-skin-accent/60 focus:ring-1 focus:ring-skin-accent/40 transition-all shadow-lg"
+              className="lazer-song-search-input"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-[#1b1c24] border border-white/10 text-[9px] font-mono text-slate-400 font-bold rounded">
-              {filteredCustomMaps.length} matches
-            </span>
+            {searchTerm === '' && (
+              <span className="lazer-song-search-matches">{songGroups.length} matches</span>
+            )}
+            <Search className="lazer-song-search-icon" />
           </div>
 
-          {/* FILTER / SORT TOOLBAR */}
-          <div className="flex-shrink-0 flex flex-wrap items-center gap-2 relative z-20">
-            {/* Collection chips */}
-            <div className="flex items-center gap-0.5 bg-[#0d0e14] border border-white/10 rounded-lg p-0.5">
-              {([
-                { id: 'Downloaded', label: 'Downloaded' },
-                { id: 'Favorites', label: 'Favorites' },
-              ] as const).map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setCollectionFilter(opt.id)}
-                  className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    collectionFilter === opt.id
-                      ? 'bg-skin-accent/25 text-skin-accent border border-skin-accent/40'
-                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Sort dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setOpenFilterMenu(openFilterMenu === 'sort' ? null : 'sort')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d0e14] border border-white/10 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300 hover:text-white hover:border-white/20 transition-all cursor-pointer"
-              >
-                Sort: <span className="text-white">{sortBy}</span>
-                <ChevronDown className="h-3 w-3" />
-              </button>
-              {openFilterMenu === 'sort' && (
-                <>
-                  <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
-                  <div className="absolute left-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 rounded-lg shadow-2xl py-1 min-w-[140px]">
-                    {['Title', 'Artist', 'Difficulty', 'BPM', 'Length', 'Date Added'].map(opt => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => { setSortBy(opt); setOpenFilterMenu(null); }}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors cursor-pointer ${
-                          sortBy === opt ? 'text-skin-accent bg-skin-accent/10' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        {opt}
-                        {sortBy === opt && <Check className="h-3 w-3" />}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Star range popover */}
-            <div className="relative">
+          {/* STAR RATING RAINBOW BAR + Show converts */}
+          <div className="flex-shrink-0 flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="lazer-filter-tab">Star Rating</span>
               <button
                 type="button"
                 onClick={() => setOpenFilterMenu(openFilterMenu === 'star' ? null : 'star')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 bg-[#0d0e14] border rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  minStar > 0 || maxStar < 10
-                    ? 'border-amber-500/40 text-amber-300'
-                    : 'border-white/10 text-slate-300 hover:text-white hover:border-white/20'
-                }`}
+                className="lazer-starbar"
+                title="Filter by star rating"
               >
-                <Star className="h-3 w-3" />
-                {minStar.toFixed(1)}–{maxStar.toFixed(1)}
+                <span className="lazer-starbar-value">{minStar <= 0 ? '0.0' : minStar.toFixed(1)}</span>
+                <span className="lazer-starbar-track" aria-hidden="true">
+                  <span
+                    className="lazer-starbar-fill"
+                    style={{ width: `${Math.max(0, Math.min(100, (minStar / 10) * 100))}%` }}
+                  />
+                  <span
+                    className="lazer-starbar-thumb"
+                    style={{ left: `${Math.max(0, Math.min(100, (minStar / 10) * 100))}%` }}
+                  />
+                </span>
+                <span className="lazer-starbar-inf">∞</span>
               </button>
-              {openFilterMenu === 'star' && (
-                <>
-                  <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
-                  <div className="absolute left-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 rounded-lg shadow-2xl p-3 w-56 flex flex-col gap-3">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[9px] font-mono text-slate-400 uppercase tracking-wider">
-                        <span>Min stars</span><span className="text-white">{minStar.toFixed(1)}</span>
-                      </div>
-                      <input
-                        type="range" min={0} max={10} step={0.1} value={minStar}
-                        onChange={(e) => {
-                          const v = parseFloat(e.target.value);
-                          setMinStar(v);
-                          if (v > maxStar) setMaxStar(v);
-                        }}
-                        className="w-full accent-amber-400"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[9px] font-mono text-slate-400 uppercase tracking-wider">
-                        <span>Max stars</span><span className="text-white">{maxStar.toFixed(1)}</span>
-                      </div>
-                      <input
-                        type="range" min={0} max={10} step={0.1} value={maxStar}
-                        onChange={(e) => {
-                          const v = parseFloat(e.target.value);
-                          setMaxStar(v);
-                          if (v < minStar) setMinStar(v);
-                        }}
-                        className="w-full accent-amber-400"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setMinStar(0); setMaxStar(10); }}
-                      className="self-end text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
+            <span className="lazer-filter-tab opacity-80 hidden sm:inline-flex">Show converts</span>
+            {openFilterMenu === 'star' && (
+              <div className="relative">
+                <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
+                <div className="absolute right-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 rounded-lg shadow-2xl p-3 w-56 flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[9px] font-mono text-slate-400 uppercase tracking-wider">
+                      <span>Min stars</span><span className="text-white">{minStar.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1} value={minStar}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        setMinStar(v);
+                        if (v > maxStar) setMaxStar(v);
+                      }}
+                      className="w-full accent-amber-400"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between text-[9px] font-mono text-slate-400 uppercase tracking-wider">
+                      <span>Max stars</span><span className="text-white">{maxStar.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1} value={maxStar}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        setMaxStar(v);
+                        if (v < minStar) setMinStar(v);
+                      }}
+                      className="w-full accent-amber-400"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setMinStar(0); setMaxStar(10); }}
+                    className="self-end text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SORT / GROUP / COLLECTION ROW */}
+          <div className="flex-shrink-0 flex flex-wrap items-center gap-2 relative z-20">
+            {([
+              { key: 'sort' as const, label: 'Sort', value: sortBy, options: ['Title', 'Artist', 'Difficulty', 'BPM', 'Length', 'Date Added'] },
+              { key: 'group' as const, label: 'Group', value: groupBy, options: ['None', 'Artist', 'Creator'] },
+              { key: 'collection' as const, label: 'Collection', value: collectionFilter, options: ['All beatmaps', 'Downloaded', 'Favorites'] },
+            ]).map((dd) => (
+              <div key={dd.key} className="relative flex items-center gap-1.5">
+                <span className="lazer-filter-tab">{dd.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setOpenFilterMenu(openFilterMenu === dd.key ? null : dd.key)}
+                  className="lazer-filter-select"
+                >
+                  <span className="truncate max-w-[140px]">{dd.value}</span>
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </button>
+                {openFilterMenu === dd.key && (
+                  <>
+                    <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
+                    <div className="absolute left-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 rounded-lg shadow-2xl py-1 min-w-[150px]">
+                      {dd.options.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            if (dd.key === 'sort') setSortBy(opt);
+                            else if (dd.key === 'group') setGroupBy(opt);
+                            else setCollectionFilter(opt);
+                            setOpenFilterMenu(null);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-sans transition-colors cursor-pointer ${
+                            dd.value === opt ? 'text-white bg-white/10 font-bold' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {opt}
+                          {dd.value === opt && <Check className="h-3 w-3" />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* CAROUSEL SETS AND DIFFICULTY PILLS (TASK-V-021) */}
