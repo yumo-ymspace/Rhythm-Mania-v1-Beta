@@ -61,11 +61,16 @@ export function computeScrollTravelTimeMs(scrollSpeed?: number): number {
 export function calculateScrollSpeedFactor(
   height: number,
   receptorY: number,
-  settings: PlayfieldVisualSettings
+  settings: PlayfieldVisualSettings,
+  rateMultiplier: number = 1
 ): number {
   const travelDistance = settings.upsurfaceNoteMode ? (height - receptorY) : receptorY;
   const scrollTimeMs = computeScrollTravelTimeMs(settings.scrollSpeed);
-  return travelDistance / scrollTimeMs;
+  // Rate compensation: songTime advances rate x wall-clock (DT=1.5, HT=0.75).
+  // Dividing keeps wall-clock travel time (visual px/sec) constant so DT/HT
+  // only changes note density, not scroll speed.
+  const rate = Number.isFinite(rateMultiplier) && rateMultiplier > 0 ? rateMultiplier : 1;
+  return travelDistance / scrollTimeMs / rate;
 }
 
 export function getScrollYPosition(

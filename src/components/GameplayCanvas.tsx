@@ -2445,7 +2445,11 @@ export default function GameplayCanvas({
         const renderSettings = activeScrollSpeed === currentSettings.scrollSpeed
           ? currentSettings
           : { ...currentSettings, scrollSpeed: activeScrollSpeed };
-        const speedFactor = calculateScrollSpeedFactor(height, receptorY, renderSettings);
+        // Rate-compensated scroll: keep wall-clock px/sec constant so DT/HT/WU/WD/AS
+        // change note density, not visual scroll speed.
+        const liveRate = mainAudio.playbackRate;
+        const rateForScroll = Number.isFinite(liveRate) && liveRate > 0 ? liveRate : 1;
+        const speedFactor = calculateScrollSpeedFactor(height, receptorY, renderSettings, rateForScroll);
 
         // Calculate dynamic layouts
         const colsLayout = updateColumnsLayout(
