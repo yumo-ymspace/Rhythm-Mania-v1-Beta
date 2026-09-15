@@ -42,8 +42,9 @@
  * HpMultiplierNormal is computed during the drain-rate iteration in
  * LegacyDrainingHealthProcessor. For mania (drain rate = 0), the iteration
  * converges to a value that depends on the map's HP drain rate and the note
- * distribution. We simplify by using the DifficultyRange-based recovery
- * heuristic and pre-computing a plausible HpMultiplierNormal.
+ * distribution. computeHpMultiplierNormalForMap() ports that iteration over
+ * the note timeline (rice = one Perfect recovery, hold = head + tail
+ * Perfect recoveries); ManiaHealthProcessor then returns drain rate 0.
  */
 
 import type { JudgementType } from '../../types';
@@ -81,22 +82,143 @@ function difficultyRange(difficulty: number, min: number, mid: number, max: numb
  * recovery budget. This matches the stable behaviour closely enough for
  * gameplay feel without requiring a full beatmap simulation pass.
  */
+export interface HpMapNote {
+  time: number;
+  endTime?: number;
+  type?: string;
+}
+
+/**
+ * Base Perfect (internal marvelous) recovery before HpMultiplierNormal scaling.
+ * Mirrors ManiaHealthProcessor.GetHealthIncreaseFor(Perfect).
+ */
+function perfectRecoveryBase(hpDrainRate: number): number {
+  const hp = Math.max(0, Math.min(10, hpDrainRate));
+  return 0.0055 - hp * 0.0005;
+}
+
+function isHoldNote(note: HpMapNote): boolean {
+  if (note.type === 'hold') return true;
+  return note.endTime !== undefined && note.endTime > note.time;
+}
+
+/**
+ * Map-aware HpMultiplierNormal port of lazer's
+ * LegacyDrainingHealthProcessor.ComputeDrainRate().
+ *
+ * ManiaHealthProcessor calls the base iteration only to compute
+ * HpMultiplierNormal, then returns drain rate 0 (no passive drain).
+ * The loop binary-searches a test drop rate while bumping the recovery
+ * multiplier (*1.01) whenever the simulated perfect play dips below the
+ * lowestHpEver/lowestHpEnd curves or the uncapped recovery budget is too
+ * low. The returned multiplier scales Good/Great/Perfect recovery only.
+ *
+ * With no notes the iteration has nothing to simulate and stays at 1.0.
+ */
+export function computeHpMultiplierNormalForMap(
+  hpDrainRate: number,
+  notes: readonly HpMapNote[] | undefined | null,
+): number {
+  const hp = Math.max(0, Math.min(10, hpDrainRate));
+  if (!notes || notes.length === 0) return 1.0;
+
+  const sorted = [...notes]
+    .filter((n) => Number.isFinite(n.time))
+    .sort((a, b) => a.time - b.time || (a.endTime ?? a.time) - (b.endTime ?? b.time));
+  if (sorted.length === 0) return 1.0;
+
+  const lowestHpEver = difficultyRange(hp, 0.975, 0.8, 0.3);
+  const lowestHpEnd = difficultyRange(hp, 0.99, 0.9, 0.4);
+  const hpRecoveryAvailable = difficultyRange(hp, 0.04, 0.02, 0);
+  const baseRecovery = perfectRecoveryBase(hp);
+
+  let hpMultiplierNormal = 1;
+  let testDrop = 0.00025;
+  const drainStartTime = sorted[0].time;
+
+  for (let iteration = 0; iteration < 500; iteration++) {
+    let currentHp = 1;
+    let currentHpUncapped = 1;
+    let lastTime = drainStartTime;
+    let fail = false;
+
+    for (const h of sorted) {
+      const start = h.time;
+      const end = isHoldNote(h) && h.endTime !== undefined ? h.endTime : h.time;
+
+      const reduce = (amount: number) => {
+        currentHpUncapped = Math.max(0, currentHpUncapped - amount);
+        currentHp = Math.max(0, currentHp - amount);
+      };
+      const increase = (amount: number) => {
+        currentHpUncapped += amount;
+        currentHp = Math.max(0, Math.min(1, currentHp + amount));
+      };
+
+      reduce(testDrop * (start - lastTime));
+      lastTime = end;
+
+      if (currentHp <= lowestHpEver) {
+        fail = true;
+        testDrop *= 0.96;
+        break;
+      }
+
+      const hpReduction = testDrop * (end - start);
+      const hpOverkill = Math.max(0, hpReduction - currentHp);
+      reduce(hpReduction);
+
+      if (isHoldNote(h)) {
+        // Nested HeadNote + TailNote judged at MaxResult (Perfect).
+        increase(baseRecovery * hpMultiplierNormal);
+        increase(baseRecovery * hpMultiplierNormal);
+      }
+
+      if (hpOverkill > 0 && currentHp - hpOverkill <= lowestHpEver) {
+        fail = true;
+        testDrop *= 0.96;
+        break;
+      }
+
+      if (!isHoldNote(h)) {
+        // Top-level rice note judged at MaxResult (Perfect).
+        increase(baseRecovery * hpMultiplierNormal);
+      }
+    }
+
+    if (!fail && currentHp < lowestHpEnd) {
+      fail = true;
+      testDrop *= 0.94;
+      hpMultiplierNormal *= 1.01;
+    }
+
+    const recovery = (currentHpUncapped - 1) / Math.max(1, sorted.length);
+
+    if (!fail && recovery < hpRecoveryAvailable) {
+      fail = true;
+      testDrop *= 0.96;
+      hpMultiplierNormal *= 1.01;
+    }
+
+    if (!fail && !Number.isFinite(hpMultiplierNormal)) {
+      return 1.0;
+    }
+
+    if (!fail) {
+      return hpMultiplierNormal;
+    }
+
+    if (!Number.isFinite(testDrop) || testDrop <= 0) {
+      return hpMultiplierNormal;
+    }
+  }
+
+  return hpMultiplierNormal;
+}
+
 export function computeHpMultiplierNormal(hpDrainRate: number): number {
-  // hpRecoveryAvailable ranges from 0.04 (HP 0) to 0.0 (HP 10)
-  const hpRecoveryAvailable = difficultyRange(hpDrainRate, 0.04, 0.02, 0);
-
-  // When recovery is high (low HP drain rate), the multiplier stays near 1.
-  // When recovery is low (high HP drain rate), we need less recovery scaling
-  // because the penalty deltas are already proportionally larger.
-  // The stable iteration typically produces values in the range [1.0, ~1.5].
-  // For HP 10 (hpRecoveryAvailable = 0), use 1.0 since recovery gains are
-  // near zero anyway and the miss penalties are the main driver.
-  if (hpRecoveryAvailable <= 0) return 1.0;
-
-  // Scale: at HP 0 (recovery 0.04) → 1.0; at HP 5 (recovery 0.02) → 1.0;
-  // between HP 5–10 as recovery drops → stays at 1.0.
-  // The actual iteration in stable tends to produce HpMultiplierNormal ≈ 1.0
-  // for mania because there is no drain to compensate for.
+  // No beatmap context: preserve the historical 1.0 default. Callers with
+  // access to the note timeline should use computeHpMultiplierNormalForMap().
   return 1.0;
 }
 
@@ -209,6 +331,7 @@ export interface HealthState {
 export function createHealthState(
   hpDrainRate: number,
   mods: readonly string[] = [],
+  notes?: readonly HpMapNote[] | undefined | null,
 ): HealthState {
   const isEZ = mods.some(m => m.toUpperCase() === 'EZ');
   const isNF = mods.some(m => m.toUpperCase() === 'NF');
@@ -230,7 +353,7 @@ export function createHealthState(
     health: 1.0,
     failed: false,
     extraLives: isEZ ? 2 : 0,
-    hpMultiplierNormal: computeHpMultiplierNormal(hpDrainRate),
+    hpMultiplierNormal: computeHpMultiplierNormalForMap(hpDrainRate, notes),
     isNoFail: isNF,
     isSuddenDeath: isSD,
     isPerfect: isPF,

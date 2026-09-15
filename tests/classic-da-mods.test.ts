@@ -21,7 +21,7 @@ import { simulateManiaReplay } from '../src/ruleset/mania/replaySimulator';
 import type { Beatmap, HitObject, JudgementType } from '../src/types';
 
 describe('TASK-036: Classic (CL) & Difficulty Adjust (DA) mods', () => {
-  describe('Classic (CL) hit windows & no speed compensation', () => {
+  describe('Classic (CL) hit windows & lazer speed compensation', () => {
     const getWindowsMap = (
       od: number,
       diffMultiplier: number = 1,
@@ -75,48 +75,40 @@ describe('TASK-036: Classic (CL) & Difficulty Adjust (DA) mods', () => {
       expect(w.miss).toBe(158.5);     // 188 - 30 = 158 -> 158.5
     });
 
-    it('does NOT scale windows with DT (no speed compensation under Classic)', () => {
-      const standardClassic = getWindowsMap(5, 1, 1, true);
+    it('scales windows with DT under Classic (lazer totalMultiplier = speed / difficulty)', () => {
+      // ppy/osu ManiaHitWindows.updateWindows: the Classic branch still uses
+      // totalMultiplier, so DT 1.5x widens the ms windows to keep them
+      // independent of track speed.
       const dtClassic = getWindowsMap(5, 1, 1.5, true);
 
-      // In Classic mod, song-time hit windows MUST NOT be scaled by DT's 1.5x speed
-      expect(dtClassic.marvelous).toBe(standardClassic.marvelous);
-      expect(dtClassic.perfect).toBe(standardClassic.perfect);
-      expect(dtClassic.great).toBe(standardClassic.great);
-      expect(dtClassic.good).toBe(standardClassic.good);
-      expect(dtClassic.bad).toBe(standardClassic.bad);
-      expect(dtClassic.miss).toBe(standardClassic.miss);
-
-      expect(dtClassic.marvelous).toBe(16.5);
-      expect(dtClassic.perfect).toBe(49.5);
+      expect(dtClassic.marvelous).toBe(24.5); // floor(16 * 1.5) + 0.5
+      expect(dtClassic.perfect).toBe(73.5); // floor(49 * 1.5) + 0.5
+      expect(dtClassic.great).toBe(123.5); // floor(82 * 1.5) + 0.5
+      expect(dtClassic.good).toBe(168.5); // floor(112 * 1.5) + 0.5
+      expect(dtClassic.bad).toBe(204.5); // floor(136 * 1.5) + 0.5
+      expect(dtClassic.miss).toBe(259.5); // floor(173 * 1.5) + 0.5
     });
 
-    it('does NOT scale windows with HT (no speed compensation under Classic)', () => {
-      const standardClassic = getWindowsMap(5, 1, 1, true);
+    it('scales windows with HT under Classic (lazer totalMultiplier = speed / difficulty)', () => {
       const htClassic = getWindowsMap(5, 1, 0.75, true);
 
-      expect(htClassic.marvelous).toBe(standardClassic.marvelous);
-      expect(htClassic.perfect).toBe(standardClassic.perfect);
-      expect(htClassic.great).toBe(standardClassic.great);
-      expect(htClassic.good).toBe(standardClassic.good);
-      expect(htClassic.bad).toBe(standardClassic.bad);
-      expect(htClassic.miss).toBe(standardClassic.miss);
+      expect(htClassic.marvelous).toBe(12.5); // floor(16 * 0.75) + 0.5
+      expect(htClassic.perfect).toBe(36.5); // floor(49 * 0.75) + 0.5
+      expect(htClassic.great).toBe(61.5); // floor(82 * 0.75) + 0.5
+      expect(htClassic.good).toBe(84.5); // floor(112 * 0.75) + 0.5
+      expect(htClassic.bad).toBe(102.5); // floor(136 * 0.75) + 0.5
+      expect(htClassic.miss).toBe(129.5); // floor(173 * 0.75) + 0.5
     });
 
-    it('scales stable windows with HR (difficultyMultiplier = 1.4) without speed compensation', () => {
+    it('scales stable windows with HR + DT via totalMultiplier (speed / difficulty)', () => {
+      // totalMultiplier = 1.5 / 1.4 ≈ 1.0714
       const hrClassic = getWindowsMap(5, 1.4, 1.5, true);
-      // marvelous: floor(16 / 1.4) + 0.5 = floor(11.428) + 0.5 = 11.5
-      expect(hrClassic.marvelous).toBe(11.5);
-      // perfect: floor(49 / 1.4) + 0.5 = floor(35.0) + 0.5 = 35.5
-      expect(hrClassic.perfect).toBe(35.5);
-      // great: floor(82 / 1.4) + 0.5 = floor(58.571) + 0.5 = 58.5
-      expect(hrClassic.great).toBe(58.5);
-      // good: floor(112 / 1.4) + 0.5 = floor(80.0) + 0.5 = 80.5
-      expect(hrClassic.good).toBe(80.5);
-      // bad: floor(136 / 1.4) + 0.5 = floor(97.142) + 0.5 = 97.5
-      expect(hrClassic.bad).toBe(97.5);
-      // miss: floor(173 / 1.4) + 0.5 = floor(123.571) + 0.5 = 123.5
-      expect(hrClassic.miss).toBe(123.5);
+      expect(hrClassic.marvelous).toBe(17.5); // floor(16 * 1.5 / 1.4) + 0.5
+      expect(hrClassic.perfect).toBe(52.5); // floor(49 * 1.5 / 1.4) + 0.5
+      expect(hrClassic.great).toBe(87.5); // floor(82 * 1.5 / 1.4) + 0.5
+      expect(hrClassic.good).toBe(120.5); // floor(112 * 1.5 / 1.4) + 0.5
+      expect(hrClassic.bad).toBe(145.5); // floor(136 * 1.5 / 1.4) + 0.5
+      expect(hrClassic.miss).toBe(185.5); // floor(173 * 1.5 / 1.4) + 0.5
     });
 
     it('detects Classic mod using isClassicMod helper', () => {

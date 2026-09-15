@@ -701,7 +701,7 @@ export default function GameplayCanvas({
     columnJudgements: initializeColumnJudgements(beatmap.keyCount),
   });
   const healthStateRef = useRef<HealthState>(
-    createHealthState(beatmap.hpDrainRate, settings.selectedMods)
+    createHealthState(beatmap.hpDrainRate, settings.selectedMods, beatmap.notes)
   );
 
   const hitErrorSamplesRef = useRef<number[]>([]);
@@ -1016,7 +1016,7 @@ export default function GameplayCanvas({
       columnJudgements: initializeColumnJudgements(beatmap.keyCount),
       isAutoplay: isAutoplay,
     };
-    healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods);
+    healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods, beatmap.notes);
 
     // osu!lazer mania standardised score: max combo portion for all-Marvelous FC
     const totalJudgements = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
@@ -1559,9 +1559,11 @@ export default function GameplayCanvas({
           if (action.judgement === 'marvelous' || action.judgement === 'perfect') {
             tickColor = '#3b82f6';
           } else if (action.judgement === 'great') {
-            tickColor = '#22c55e';
-          } else if (action.judgement === 'good' || action.judgement === 'bad') {
-            tickColor = '#ec9a29';
+            tickColor = '#4ade80';
+          } else if (action.judgement === 'good') {
+            tickColor = '#fb923c';
+          } else if (action.judgement === 'bad') {
+            tickColor = '#facc15';
           }
 
           hitErrorTicksRef.current.push({
@@ -1598,9 +1600,11 @@ export default function GameplayCanvas({
         if (resolvedJudgement.type === 'marvelous' || resolvedJudgement.type === 'perfect') {
           tickColor = '#3b82f6';
         } else if (resolvedJudgement.type === 'great') {
-          tickColor = '#22c55e';
-        } else if (resolvedJudgement.type === 'good' || resolvedJudgement.type === 'bad') {
-          tickColor = '#ec9a29';
+          tickColor = '#4ade80';
+        } else if (resolvedJudgement.type === 'good') {
+          tickColor = '#fb923c';
+        } else if (resolvedJudgement.type === 'bad') {
+          tickColor = '#facc15';
         }
 
         hitErrorTicksRef.current.push({
@@ -1714,11 +1718,13 @@ export default function GameplayCanvas({
       let tickColor = '#3b82f6'; // Default perfect blue
       if (resolvedJudgement.type === 'marvelous' || resolvedJudgement.type === 'perfect') {
         tickColor = '#3b82f6'; // Blue for 300 range
-      } else if (resolvedJudgement.type === 'great') {
-        tickColor = '#22c55e'; // Green for 100 range
-      } else if (resolvedJudgement.type === 'good' || resolvedJudgement.type === 'bad') {
-        tickColor = '#ec9a29'; // Orange for 50 range (using high clarity shade)
-      }
+        } else if (resolvedJudgement.type === 'great') {
+          tickColor = '#4ade80'; // Green for Good
+        } else if (resolvedJudgement.type === 'good') {
+          tickColor = '#fb923c'; // Orange for Ok
+        } else if (resolvedJudgement.type === 'bad') {
+          tickColor = '#facc15'; // Yellow for Meh
+        }
       
       hitErrorTicksRef.current.push({
         id: Math.random().toString(36).substring(2, 9),
@@ -1814,9 +1820,11 @@ export default function GameplayCanvas({
         if (action.judgement === 'marvelous' || action.judgement === 'perfect') {
           tickColor = '#3b82f6';
         } else if (action.judgement === 'great') {
-          tickColor = '#22c55e';
-        } else if (action.judgement === 'good' || action.judgement === 'bad') {
-          tickColor = '#ec9a29';
+          tickColor = '#4ade80';
+        } else if (action.judgement === 'good') {
+          tickColor = '#fb923c';
+        } else if (action.judgement === 'bad') {
+          tickColor = '#facc15';
         }
 
         hitErrorTicksRef.current.push({
@@ -2811,7 +2819,7 @@ export default function GameplayCanvas({
       hitErrorSampleCount: 0,
       columnJudgements: initializeColumnJudgements(beatmap.keyCount),
     };
-    healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods);
+    healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods, beatmap.notes);
 
     totalJudgementsRef.current = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
     maxComboPortionRef.current = computeMaxComboPortion(totalJudgementsRef.current);

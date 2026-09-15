@@ -23,11 +23,11 @@ const BIN_COUNT = 41;
 /** Tier color bands matching the judgement pill palette (approximate windows). */
 function binColor(center: number): string {
   const a = Math.abs(center);
-  if (a <= 21) return '#22d3ee';   // marvelous-ish
-  if (a <= 45) return '#0d9488';   // perfect-ish
-  if (a <= 90) return '#16a34a';   // great-ish
-  if (a <= 130) return '#d97706';  // good-ish
-  return '#7e22ce';                // bad-ish
+  if (a <= 21) return '#22d3ee';   // Perfect (marvelous)
+  if (a <= 45) return '#3b82f6';   // Great (perfect) - blue
+  if (a <= 90) return '#4ade80';   // Good (great) - green
+  if (a <= 130) return '#fb923c';  // Ok (good) - orange
+  return '#facc15';                // Meh (bad) - yellow
 }
 
 export default function HitErrorGraph({ errors, unstableRate }: HitErrorGraphProps) {

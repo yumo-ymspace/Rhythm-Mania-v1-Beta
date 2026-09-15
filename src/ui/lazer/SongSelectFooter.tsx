@@ -118,12 +118,12 @@ export function SongSelectFooter({
       <div className="lazer-footer-right">
         <motion.div
           className="lazer-parked-cookie-wrapper"
-          initial={{ scale: 0.9, opacity: 0.8 }}
+          initial={{ scale: 0.9, opacity: 1 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
           <LazerCookie
-            size={148}
+            size={200}
             bpm={previewBpm || 120}
             pulse={true}
             showSpectrum={true}

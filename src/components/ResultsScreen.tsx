@@ -304,9 +304,9 @@ export default function ResultsScreen({
     {
       name: 'Great',
       count: perfectCount,
-      color: '#facc15',
-      pillClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
-      barClass: 'bg-amber-400',
+      color: '#3b82f6',
+      pillClass: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
+      barClass: 'bg-blue-400',
     },
     {
       name: 'Good',
@@ -318,16 +318,16 @@ export default function ResultsScreen({
     {
       name: 'Ok',
       count: goodCount,
-      color: '#3b82f6',
-      pillClass: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
-      barClass: 'bg-blue-400',
+      color: '#fb923c',
+      pillClass: 'bg-orange-500/20 text-orange-300 border border-orange-500/40',
+      barClass: 'bg-orange-400',
     },
     {
       name: 'Meh',
       count: badCount,
-      color: '#ec4899',
-      pillClass: 'bg-pink-500/20 text-pink-300 border border-pink-500/40',
-      barClass: 'bg-pink-400',
+      color: '#facc15',
+      pillClass: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
+      barClass: 'bg-yellow-400',
     },
     {
       name: 'Miss',

@@ -108,29 +108,45 @@ export function computeStableHitWindow(
 }
 
 /**
- * Resolves full JudgementWindow list for a given overall difficulty, difficulty multiplier, speed multiplier, and classic mode flag.
- * When isClassic is true, stable hit window formulas are used and speedMultiplier compensation is suppressed (speedMultiplier = 1).
+ * Resolves full JudgementWindow list matching osu!(lazer) ManiaHitWindows.
+ * Lazer always applies totalMultiplier = speed / difficulty, including under
+ * Classic (stable formulas). Classic non-convert stable bases equal
+ * 16 / 64-3*OD / 97-3*OD / 127-3*OD / 151-3*OD / 188-3*OD; converts use the
+ * 16 / 34|47 / 67|77 / 97 / 121 / 158 thresholds keyed on rounded OD > 4.
  */
 export function getJudgementWindows(
   od: number,
   difficultyMultiplier: number = 1,
   speedMultiplier: number = 1,
   isClassic: boolean = false,
+  isConvert: boolean = false,
 ): JudgementWindow[] {
   const types: JudgementType[] = ['marvelous', 'perfect', 'great', 'good', 'bad', 'miss'];
-  // Under Classic, hit windows do not scale with track rate (no speed compensation)
-  const effectiveSpeedMultiplier = isClassic ? 1 : speedMultiplier;
+
+  const classicBase = (type: JudgementType): number => {
+    if (isConvert) {
+      const highOd = Math.round(od) > 4;
+      switch (type) {
+        case 'marvelous': return 16;
+        case 'perfect': return highOd ? 34 : 47;
+        case 'great': return highOd ? 67 : 77;
+        case 'good': return 97;
+        case 'bad': return 121;
+        case 'miss': return 158;
+      }
+    }
+    return MANIA_STABLE_DIFFICULTY_RANGES[type](od);
+  };
 
   return types.map((type) => {
     const { color, glowColor } = JUDGEMENT_COLORS[type];
     let windowMs: number;
     if (isClassic) {
-      const base = MANIA_STABLE_DIFFICULTY_RANGES[type](od);
-      const totalMultiplier = effectiveSpeedMultiplier / difficultyMultiplier;
-      windowMs = Math.floor(base * totalMultiplier) + 0.5;
+      const totalMultiplier = speedMultiplier / difficultyMultiplier;
+      windowMs = Math.floor(classicBase(type) * totalMultiplier) + 0.5;
     } else {
       const range = MANIA_DIFFICULTY_RANGES[type];
-      windowMs = computeLazerHitWindow(od, range.min, range.mid, range.max, difficultyMultiplier, effectiveSpeedMultiplier);
+      windowMs = computeLazerHitWindow(od, range.min, range.mid, range.max, difficultyMultiplier, speedMultiplier);
     }
 
     return {
@@ -150,26 +166,34 @@ export function getJudgementWindows(
  */
 export function isClassicMod(mods?: readonly string[] | string[] | null): boolean {
   if (!mods || !Array.isArray(mods)) return false;
-  return mods.some((m) => m.toUpperCase() === 'CL' || m.toUpperCase() === 'CLASSIC');
+  return mods.some((m) => {
+    const u = m.toUpperCase();
+    return u === 'CL' || u === 'CLASSIC';
+  });
+}
+
+function hasMod(mods: readonly string[] | null | undefined, ...ids: string[]): boolean {
+  if (!mods || !Array.isArray(mods)) return false;
+  return mods.some((m) => ids.includes(m.toUpperCase()));
 }
 
 /**
  * Resolves difficultyMultiplier from active gameplay mods (HR = 1.4, EZ = 1 / 1.4, default = 1.0).
+ * Matches lazer ManiaHitWindows.DifficultyMultiplier semantics.
  */
 export function getDifficultyMultiplier(mods?: readonly string[] | string[] | null): number {
-  if (!mods || !Array.isArray(mods)) return 1.0;
-  if (mods.includes('HR')) return 1.4;
-  if (mods.includes('EZ')) return 1 / 1.4;
+  if (hasMod(mods, 'HR')) return 1.4;
+  if (hasMod(mods, 'EZ')) return 1 / 1.4;
   return 1.0;
 }
 
 /**
  * Resolves speedMultiplier / rate from active gameplay mods (DT/NC = 1.5, HT/DC = 0.75, default = 1.0).
+ * Matches lazer track-rate compensation (WU/WD/AS use dynamic rates and stay at 1.0 here).
  */
 export function getSpeedMultiplier(mods?: readonly string[] | string[] | null): number {
-  if (!mods || !Array.isArray(mods)) return 1.0;
-  if (mods.includes('DT') || mods.includes('NC')) return 1.5;
-  if (mods.includes('HT') || mods.includes('DC')) return 0.75;
+  if (hasMod(mods, 'DT', 'NC')) return 1.5;
+  if (hasMod(mods, 'HT', 'DC')) return 0.75;
   return 1.0;
 }
 

@@ -162,7 +162,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
   let maxComboPortion = computeMaxComboPortion(totalJudgements);
   let currentComboPortion = 0;
   const hitErrorSamples: number[] = [];
-  const healthState = createHealthState(hpDrainRate, selectedMods);
+  const healthState = createHealthState(hpDrainRate, selectedMods, activeBeatmap.notes);
 
   const applyJudgement = (judg: JudgementWindow, col: number, healthContext: HealthJudgementContext = 'note') => {
     if (col >= 0 && col < columnJudgements.length) {
