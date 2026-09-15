@@ -238,9 +238,63 @@ export default function SongSelect({
   const [sortBy, setSortBy] = useState<string>('Title');
   const [groupBy, setGroupBy] = useState<string>('None');
   const [collectionFilter, setCollectionFilter] = useState<string>('All beatmaps');
-  const [openFilterMenu, setOpenFilterMenu] = useState<'sort' | 'group' | 'collection' | 'star' | null>(null);
+  const [openFilterMenu, setOpenFilterMenu] = useState<'sort' | 'group' | 'collection' | null>(null);
   const [showModsModal, setShowModsModal] = useState<boolean>(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'details' | 'ranking'>('ranking');
+  const starTrackRef = useRef<HTMLDivElement | null>(null);
+  const starDragTargetRef = useRef<'min' | 'max' | null>(null);
+
+  const clampStar = (v: number): number => Math.max(0, Math.min(10, Math.round(v * 10) / 10));
+
+  const setStarBound = (which: 'min' | 'max', v: number) => {
+    const nv = clampStar(v);
+    if (which === 'min') {
+      setMinStar(nv);
+      if (nv > maxStar) setMaxStar(nv);
+    } else {
+      setMaxStar(nv);
+      if (nv < minStar) setMinStar(nv);
+    }
+  };
+
+  const starValueFromClientX = (clientX: number): number => {
+    const el = starTrackRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
+    return clampStar(((clientX - rect.left) / rect.width) * 10);
+  };
+
+  const handleStarTrackPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const v = starValueFromClientX(e.clientX);
+    const distMin = Math.abs(v - minStar);
+    const distMax = Math.abs(v - maxStar);
+    const target: 'min' | 'max' = distMin <= distMax ? 'min' : 'max';
+    starDragTargetRef.current = target;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setStarBound(target, v);
+  };
+
+  const handleStarTrackPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = starDragTargetRef.current;
+    if (!target) return;
+    setStarBound(target, starValueFromClientX(e.clientX));
+  };
+
+  const endStarDrag = () => {
+    starDragTargetRef.current = null;
+  };
+
+  const handleStarTrackWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const step = e.deltaY > 0 ? -0.1 : 0.1;
+    if (e.shiftKey) {
+      setStarBound('max', maxStar + step);
+    } else {
+      setStarBound('min', minStar + step);
+    }
+  };
 
   // Favorites: stable song-group keys persisted to localStorage
   const [favoriteSongs, setFavoriteSongs] = useState<string[]>(() => {
@@ -992,8 +1046,8 @@ export default function SongSelect({
   const selectedHpDrain = selectedCustomMap?.hpDrainRate ?? 5;
 
   return (
-    <div 
-      className="relative w-full h-[calc(100dvh_-_60px)] sm:h-[calc(100dvh_-_68px)] text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
+    <div
+      className="relative w-full h-full min-h-0 text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
       {/* 1. Full-bleed background cover artwork: readable art, dark translucent left wedge (TASK-V-020) */}
       {selectBgUrl && (
@@ -1075,7 +1129,7 @@ export default function SongSelect({
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className={`w-full lg:w-[460px] xl:w-[500px] flex-col h-full min-h-0 p-4 lg:p-6 lg:pr-8 gap-4 overflow-y-auto lazer-left-scroll ${
+        <div className={`w-full lg:w-[460px] xl:w-[500px] flex-col h-full min-h-0 p-4 lg:p-6 lg:pr-8 gap-4 overflow-hidden flex-shrink-0 ${
           isMobile && mobileTab !== 'ranking' ? 'hidden' : 'flex'
         }`}>
           <SongSelectLeftPanel
@@ -1101,7 +1155,7 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className={`flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-6 lg:pr-3 py-3 gap-2 overflow-hidden ${
+        <div className={`flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-6 lg:pr-3 py-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[42%] lg:min-w-[380px] lg:max-w-[560px] xl:max-w-[600px] ${
           isMobile && mobileTab !== 'carousel' ? 'hidden' : 'flex'
         }`}>
 
@@ -1121,73 +1175,65 @@ export default function SongSelect({
             <Search className="lazer-song-search-icon" />
           </div>
 
-          {/* STAR RATING RAINBOW BAR + Show converts */}
+          {/* STAR RATING RAINBOW BAR + Show converts — drag/scroll directly on the bar */}
           <div className="flex-shrink-0 flex items-center gap-2">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="lazer-filter-tab">Star Rating</span>
-              <button
-                type="button"
-                onClick={() => setOpenFilterMenu(openFilterMenu === 'star' ? null : 'star')}
-                className="lazer-starbar"
-                title="Filter by star rating"
+              <div
+                className="lazer-starbar is-interactive"
+                title="Drag the thumbs, click the bar, or scroll (Shift+scroll for max) to filter"
+                onDoubleClick={() => { setMinStar(0); setMaxStar(10); }}
               >
-                <span className="lazer-starbar-value">{minStar <= 0 ? '0.0' : minStar.toFixed(1)}</span>
-                <span className="lazer-starbar-track" aria-hidden="true">
+                <span className="lazer-starbar-value">{minStar.toFixed(1)}</span>
+                <div
+                  ref={starTrackRef}
+                  className="lazer-starbar-track is-draggable"
+                  role="slider"
+                  aria-label="Minimum star rating"
+                  aria-valuemin={0}
+                  aria-valuemax={10}
+                  aria-valuenow={minStar}
+                  tabIndex={0}
+                  onPointerDown={handleStarTrackPointerDown}
+                  onPointerMove={handleStarTrackPointerMove}
+                  onPointerUp={endStarDrag}
+                  onPointerCancel={endStarDrag}
+                  onWheel={handleStarTrackWheel}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setStarBound(e.shiftKey ? 'max' : 'min', (e.shiftKey ? maxStar : minStar) - 0.1);
+                    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setStarBound(e.shiftKey ? 'max' : 'min', (e.shiftKey ? maxStar : minStar) + 0.1);
+                    } else if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      setMinStar(0);
+                      setMaxStar(10);
+                    }
+                  }}
+                >
                   <span
-                    className="lazer-starbar-fill"
+                    className="lazer-starbar-dim is-left"
                     style={{ width: `${Math.max(0, Math.min(100, (minStar / 10) * 100))}%` }}
                   />
                   <span
-                    className="lazer-starbar-thumb"
+                    className="lazer-starbar-dim is-right"
+                    style={{ width: `${Math.max(0, Math.min(100, 100 - (maxStar / 10) * 100))}%` }}
+                  />
+                  <span
+                    className="lazer-starbar-thumb is-min"
                     style={{ left: `${Math.max(0, Math.min(100, (minStar / 10) * 100))}%` }}
                   />
-                </span>
-                <span className="lazer-starbar-inf">∞</span>
-              </button>
+                  <span
+                    className="lazer-starbar-thumb is-max"
+                    style={{ left: `${Math.max(0, Math.min(100, (maxStar / 10) * 100))}%` }}
+                  />
+                </div>
+                <span className="lazer-starbar-value is-max">{maxStar >= 10 ? '∞' : maxStar.toFixed(1)}</span>
+              </div>
             </div>
             <span className="lazer-filter-tab opacity-80 hidden sm:inline-flex">Show converts</span>
-            {openFilterMenu === 'star' && (
-              <div className="relative">
-                <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
-                <div className="absolute right-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 rounded-lg shadow-2xl p-3 w-56 flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between text-[9px] font-mono text-slate-400 uppercase tracking-wider">
-                      <span>Min stars</span><span className="text-white">{minStar.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1} value={minStar}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        setMinStar(v);
-                        if (v > maxStar) setMaxStar(v);
-                      }}
-                      className="w-full accent-amber-400"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between text-[9px] font-mono text-slate-400 uppercase tracking-wider">
-                      <span>Max stars</span><span className="text-white">{maxStar.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1} value={maxStar}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        setMaxStar(v);
-                        if (v < minStar) setMinStar(v);
-                      }}
-                      className="w-full accent-amber-400"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setMinStar(0); setMaxStar(10); }}
-                    className="self-end text-[9px] font-mono uppercase tracking-wider text-slate-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    Reset
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* SORT / GROUP / COLLECTION ROW */}

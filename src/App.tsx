@@ -1025,6 +1025,76 @@ export default function App() {
     });
   }, []);
 
+  // Bundled startup map: "ranked triangles" (beatmapset 2153231). Download once
+  // on first load when it is not already installed so fresh users have a
+  // playable ranked map immediately.
+  const bundledStartupDownloadRef = useRef(false);
+  useEffect(() => {
+    if (bundledStartupDownloadRef.current) return;
+    bundledStartupDownloadRef.current = true;
+    const BUNDLED_STARTUP_SET_ID = 2153231;
+    const downloadBundledStartupMap = async () => {
+      try {
+        const stored = await storageManager.getAllBeatmaps();
+        const alreadyInstalled = stored.some((m) =>
+          (m as Beatmap & { sourceSetId?: number }).sourceSetId === BUNDLED_STARTUP_SET_ID ||
+          String((m as Beatmap & { catalogSetId?: string }).catalogSetId || '').replace(/^osuapi_/, '') === String(BUNDLED_STARTUP_SET_ID) ||
+          (m as Beatmap & { packageId?: string }).packageId === `osuapi_${BUNDLED_STARTUP_SET_ID}` ||
+          (m as Beatmap & { parentPackageId?: string }).parentPackageId === `osuapi_${BUNDLED_STARTUP_SET_ID}`
+        );
+        if (alreadyInstalled) return;
+        setDownloadingSetIds((prev) => prev.includes(BUNDLED_STARTUP_SET_ID) ? prev : [...prev, BUNDLED_STARTUP_SET_ID]);
+        const blob = await downloadBeatmapsetArchive(BUNDLED_STARTUP_SET_ID, () => {}, () => {}, MAX_COMPRESSED_SIZE_BYTES);
+        if (!blob || blob.size === 0 || blob.size > MAX_COMPRESSED_SIZE_BYTES) return;
+        const arrayBuffer = await blob.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        validateZipLimits(zip);
+        const extractionBudget = createZipExtractionBudget();
+        const osuFiles = Object.keys(zip.files).filter((f) => f.toLowerCase().endsWith('.osu') && !zip.files[f].dir);
+        if (osuFiles.length === 0) return;
+        const importedMaps: Beatmap[] = [];
+        const pkgId = `osuapi_${BUNDLED_STARTUP_SET_ID}`;
+        for (const fileKey of osuFiles) {
+          const rawContent = await extractZipEntry(zip.files[fileKey], fileKey, extractionBudget);
+          const content = decodeBoundedUtf8(rawContent, `Beatmap file ${fileKey}`);
+          const parsed = parseBeatmap(content, fileKey);
+          if (!parsed || parsed.notes.length === 0) continue;
+          const md5 = await computeChecksum(rawContent, 'md5');
+          const chartRevisionId = `osuapi_${BUNDLED_STARTUP_SET_ID}_b0_${md5}`;
+          const fullMap = {
+            ...parsed,
+            id: chartRevisionId,
+            catalogSetId: pkgId,
+            catalogMapId: chartRevisionId,
+            chartRevisionId,
+            checksum: md5,
+            checksumAlgorithm: 'md5',
+            isServerMap: true,
+            packageId: pkgId,
+            parentPackageId: pkgId,
+            sourceSetId: BUNDLED_STARTUP_SET_ID,
+            coverUrl: `https://assets.ppy.sh/beatmaps/${BUNDLED_STARTUP_SET_ID}/covers/slimcover@2x.jpg`,
+            isCached: true,
+            beatmapHash: computeBeatmapHash(parsed),
+          } as Beatmap;
+          importedMaps.push(fullMap);
+        }
+        if (importedMaps.length === 0) return;
+        await storageManager.savePackageWithBeatmaps(pkgId, importedMaps[0]?.title || 'Ranked Triangles', new Blob([arrayBuffer]), importedMaps);
+        setCustomMaps((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const fresh = importedMaps.filter((m) => !existingIds.has(m.id));
+          return fresh.length > 0 ? [...fresh, ...prev] : prev;
+        });
+      } catch (err) {
+        console.warn('Bundled startup map auto-download failed:', err instanceof Error ? err.message : String(err));
+      } finally {
+        setDownloadingSetIds((prev) => prev.filter((id) => id !== BUNDLED_STARTUP_SET_ID));
+      }
+    };
+    void downloadBundledStartupMap();
+  }, []);
+
   const updateSettings = useCallback((newSettings: Partial<GameSettings>) => {
     setSettings(prev => {
       const updated = { ...prev, ...newSettings };
@@ -1251,6 +1321,12 @@ export default function App() {
     navigateScreen('select');
   };
 
+  // Lazer toolbar is position:fixed (out of flow), so the main viewport must
+  // reserve its height — otherwise page tops (e.g. Song Select search/filters)
+  // render underneath it. Legacy header is sticky in-flow and needs no offset.
+  const isLazerChrome = resolveLazerChrome(settings).ui === 'lazer';
+  const showLazerToolbar = isLazerChrome && !(currentScreen === 'menu' && menuPhase === 'idle') && currentScreen !== 'play';
+
   return (
     <div
       id="application-container" 
@@ -1305,7 +1381,7 @@ export default function App() {
                 setMenuPhase('idle');
                 leaveProfilePath('menu');
               }}
-              onOpenListing={() => setShowFindBeatmapOverlay(true)}
+              onOpenListing={() => setShowFindBeatmapOverlay((prev) => !prev)}
               onToggleNowPlaying={() => setIsNowPlayingOpen((prev) => !prev)}
               isListingOpen={showFindBeatmapOverlay}
               isNowPlayingOpen={isNowPlayingOpen}
@@ -1381,7 +1457,7 @@ export default function App() {
                     <button
                       id="header-nav-beatmap-listing"
                       type="button"
-                      onClick={() => setShowFindBeatmapOverlay(true)}
+                      onClick={() => setShowFindBeatmapOverlay((prev) => !prev)}
                       className="group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4"
                       title="Beatmap Listing"
                     >
@@ -1623,13 +1699,13 @@ export default function App() {
 
 
       {/* 2. CORE VIEWPORTS */}
-      <main 
-        id="app-main-viewport" 
+      <main
+        id="app-main-viewport"
         className={`flex-1 flex flex-col min-h-0 relative ${
           (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results' || currentScreen === 'skins')
-            ? 'w-full h-full' 
+            ? 'w-full h-full'
             : 'py-6 md:py-12 px-4 md:px-6 z-10'
-        }`}
+        }${showLazerToolbar ? ' pt-[50px] max-[480px]:pt-[38px]' : ''}`}
       >
         <AnimatePresence mode="wait">
           {currentScreen === 'menu' && (
@@ -1678,7 +1754,7 @@ export default function App() {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="w-full"
+              className="w-full flex-1 min-h-0 h-full flex flex-col"
             >
               <SongSelect
                 settings={settings}

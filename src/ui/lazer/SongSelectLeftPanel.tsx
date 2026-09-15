@@ -11,8 +11,8 @@
  */
 
 import React from 'react';
-import { 
-  Heart, Play, Clock, Activity, Award, Info, ChevronDown, Music, Search, Upload
+import {
+  Heart, Play, Clock, Activity, Award, Info, ChevronDown
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../../types';
 import { calculateDominantBpm } from '../../utils/beatmapParser';
@@ -90,38 +90,177 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
   onImportClick,
   importStatus,
 }) => {
+  // No selection: render a blank skeleton of the map-details layout so the
+  // panel keeps its shape. Textual details stay blank or "-" as appropriate.
   if (!selectedMap) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-white/10 bg-[#0d0e14]/85 shadow-xl gap-4">
-        <span className="p-4 bg-pink-500/10 text-pink-500 rounded-full border border-pink-500/20 shadow">
-          <Music className="h-8 w-8" />
-        </span>
-        <div className="flex flex-col gap-1.5">
-          <h3 className="text-lg font-sans font-black text-white tracking-widest uppercase">
-            No Beatmap Selected
-          </h3>
-          <p className="text-xs text-slate-400 font-sans max-w-sm leading-relaxed">
-            Select a beatmap set from the carousel on the right to inspect difficulty pills and local rankings.
-          </p>
-          {onOpenOnlineCatalog && (
+      <div className="flex flex-col gap-3 w-full h-full min-h-0 overflow-hidden lazer-song-wedge-wrap" aria-label="No beatmap selected">
+        {/* 1. TOP HEADER BLOCK SKELETON — pinned, never scrolls off */}
+        <div className="lazer-song-wedge flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="lazer-status-pill is-graveyard">-</span>
+          </div>
+
+          {/* Title (blank, height preserved) */}
+          <h1
+            className="font-sans font-bold text-[26px] lg:text-[30px] tracking-tight leading-[1.05] truncate mt-1.5 text-transparent select-none"
+            aria-hidden="true"
+          >
+            &nbsp;
+          </h1>
+
+          {/* Artist (blank, height preserved) */}
+          <div className="text-[13px] truncate select-none text-transparent" aria-hidden="true">
+            &nbsp;
+          </div>
+
+          {/* Meta row: plays / favorites / duration / bpm */}
+          <div className="flex items-center gap-4 text-[12px] text-white/80 font-normal mt-1.5">
+            <div className="flex items-center gap-1.5" title="Local plays">
+              <Play className="h-3 w-3 fill-current opacity-80" />
+              <span className="tabular-nums">-</span>
+            </div>
+
+            <span className="flex items-center gap-1.5 text-white/70" title="Favorite">
+              <Heart className="h-3.5 w-3.5" />
+              <span className="tabular-nums">-</span>
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3 w-3 opacity-80" />
+              <span className="tabular-nums">-</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 truncate max-w-[220px]" title="BPM: -">
+              <Activity className="h-3 w-3 opacity-80 shrink-0" />
+              <span className="tabular-nums truncate">-</span>
+            </div>
+          </div>
+
+          {/* 2. DIFFICULTY & MAPPER LINE */}
+          <div className="flex items-center gap-2 mt-2.5">
+            <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-black ${getDifficultyColor(0)}`}>
+              ★ -
+            </span>
+            <div className="text-[12px] font-bold text-slate-100 truncate">
+              <span className="text-emerald-300 font-bold mr-1.5">-</span>
+              <span className="text-white/50 font-normal">mapped by</span>{' '}
+              <span className="text-slate-100 font-normal">-</span>
+            </div>
+          </div>
+
+          {/* 3. MANIA STATS ROW */}
+          <div className="grid grid-cols-5 gap-3 mt-3">
+            {[
+              { label: 'Notes' },
+              { label: 'Hold Notes' },
+              { label: 'Key Count' },
+              { label: 'Accuracy' },
+              { label: 'HP Drain' },
+            ].map((stat) => (
+              <div key={stat.label} className="flex flex-col gap-1 min-w-0">
+                <span className="text-[10px] text-white/55 font-normal truncate">{stat.label}</span>
+                <span className="text-[12px] font-bold text-white tabular-nums">-</span>
+                <div className="h-[3px] rounded-full bg-white/15 overflow-hidden mt-0.5">
+                  <div
+                    className="h-full bg-white/80 rounded-full"
+                    style={{ width: '8%' }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. TABS & RANKING TOOLBAR */}
+        <div className="flex flex-col gap-2 mt-1 flex-shrink-0">
+          <div className="flex items-center gap-4 text-[12px] font-bold">
             <button
               type="button"
-              onClick={onOpenOnlineCatalog}
-              className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-[#ffcc22]/40 bg-[#ffcc22]/90 hover:bg-[#ffcc22] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-950 transition cursor-pointer shadow-[0_0_15px_rgba(255,204,34,0.2)]"
+              onClick={() => onChangeTab('details')}
+              className={`pb-1 border-b-2 transition cursor-pointer ${
+                activeTab === 'details'
+                  ? 'text-white border-white'
+                  : 'text-white/50 hover:text-white/85 border-transparent'
+              }`}
             >
-              <Search className="h-3.5 w-3.5" /> Beatmap Listing
+              Details
             </button>
-          )}
-          {onImportClick && (
             <button
               type="button"
-              onClick={onImportClick}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-pink-500/35 bg-pink-500/80 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-pink-100 transition hover:bg-pink-500 cursor-pointer mt-1"
+              onClick={() => onChangeTab('ranking')}
+              className={`pb-1 border-b-2 transition cursor-pointer ${
+                activeTab === 'ranking'
+                  ? 'text-white border-white'
+                  : 'text-white/50 hover:text-white/85 border-transparent'
+              }`}
             >
-              <Upload className="h-3.5 w-3.5" /> Import Songs Locally
+              Ranking
             </button>
+
+            {activeTab === 'ranking' && (
+              <div className="flex items-center gap-2 ml-3">
+                <span className="lazer-ranking-pill">
+                  <span className="opacity-60 font-bold">Scope</span>
+                  <span>Local</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </span>
+                <span className="lazer-ranking-pill">
+                  <span className="opacity-60 font-bold">Sort</span>
+                  <span>Score</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </span>
+                <span className="lazer-ranking-pill opacity-80">Selected Mods</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 5. CONTENT BODY: BLANK DETAILS OR EMPTY RANKING — the only scroll region */}
+        <div className="flex-1 min-h-0 overflow-y-auto lazer-left-content-scroll min-h-[220px] max-h-[360px]">
+          {activeTab === 'details' ? (
+            <div className="space-y-3 text-xs font-mono pt-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Length</div>
+                  <div className="text-sm font-black text-white mt-1">-</div>
+                </div>
+                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">BPM</div>
+                  <div className="text-sm font-black text-white mt-1">-</div>
+                </div>
+                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Total Objects</div>
+                  <div className="text-sm font-black text-white mt-1">-</div>
+                </div>
+                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
+                  <div className={`text-sm font-black mt-1 ${getDifficultyColor(0)}`}>★ -</div>
+                </div>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-slate-300 leading-relaxed">
+                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1">Difficulty Info</div>
+                <div className="font-sans font-bold text-white text-sm">-</div>
+                <div className="mt-2 text-[10px] text-slate-500">
+                  Local ranking only — records set on this device for the selected chart.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full min-h-[220px] flex items-center justify-center text-white/85 gap-2.5 font-sans font-normal text-[15px] pt-10">
+              <Info className="h-5 w-5 opacity-90 shrink-0" />
+              <span>No records yet!</span>
+            </div>
           )}
         </div>
+
+        {importStatus && (
+          <div className={`p-2.5 rounded-xl text-xs font-mono border mt-2 flex-shrink-0 ${
+            importStatus.type === 'ok' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-rose-950/40 text-rose-400 border-rose-800/40'
+          }`}>
+            {importStatus.msg}
+          </div>
+        )}
       </div>
     );
   }
@@ -147,9 +286,9 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
   const durationFormatted = formatDuration(selectedMap.duration || 0);
 
   return (
-    <div className="flex flex-col gap-3 w-full lazer-song-wedge-wrap">
+    <div className="flex flex-col gap-3 w-full h-full min-h-0 overflow-hidden lazer-song-wedge-wrap">
       {/* 1. TOP HEADER BLOCK — hud/songselect.jpg: status, title, artist, plays/favs/length/bpm */}
-      <div className="lazer-song-wedge">
+      <div className="lazer-song-wedge flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className={statusPillClass}>
             {statusLabel}
@@ -237,7 +376,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
       </div>
 
       {/* 4. TABS & RANKING TOOLBAR — hud refs: Details | Ranking + Scope/Sort/Selected Mods pills */}
-      <div className="flex flex-col gap-2 mt-1">
+      <div className="flex flex-col gap-2 mt-1 flex-shrink-0">
         <div className="flex items-center gap-4 text-[12px] font-bold">
           <button
             type="button"
@@ -280,8 +419,8 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
         </div>
       </div>
 
-      {/* 5. CONTENT BODY: DETAILS OR LOCAL RANKINGS */}
-      <div className="flex-1 overflow-y-auto min-h-[220px] max-h-[360px] pr-1">
+      {/* 5. CONTENT BODY: DETAILS OR LOCAL RANKINGS — the only scroll region */}
+      <div className="flex-1 min-h-0 overflow-y-auto lazer-left-content-scroll min-h-[220px] max-h-[360px]">
         {activeTab === 'details' ? (
           <div className="space-y-3 text-xs font-mono pt-2">
             <div className="grid grid-cols-2 gap-2">
@@ -386,7 +525,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
       </div>
 
       {importStatus && (
-        <div className={`p-2.5 rounded-xl text-xs font-mono border mt-2 ${
+        <div className={`p-2.5 rounded-xl text-xs font-mono border mt-2 flex-shrink-0 ${
           importStatus.type === 'ok' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-rose-950/40 text-rose-400 border-rose-800/40'
         }`}>
           {importStatus.msg}

@@ -139,6 +139,33 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
   // via pushNotification). No fake/seed items are pre-loaded.
   const [notifications, setNotifications] = useState<Array<{ id: string; title: string; detail: string; time: string; read?: boolean }>>([]);
   const notifRef = useRef<HTMLDivElement | null>(null);
+  // Keep the toolbar above the listing panel for the full exit animation so
+  // the panel slides back up underneath the toolbar (mirroring the enter
+  // animation) instead of sliding over it when `isListingOpen` flips false.
+  const [isListingElevated, setIsListingElevated] = useState(isListingOpen);
+  const listingElevateTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isListingOpen) {
+      if (listingElevateTimer.current !== null) {
+        window.clearTimeout(listingElevateTimer.current);
+        listingElevateTimer.current = null;
+      }
+      setIsListingElevated(true);
+      return;
+    }
+    // Listing exit animation is 250ms; keep elevation slightly longer.
+    listingElevateTimer.current = window.setTimeout(() => {
+      setIsListingElevated(false);
+      listingElevateTimer.current = null;
+    }, 300);
+    return () => {
+      if (listingElevateTimer.current !== null) {
+        window.clearTimeout(listingElevateTimer.current);
+        listingElevateTimer.current = null;
+      }
+    };
+  }, [isListingOpen]);
 
   // Coming-soon toasts share the same system as the middle horizontal bar buttons.
   const {
@@ -260,7 +287,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
   return (
     <div
       id="lazer-toolbar"
-      className={`lazer-toolbar ${visible ? 'is-visible' : 'is-hidden'} ${isListingOpen ? 'is-above-listing' : ''} ${className}`}
+      className={`lazer-toolbar ${visible ? 'is-visible' : 'is-hidden'} ${isListingOpen || isListingElevated ? 'is-above-listing' : ''} ${className}`}
       data-lazer-toolbar=""
       role="banner"
       aria-label="osu! lazer top toolbar"

@@ -1739,6 +1739,19 @@ html[data-ui="lazer"] {
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
+/* Left details/ranking scroll region: keep scroll, hide the visual bar */
+.lazer-left-content-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+}
+
+.lazer-left-content-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .lazer-left-scroll::-webkit-scrollbar {
   width: 6px;
 }
@@ -1918,6 +1931,49 @@ html[data-ui="lazer"] {
   font-size: 13px;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* Direct-manipulation star bar: drag thumbs, click track, wheel to adjust */
+.lazer-starbar.is-interactive {
+  cursor: default;
+}
+
+.lazer-starbar-track.is-draggable {
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.lazer-starbar-track.is-draggable:focus-visible {
+  box-shadow: 0 0 0 2px rgba(233, 103, 161, 0.55);
+}
+
+.lazer-starbar-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.lazer-starbar-dim.is-left {
+  left: 0;
+  border-radius: 9999px 0 0 9999px;
+}
+
+.lazer-starbar-dim.is-right {
+  right: 0;
+  border-radius: 0 9999px 9999px 0;
+}
+
+.lazer-starbar-thumb.is-min,
+.lazer-starbar-thumb.is-max {
+  z-index: 1;
+}
+
+.lazer-starbar-value.is-max {
+  min-width: 34px;
 }
 
 /* Carousel set-card shade: art right, dark left */

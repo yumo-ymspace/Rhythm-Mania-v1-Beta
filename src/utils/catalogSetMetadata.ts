@@ -10,6 +10,8 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
+import { isTrustedCatalogCoverUrl } from './securityLimits';
+
 const CATALOG_SET_METADATA_KEY = 'rhythm_mania_v1_catalog_set_metadata';
 
 export interface CatalogSetMetadata {
@@ -26,13 +28,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isApprovedCoverUrl(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length > 2048) return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname === 'assets.ppy.sh' && url.pathname.startsWith('/beatmaps/');
-  } catch {
-    return false;
-  }
+  return typeof value === 'string' && isTrustedCatalogCoverUrl(value);
 }
 
 function readAll(): Record<string, CatalogSetMetadata> {

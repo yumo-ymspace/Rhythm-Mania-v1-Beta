@@ -15,6 +15,7 @@ import { AssetLifecycleManager, getMediaCacheKey } from './assetLifecycle';
 import { TempMemoryCache } from './tempMemoryCache';
 import {
   isSafeAssetUrl,
+  isTrustedCatalogCoverUrl,
   MAX_BEATMAP_NOTES,
   MAX_BEATMAP_TIMING_POINTS,
   MAX_COMPRESSED_SIZE_BYTES,
@@ -75,15 +76,7 @@ function safeCoverUrl(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length > MAX_MEDIA_URL_LENGTH) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  if (isSafeAssetUrl(trimmed)) return trimmed;
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol === 'https:' && (url.hostname === 'assets.ppy.sh' || url.hostname.endsWith('.ppy.sh')) && url.pathname.startsWith('/beatmaps/')) {
-      return trimmed;
-    }
-  } catch {
-    return undefined;
-  }
+  if (isSafeAssetUrl(trimmed) || isTrustedCatalogCoverUrl(trimmed)) return trimmed;
   return undefined;
 }
 

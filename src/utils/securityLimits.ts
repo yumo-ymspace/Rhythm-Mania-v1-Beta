@@ -560,9 +560,31 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
 }
 
 /**
+ * Checks if a URL is a trusted osu! catalog cover served by the official CDN.
+ * Only exact-host https://assets.ppy.sh/beatmaps/... URLs are trusted. This
+ * allowlist is intentionally narrow: catalog covers are remote images (not
+ * executable import media), and the same origin is already used for <img>
+ * covers across Song Select, history, and the online catalog.
+ */
+export function isTrustedCatalogCoverUrl(url: string): boolean {
+  if (typeof url !== 'string') return false;
+  const value = url.trim();
+  if (!value || value.length > MAX_MEDIA_URL_LENGTH) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:'
+      && parsed.hostname === 'assets.ppy.sh'
+      && parsed.pathname.startsWith('/beatmaps/');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Sanitizes a URL for safe use inside CSS url("...") context.
  * Rejects quotes and parentheses (CSS breakouts). Whitespace in paths is percent-encoded.
- * Also enforces the isSafeAssetUrl check to only allow blob: or same-origin paths.
+ * Allows blob:/same-origin paths via isSafeAssetUrl plus trusted osu! catalog
+ * covers via isTrustedCatalogCoverUrl (official assets.ppy.sh CDN only).
  */
 export function sanitizeCssUrl(url: string, fallback = '/backgrounds/Ferineon.webp'): string {
   if (!url || typeof url !== 'string') return fallback;
@@ -601,7 +623,8 @@ export function sanitizeCssUrl(url: string, fallback = '/backgrounds/Ferineon.we
     return fallback;
   }
 
-  if (!isSafeAssetUrl(url) && !isSafeAssetUrl(safe)) {
+  if (!isSafeAssetUrl(url) && !isSafeAssetUrl(safe)
+    && !isTrustedCatalogCoverUrl(url) && !isTrustedCatalogCoverUrl(safe)) {
     console.warn('Security Exception: Unsafe URL blocked in CSS context:', url);
     return fallback;
   }
