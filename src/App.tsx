@@ -1127,8 +1127,8 @@ export default function App() {
           : (updated.upsurfaceNoteMode === true || String(updated.upsurfaceNoteMode) === 'true'),
         videoOpacity: 1.0,
         backgroundDim: Number(updated.backgroundDim !== undefined ? updated.backgroundDim : 0.60),
-        menuBackgroundDim: Number(updated.menuBackgroundDim !== undefined ? updated.menuBackgroundDim : 0.30),
-        settingsMenuBackgroundDim: Number(updated.settingsMenuBackgroundDim !== undefined ? updated.settingsMenuBackgroundDim : 0.60),
+        menuBackgroundDim: Number(updated.menuBackgroundDim !== undefined ? updated.menuBackgroundDim : 0),
+        settingsMenuBackgroundDim: Number(updated.settingsMenuBackgroundDim !== undefined ? updated.settingsMenuBackgroundDim : 0),
         disableVideo: Boolean(updated.disableVideo),
         videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
         disableParticles: Boolean(updated.disableParticles),
@@ -1347,7 +1347,7 @@ export default function App() {
               transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed"
               style={{
-                backgroundImage: `linear-gradient(rgba(0, 0, 0, ${settings.menuBackgroundDim ?? 0.3}), rgba(0, 0, 0, ${settings.menuBackgroundDim ?? 0.3})), url("${sanitizeCssUrl(activeBackgroundUrl)}")`
+                backgroundImage: `linear-gradient(rgba(0, 0, 0, ${settings.menuBackgroundDim ?? 0}), rgba(0, 0, 0, ${settings.menuBackgroundDim ?? 0})), url("${sanitizeCssUrl(activeBackgroundUrl)}")`
               }}
             />
           )}

@@ -1049,7 +1049,7 @@ export default function SongSelect({
     <div
       className="relative w-full h-full min-h-0 text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
-      {/* 1. Full-bleed background cover artwork: readable art, dark translucent left wedge (TASK-V-020) */}
+      {/* 1. Full-bleed background cover artwork with no dim overlay */}
       {selectBgUrl && (
         <div 
           className="absolute inset-0 bg-cover bg-center pointer-events-none transition-all duration-700 scale-105"
@@ -1059,15 +1059,6 @@ export default function SongSelect({
           }}
         />
       )}
-      {/* Dark wedge + overall tint matching hud/songselect.jpg: solid left panel fading into art */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          zIndex: 1,
-          background: 'linear-gradient(100deg, rgba(20,22,28,0.96) 0%, rgba(20,22,28,0.94) 30%, rgba(20,22,28,0.55) 52%, rgba(20,22,28,0.15) 72%, rgba(20,22,28,0.25) 100%)',
-        }}
-      />
-
       {/* Version Tag */}
       <div className="absolute bottom-20 left-6 text-[10px] text-white/30 font-mono z-30 select-none pointer-events-none hidden lg:block">
         {metadata.version}
@@ -1124,12 +1115,12 @@ export default function SongSelect({
       )}
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-16 min-h-0">
+      <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-[80px] min-h-0">
         
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className={`w-full lg:w-[460px] xl:w-[500px] flex-col h-full min-h-0 p-4 lg:p-6 lg:pr-8 gap-4 overflow-hidden flex-shrink-0 ${
+        <div className={`w-full lg:w-[460px] xl:w-[500px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-8 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 ${
           isMobile && mobileTab !== 'ranking' ? 'hidden' : 'flex'
         }`}>
           <SongSelectLeftPanel

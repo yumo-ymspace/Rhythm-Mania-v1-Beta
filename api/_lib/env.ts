@@ -15,8 +15,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export interface ServerEnvConfig {
-  osuClientId?: string;
-  osuClientSecret?: string;
   isProduction: boolean;
 }
 
@@ -25,13 +23,9 @@ export function isProductionEnvironment(): boolean {
 }
 
 export function getEnvConfig(): ServerEnvConfig {
-  const osuClientId = process.env.OSU_CLIENT_ID;
-  const osuClientSecret = process.env.OSU_CLIENT_SECRET;
   const isProduction = isProductionEnvironment();
 
   return {
-    osuClientId,
-    osuClientSecret,
     isProduction,
   };
 }

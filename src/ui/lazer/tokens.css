@@ -265,8 +265,8 @@ html[data-ui="lazer"] {
 .lazer-footer-back {
   display: inline-flex;
   align-items: stretch;
-  min-width: 210px;
-  height: 50px;
+  min-width: 300px;
+  height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1289,23 +1289,52 @@ html[data-ui="lazer"] {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 58px;
+  height: 72px;
   background: rgba(14, 17, 23, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 16px 0 0;
   z-index: 40;
   user-select: none;
+  overflow: visible;
 }
 
 .lazer-footer-left {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   height: 100%;
+}
+
+/* Bottom-left tool cluster (hud refs): Back + Mods + Random + Options
+   grouped, sheared, overlapping. */
+.lazer-footer-cluster {
+  align-items: stretch;
+  gap: 0;
+}
+
+.lazer-footer-cluster .lazer-footer-back {
+  min-width: 300px;
+  height: 100%;
+}
+
+.lazer-footer-cluster .lazer-footer-action-btn {
+  min-width: 150px;
+  height: 100%;
+  margin-left: -14px;
+}
+
+.lazer-footer-cluster .lazer-footer-options-anchor {
+  display: flex;
+  align-items: stretch;
+  margin-left: -14px;
+}
+
+.lazer-footer-cluster .lazer-footer-options-anchor .lazer-footer-action-btn {
+  margin-left: 0;
 }
 
 .lazer-footer-center {
@@ -1313,6 +1342,7 @@ html[data-ui="lazer"] {
   align-items: center;
   gap: 10px;
   height: 100%;
+  flex: 1;
 }
 
 .lazer-footer-right {
@@ -1326,8 +1356,8 @@ html[data-ui="lazer"] {
 .lazer-footer-action-btn {
   display: inline-flex;
   align-items: stretch;
-  height: 42px;
-  min-width: 105px;
+  height: 52px;
+  min-width: 140px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1374,12 +1404,43 @@ html[data-ui="lazer"] {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 0 14px;
+  padding: 0 18px;
   font-family: Inter, "Space Grotesk", sans-serif;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/* Bigger coloured tool slabs (hud bottom-left refs). */
+.lazer-footer-action-btn.is-mods .lazer-footer-action-slab {
+  background: linear-gradient(180deg, #33431f 0%, #232d16 100%);
+  border-color: rgba(163, 230, 53, 0.35);
+}
+
+.lazer-footer-action-btn.is-random .lazer-footer-action-slab {
+  background: linear-gradient(180deg, #27405c 0%, #1a2a3e 100%);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.lazer-footer-action-btn.is-options .lazer-footer-action-slab {
+  background: linear-gradient(180deg, #3d3352 0%, #292336 100%);
+  border-color: rgba(192, 132, 252, 0.35);
+}
+
+.lazer-footer-action-btn.is-mods:hover .lazer-footer-action-slab,
+.lazer-footer-action-btn.is-random:hover .lazer-footer-action-slab,
+.lazer-footer-action-btn.is-options:hover .lazer-footer-action-slab {
+  filter: brightness(1.12);
+}
+
+/* Long back slab fills the taller footer. */
+.lazer-footer-cluster .lazer-footer-back-slab {
+  border-radius: 0 4px 4px 0;
+}
+
+.lazer-footer-cluster .lazer-footer-back-inner {
+  font-size: 20px;
 }
 
 .lazer-footer-hotkey-badge {
@@ -1441,11 +1502,21 @@ html[data-ui="lazer"] {
 @media (max-width: 768px) {
   .lazer-song-select-footer {
     height: 52px;
-    padding: 0 8px;
+    padding: 0 8px 0 0;
+  }
+  .lazer-footer-cluster .lazer-footer-back {
+    min-width: 120px;
+  }
+  .lazer-footer-cluster .lazer-footer-action-btn {
+    min-width: 70px;
+    margin-left: -8px;
+  }
+  .lazer-footer-cluster .lazer-footer-options-anchor {
+    margin-left: -8px;
   }
   .lazer-footer-action-btn {
     min-width: 70px;
-    height: 36px;
+    height: 100%;
   }
   .lazer-footer-action-inner {
     padding: 0 8px;
@@ -1504,9 +1575,23 @@ html[data-ui="lazer"] {
 }
 
 .lazer-carousel-card.is-active {
-  transform: translateX(-14px);
+  /* Kept inside the container's left pad so the slimcover left edge is
+     never clipped (was translateX(-14px) into overflow-hidden). */
+  transform: translateX(-6px);
   border-color: rgba(0, 229, 255, 0.6);
   box-shadow: 0 0 20px rgba(0, 229, 255, 0.25), 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* Real-carousel taper: margin-left drives short-top/bottom, long-middle. */
+.lazer-carousel-taper-item {
+  transition: margin-left 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lazer-carousel-taper {
+  padding-top: 4px;
+  padding-bottom: 12px;
+  /* Left pad reserves room for the active-card shift so art never clips. */
+  scrollbar-gutter: stable;
 }
 
 .lazer-carousel-diff-row {
@@ -1530,7 +1615,8 @@ html[data-ui="lazer"] {
 }
 
 .lazer-carousel-diff-row.is-selected {
-  transform: translateX(-16px);
+  /* Small shift only — stays inside the expanded pl-4 gutter, never clips. */
+  transform: translateX(-6px);
   border-color: rgba(0, 229, 255, 0.85);
   background: rgba(28, 36, 50, 0.98);
   box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
@@ -1775,13 +1861,25 @@ html[data-ui="lazer"] {
   position: relative;
 }
 
+/* Map info wedge is flush with the top toolbar and the left screen edge
+   (hud/songselect refs): no top/left gap, square top-left, angled right. */
 .lazer-song-wedge {
   background: rgba(22, 24, 30, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 4px 18px 18px 4px;
-  padding: 16px 20px 16px 16px;
+  border-top: none;
+  border-left: none;
+  border-radius: 0 0 18px 0;
+  margin: 0;
+  padding: 16px 28px 16px 16px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
+}
+
+/* Tabs + ranking/details body sit below the flush wedge with left gutter. */
+.lazer-song-wedge-wrap > .flex.flex-col.gap-2,
+.lazer-song-wedge-wrap > .lazer-left-content-scroll {
+  margin-left: 16px;
+  margin-right: 4px;
 }
 
 .lazer-ranking-pill {

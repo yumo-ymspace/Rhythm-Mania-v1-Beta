@@ -201,11 +201,6 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
             {activeTab === 'ranking' && (
               <div className="flex items-center gap-2 ml-3">
                 <span className="lazer-ranking-pill">
-                  <span className="opacity-60 font-bold">Scope</span>
-                  <span>Local</span>
-                  <ChevronDown className="h-3 w-3 opacity-60" />
-                </span>
-                <span className="lazer-ranking-pill">
                   <span className="opacity-60 font-bold">Sort</span>
                   <span>Score</span>
                   <ChevronDown className="h-3 w-3 opacity-60" />
@@ -403,11 +398,6 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
 
           {activeTab === 'ranking' && (
             <div className="flex items-center gap-2 ml-3">
-              <span className="lazer-ranking-pill">
-                <span className="opacity-60 font-bold">Scope</span>
-                <span>Local</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </span>
               <span className="lazer-ranking-pill">
                 <span className="opacity-60 font-bold">Sort</span>
                 <span>Score</span>

@@ -92,9 +92,8 @@ describe('TASK-V-022 — Left title, stats, ranking', () => {
       expect(html).toContain('Accuracy');
       expect(html).toContain('HP Drain');
 
-      // Verify Scope & Sort controls
-      expect(html).toContain('Scope');
-      expect(html).toContain('Local');
+      // Verify Sort controls (Scope pill removed by design)
+      expect(html).not.toContain('Scope');
       expect(html).toContain('Sort');
       expect(html).toContain('Score');
 

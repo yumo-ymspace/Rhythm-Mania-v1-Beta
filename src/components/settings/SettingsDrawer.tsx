@@ -460,7 +460,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
               key="backdrop"
               className="fixed inset-0 z-40 backdrop-blur-sm"
               style={{
-                backgroundColor: `rgba(0, 0, 0, ${settings.settingsMenuBackgroundDim !== undefined ? settings.settingsMenuBackgroundDim : 0.60})`
+                backgroundColor: `rgba(0, 0, 0, ${settings.settingsMenuBackgroundDim !== undefined ? settings.settingsMenuBackgroundDim : 0})`
               }}
               onClick={onClose} 
               aria-hidden 

@@ -135,10 +135,6 @@ The API surface is:
 | `GET /api/auth/me` | Read the current session |
 | `GET /api/auth/google/url` | Start Google OAuth |
 | `GET /api/auth/google/callback` | Complete Google OAuth |
-| `GET /api/auth/osu/url` | Start osu! OAuth (catalog) |
-| `GET /api/auth/osu/callback` | Complete osu! OAuth; return tokens to opener |
-| `POST /api/auth/osu/refresh` | Refresh osu! auth-code tokens |
-| `POST /api/auth/osu/byo-token` | Mint token from user-supplied OAuth app |
 | `POST /api/auth/logout` | End the current session |
 | `POST /api/replays/upload` | Upload an eligible replay |
 | `GET /api/replays/list` | List the top replays for one exact chart revision |
@@ -159,8 +155,7 @@ and hold-rule columns were added should also apply
 `database/migrate_catalog_replay_columns.sql`; the repository has no automatic
 migration runner. The backend accepts either `DATABASE_URL`/`POSTGRES_URL` or the `PG*`/
 `POSTGRES_*` connection variables. Google OAuth uses `GOOGLE_CLIENT_ID` and
-`GOOGLE_CLIENT_SECRET`. osu! catalog OAuth uses `OSU_CLIENT_ID` and
-`OSU_CLIENT_SECRET` (code exchange/refresh only). Set `SESSION_SECRET` in
+`GOOGLE_CLIENT_SECRET`. Set `SESSION_SECRET` in
 deployed environments.
 
 ---

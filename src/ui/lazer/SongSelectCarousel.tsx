@@ -180,15 +180,25 @@ export function SongSelectCarousel({
     );
   }
 
+  // Real carousel taper: the selected/expanded set is longest (extends
+  // furthest left); sets further away get progressively shorter. Clamped so
+  // top/bottom cards never collapse.
+  const focusKey = expandedSongKey || selectedGroupKey;
+  let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
+  if (focusIndex < 0) focusIndex = 0;
+
   return (
     <div
       ref={containerRef}
-      className="lazer-carousel-scroll flex-1 overflow-y-auto overflow-x-hidden pr-2 flex flex-col gap-2 relative z-10 min-h-0"
+      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-5 pr-2 flex flex-col gap-2 relative z-10 min-h-0"
       id="song-select-carousel-container"
     >
-      {songGroups.map((group) => {
+      {songGroups.map((group, groupIndex) => {
         const isGroupActive = selectedGroupKey === group.songKey;
         const isExpanded = expandedSongKey === group.songKey || isGroupActive;
+        const distanceFromFocus = Math.abs(groupIndex - focusIndex);
+        // 0 -> 0px indent (longest), each step +26px, capped at 5 steps.
+        const taperIndentPx = Math.min(distanceFromFocus, 5) * 26;
         const groupBannerUrl = group.coverUrl || group.bgUrl || DEFAULT_BANNER;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
@@ -201,7 +211,8 @@ export function SongSelectCarousel({
             key={group.songKey}
             layout
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col gap-1.5"
+            className="flex flex-col gap-1.5 lazer-carousel-taper-item"
+            style={{ marginLeft: taperIndentPx }}
             ref={isGroupActive ? activeItemRef : undefined}
           >
             {/* SET CARD — hud/songselect.jpg: tall art card, status pill, title/artist, mode icon + diff dots */}

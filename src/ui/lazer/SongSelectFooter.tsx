@@ -44,24 +44,22 @@ export function SongSelectFooter({
 }: SongSelectFooterProps) {
   return (
     <div className="lazer-song-select-footer" id="song-select-lazer-footer">
-      {/* Left: Sheared pink Back button */}
-      <div className="lazer-footer-left">
+      {/* Left cluster: long pink Back + bigger coloured Mods / Random / Options
+          (hud refs bottom-left). */}
+      <div className="lazer-footer-left lazer-footer-cluster">
         <FooterBackButton onClick={onBack} label="Back" />
-      </div>
 
-      {/* Center Tools: Mods, Random, Options */}
-      <div className="lazer-footer-center">
         {/* Mods Button (F1) */}
         <button
           id="bottom-mods-button"
           type="button"
           onClick={onOpenMods}
-          className="lazer-footer-action-btn"
+          className="lazer-footer-action-btn is-mods"
           aria-label="Game Modifiers"
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Sliders className="h-4 w-4 text-[#a3e635]" />
+              <Sliders className="h-5 w-5 text-[#a3e635]" />
               <span className="lazer-footer-action-label">Mods</span>
               <span className="lazer-footer-hotkey-badge">F1</span>
               {selectedModsCount > 0 && (
@@ -78,12 +76,12 @@ export function SongSelectFooter({
           id="bottom-random-button"
           type="button"
           onClick={onRandom}
-          className="lazer-footer-action-btn"
+          className="lazer-footer-action-btn is-random"
           aria-label="Random Beatmap"
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Shuffle className="h-4 w-4 text-[#38bdf8]" />
+              <Shuffle className="h-5 w-5 text-[#38bdf8]" />
               <span className="lazer-footer-action-label">Random</span>
               <span className="lazer-footer-hotkey-badge">F2</span>
             </span>
@@ -91,18 +89,18 @@ export function SongSelectFooter({
         </button>
 
         {/* Options Popover Anchor (F3) */}
-        <div className="relative">
+        <div className="relative lazer-footer-options-anchor">
           <button
             id="bottom-options-button"
             type="button"
             onClick={onToggleOptions}
-            className={`lazer-footer-action-btn ${isOptionsOpen ? 'is-active' : ''}`}
+            className={`lazer-footer-action-btn is-options ${isOptionsOpen ? 'is-active' : ''}`}
             aria-label="Options Menu"
             aria-expanded={isOptionsOpen}
           >
             <Shear className="lazer-footer-action-slab">
               <span className="lazer-footer-action-inner">
-                <SlidersHorizontal className="h-4 w-4 text-[#c084fc]" />
+                <SlidersHorizontal className="h-5 w-5 text-[#c084fc]" />
                 <span className="lazer-footer-action-label">Options</span>
                 <span className="lazer-footer-hotkey-badge">F3</span>
               </span>
@@ -113,6 +111,9 @@ export function SongSelectFooter({
           {isOptionsOpen && optionsContent}
         </div>
       </div>
+
+      {/* Center spacer (tools now live in the left cluster) */}
+      <div className="lazer-footer-center" aria-hidden="true" />
 
       {/* Right: Parked LazerCookie */}
       <div className="lazer-footer-right">

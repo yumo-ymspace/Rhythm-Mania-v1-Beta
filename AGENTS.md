@@ -69,12 +69,10 @@ cache `/api/` requests or non-GET requests.
 
 ```text
 api/
-  _lib/                         Auth, environment, response, osu!, replay verification
+  _lib/                         Auth helpers, environment, response, replay verification
   config.ts                     GET /api/config
   health.ts                     GET /api/health
-  auth-router.ts                /api/auth/* dispatcher
   catalog-router.ts             /api/catalog/* dispatcher
-  auth/osu/                     osu! OAuth handler modules
   catalog/                      Catalog search handler module
 database/
   schema.sql                    Legacy PostgreSQL table/index definitions
@@ -365,7 +363,6 @@ The API environment is read by `api/_lib/env.ts`:
 - Discrete database fields: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, each with a `POSTGRES_*` equivalent.
 - TLS: `PGSSLMODE`, default `verify-full`; production rejects `disable` unless `ALLOW_INSECURE_PG_TLS` is explicitly truthy.
 - Session/auth: `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-- osu! OAuth: `OSU_CLIENT_ID`, `OSU_CLIENT_SECRET`.
 - Runtime detection: `NODE_ENV` and `VERCEL_ENV`.
 - Hold verification: client `VITE_HOLD_TICK_INTERVAL_MS` defaults to 50 ms; server `HOLD_TICK_INTERVAL_MS` must be an explicit integer from 10..100 for version-2 replay uploads. The server does not use the client default when the variable is absent.
 
@@ -392,10 +389,6 @@ Authentication router:
 | `/api/auth/logout` | POST | Same-origin session deletion and cookie clearing |
 | `/api/auth/google/url` | GET | Google OAuth URL and short-lived state cookie |
 | `/api/auth/google/callback` | OAuth callback | Exchanges code, creates/updates a user, creates a 30-day session, and returns an HTML popup handoff |
-| `/api/auth/osu/url` | GET | osu! authorization-code OAuth URL and state cookie |
-| `/api/auth/osu/callback` | OAuth callback | Exchanges an osu! code and hands tokens to the opener/localStorage |
-| `/api/auth/osu/refresh` | POST | Refreshes an auth-code osu! token using server credentials |
-| `/api/auth/osu/byo-token` | POST | Mints an osu! client-credentials token from user-supplied BYO credentials |
 
 Replay router:
 
