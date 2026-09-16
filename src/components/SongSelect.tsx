@@ -1120,7 +1120,7 @@ export default function SongSelect({
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className={`w-full lg:w-[460px] xl:w-[500px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-8 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 ${
+        <div className={`w-full lg:w-[540px] xl:w-[600px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 ${
           isMobile && mobileTab !== 'ranking' ? 'hidden' : 'flex'
         }`}>
           <SongSelectLeftPanel

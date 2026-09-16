@@ -148,6 +148,6 @@ describe('TASK-V-021: Song Select Carousel', () => {
     expect(html).toContain('[4K]');
     expect(html).toContain('lazer-star-meter');
     expect(html).toContain('S'); // Best record local grade badge
-    expect(html).toContain('READY');
+    expect(html).not.toContain('READY');
   });
 });

@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Info } from 'lucide-react';
 import { Beatmap, PlayHistoryRecord } from '../../types';
@@ -180,25 +180,76 @@ export function SongSelectCarousel({
     );
   }
 
-  // Real carousel taper: the selected/expanded set is longest (extends
-  // furthest left); sets further away get progressively shorter. Clamped so
-  // top/bottom cards never collapse.
+  // Viewport carousel taper (osu!lazer-style): every panel's left offset is
+  // a continuous function of that panel's own pixel distance from the
+  // vertical centre of what is currently on screen — nothing is quantized
+  // to index steps, so lengths glide smoothly while scrolling. Only the
+  // centred panel is longest; the rest scale along it. Selected panels keep
+  // an extra extension on top so they read longer than the rest.
   const focusKey = expandedSongKey || selectedGroupKey;
   let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
   if (focusIndex < 0) focusIndex = 0;
+  // Per-group indent in px, recomputed every frame while scrolling.
+  const [taperIndents, setTaperIndents] = useState<number[] | null>(null);
+
+  useEffect(() => {
+    const container = containerRef?.current;
+    if (!container) return;
+    const MAX_INDENT_PX = 120;
+    const RANGE_PX = 300;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const items = container.querySelectorAll<HTMLElement>('.lazer-carousel-taper-item');
+      if (items.length === 0) return;
+      const viewCenter = container.scrollTop + container.clientHeight / 2;
+      const next: number[] = new Array(items.length);
+      items.forEach((el, idx) => {
+        const center = el.offsetTop + el.offsetHeight / 2;
+        const t = Math.min(1, Math.abs(center - viewCenter) / RANGE_PX);
+        next[idx] = Math.round(MAX_INDENT_PX * Math.pow(t, 0.85));
+      });
+      setTaperIndents((prev) => {
+        if (prev && prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
+        return next;
+      });
+    };
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(update);
+    };
+    update();
+    container.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    // Re-measure after expand/collapse animations settle (heights change).
+    const t = window.setTimeout(update, 320);
+    return () => {
+      container.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      window.clearTimeout(t);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [containerRef, songGroups.length, expandedSongKey]);
 
   return (
     <div
       ref={containerRef}
-      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-5 pr-2 flex flex-col gap-2 relative z-10 min-h-0"
+      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-2 flex flex-col gap-1.5 relative z-10 min-h-0"
       id="song-select-carousel-container"
     >
       {songGroups.map((group, groupIndex) => {
         const isGroupActive = selectedGroupKey === group.songKey;
-        const isExpanded = expandedSongKey === group.songKey || isGroupActive;
-        const distanceFromFocus = Math.abs(groupIndex - focusIndex);
-        // 0 -> 0px indent (longest), each step +26px, capped at 5 steps.
-        const taperIndentPx = Math.min(distanceFromFocus, 5) * 26;
+        // Expansion is driven only by expandedSongKey so clicking the active
+        // banner toggles (closes) its diff list while keeping selection.
+        const isExpanded = expandedSongKey === group.songKey;
+        // Continuous scroll-driven indent (0 at the viewport centre); falls
+        // back to the discrete focus index before the first measurement.
+        const fallbackIndentPx = Math.min(Math.abs(groupIndex - focusIndex), 5) * 24;
+        const baseIndentPx = taperIndents?.[groupIndex] ?? fallbackIndentPx;
+        // Selected song extends clearly past the rest on both sides,
+        // clamped to never clip the container pad.
+        const taperIndentPx = Math.max(0, baseIndentPx - (isGroupActive ? 30 : 0));
+        const taperExtendRightPx = isGroupActive ? -8 : 0;
         const groupBannerUrl = group.coverUrl || group.bgUrl || DEFAULT_BANNER;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
@@ -210,9 +261,9 @@ export function SongSelectCarousel({
           <motion.div
             key={group.songKey}
             layout
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col gap-1.5 lazer-carousel-taper-item"
-            style={{ marginLeft: taperIndentPx }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col gap-1 lazer-carousel-taper-item"
+            style={{ marginLeft: taperIndentPx, marginRight: taperExtendRightPx }}
             ref={isGroupActive ? activeItemRef : undefined}
           >
             {/* SET CARD — hud/songselect.jpg: tall art card, status pill, title/artist, mode icon + diff dots */}
@@ -229,8 +280,6 @@ export function SongSelectCarousel({
               onClick={() => onSelectGroup(group)}
               className={`lazer-carousel-card ${isGroupActive ? 'is-active' : ''}`}
             >
-              {/* Left active arrow + white edge */}
-              {isGroupActive && <div className="lazer-carousel-active-edge" aria-hidden="true" />}
               <div
                 className="absolute inset-0 bg-cover bg-center pointer-events-none"
                 style={{ backgroundImage: `url("${sanitizeCssUrl(groupBannerUrl)}")` }}
@@ -238,11 +287,8 @@ export function SongSelectCarousel({
               <div className="absolute inset-0 pointer-events-none lazer-carousel-card-shade" />
 
               {/* Set Card Content */}
-              <div className="relative flex items-center justify-between px-3.5 py-2.5 gap-3 min-h-[64px]">
+              <div className="relative flex items-center justify-between px-3.5 py-2 gap-3 min-h-[56px]">
                 <div className="flex items-start gap-2 min-w-0 flex-1">
-                  {isGroupActive && (
-                    <span className="mt-0.5 text-white/90 text-sm font-black shrink-0" aria-hidden="true">›</span>
-                  )}
                   <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
                     <h4 className="font-extrabold font-sans text-[15px] sm:text-base text-white tracking-tight truncate leading-tight order-first">
                       {group.title}
@@ -307,8 +353,8 @@ export function SongSelectCarousel({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="overflow-hidden pl-4 pr-1 flex flex-col gap-1.5"
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="overflow-hidden pl-3 pr-1 flex flex-col gap-1"
                 >
                   {sortedDiffs.map((diff) => {
                     const isDiffSelected = selectedMapId === diff.id;
@@ -342,7 +388,12 @@ export function SongSelectCarousel({
                           }
                         }}
                         className={`lazer-carousel-diff-row ${isDiffSelected ? 'is-selected' : ''}`}
-                        style={{ background: tint.bg, borderColor: isDiffSelected ? tint.edge : undefined }}
+                        style={{
+                          background: tint.bg,
+                          borderColor: isDiffSelected ? tint.edge : undefined,
+                          marginLeft: isDiffSelected ? -6 : 0,
+                          marginRight: isDiffSelected ? -6 : 0,
+                        }}
                       >
                         {/* Selected edge indicator */}
                         {isDiffSelected && <div className="lazer-carousel-diff-bar" style={{ background: tint.edge, boxShadow: `0 0 8px ${tint.edge}` }} />}
@@ -372,7 +423,7 @@ export function SongSelectCarousel({
                             </div>
                           </div>
 
-                          {/* Right: star pill + dots + READY */}
+                          {/* Right: star pill + dots */}
                           <div className="flex items-center gap-2 shrink-0">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${tint.pill}`}>
                               ★ {rating.toFixed(2)}
@@ -386,11 +437,6 @@ export function SongSelectCarousel({
                                 />
                               ))}
                             </span>
-                            {isDiffSelected && (
-                              <span className="text-[10px] text-white font-black tracking-wider uppercase animate-pulse">
-                                READY
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
