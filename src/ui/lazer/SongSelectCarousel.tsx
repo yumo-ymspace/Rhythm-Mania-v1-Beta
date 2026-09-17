@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Info } from 'lucide-react';
 import { Beatmap, PlayHistoryRecord } from '../../types';
@@ -26,6 +26,13 @@ export interface CarouselSongGroup {
   bgUrl?: string;
   difficultiesSummary?: string[];
   maps: Beatmap[];
+}
+
+export interface CarouselCenterSignal {
+  /** songKey of the group to centre. */
+  key: string;
+  /** Increment to trigger a new one-time centre, even for the same key. */
+  nonce: number;
 }
 
 export interface SongSelectCarouselProps {
@@ -44,6 +51,8 @@ export interface SongSelectCarouselProps {
   getGradeBadgeClass: (grade: string) => string;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   activeItemRef?: React.RefObject<HTMLDivElement | null>;
+  /** One-time "centre this group" request (selection / random / keyboard). */
+  centerSignal?: CarouselCenterSignal;
 }
 
 const DEFAULT_BANNER = '/backgrounds/Ferineon.webp';
@@ -169,7 +178,239 @@ export function SongSelectCarousel({
   getGradeBadgeClass,
   containerRef,
   activeItemRef,
+  centerSignal,
 }: SongSelectCarouselProps) {
+  // Viewport carousel taper (osu!lazer-style): every panel's left offset is
+  // a continuous function of that panel's own pixel distance from the
+  // vertical centre of what is currently on screen — nothing is quantized
+  // to index steps, so lengths glide smoothly while scrolling.
+  //
+  // Length hierarchy (always true, even mid-scroll):
+  //   selected group  >  centred non-selected  >  edge non-selected
+  // The selected group pins to full width regardless of viewport position;
+  // non-selected groups taper from a base indent at the centre out to the
+  // max indent at the edges.
+  //
+  // Performance: indents are written directly to the DOM inside a
+  // rAF-throttled scroll handler. No React state per scroll frame, so fast
+  // scrolling never re-renders the list. Item centres are cached (offsetTop
+  // is scroll-invariant) so the hot path does no layout reads.
+  const MAX_INDENT_PX = 120;
+  const CENTER_INDENT_PX = 36;
+  const RANGE_PX = 300;
+  const SELECTED_RIGHT_EXTEND_PX = -8;
+
+  const focusKey = expandedSongKey || selectedGroupKey;
+  let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
+  if (focusIndex < 0) focusIndex = 0;
+
+  const selectedKeyRef = useRef(selectedGroupKey);
+  selectedKeyRef.current = selectedGroupKey;
+  const groupsRef = useRef(songGroups);
+  groupsRef.current = songGroups;
+  const itemEls = useRef(new Map<string, HTMLDivElement>());
+  const centersCache = useRef(new Map<string, number>());
+  const taperRaf = useRef(0);
+  const progScrollRaf = useRef(0);
+
+  const measureCenters = () => {
+    const next = new Map<string, number>();
+    for (const g of groupsRef.current) {
+      const el = itemEls.current.get(g.songKey);
+      if (el) next.set(g.songKey, el.offsetTop + el.offsetHeight / 2);
+    }
+    centersCache.current = next;
+  };
+
+  const updateTaper = () => {
+    taperRaf.current = 0;
+    const container = containerRef?.current;
+    if (!container) return;
+    const selectedKey = selectedKeyRef.current;
+    const viewCenter = container.scrollTop + container.clientHeight / 2;
+    for (const g of groupsRef.current) {
+      const el = itemEls.current.get(g.songKey);
+      if (!el) continue;
+      if (g.songKey === selectedKey) {
+        // Selected: pinned full-width, always longer than the rest.
+        if (el.style.marginLeft !== '0px') el.style.marginLeft = '0px';
+        if (el.style.marginRight !== `${SELECTED_RIGHT_EXTEND_PX}px`) el.style.marginRight = `${SELECTED_RIGHT_EXTEND_PX}px`;
+        continue;
+      }
+      let center = centersCache.current.get(g.songKey);
+      if (center === undefined) {
+        center = el.offsetTop + el.offsetHeight / 2;
+        centersCache.current.set(g.songKey, center);
+      }
+      const t = Math.min(1, Math.abs(center - viewCenter) / RANGE_PX);
+      const indent = Math.round(CENTER_INDENT_PX + (MAX_INDENT_PX - CENTER_INDENT_PX) * Math.pow(t, 0.85));
+      const left = `${indent}px`;
+      if (el.style.marginLeft !== left) el.style.marginLeft = left;
+      if (el.style.marginRight !== '0px') el.style.marginRight = '0px';
+    }
+  };
+
+  const scheduleTaper = () => {
+    if (taperRaf.current) return;
+    taperRaf.current = requestAnimationFrame(updateTaper);
+  };
+
+  const cancelProgScroll = () => {
+    if (progScrollRaf.current) {
+      cancelAnimationFrame(progScrollRaf.current);
+      progScrollRaf.current = 0;
+    }
+  };
+
+  // Scroll + measure wiring. Centres are (re)cached after layout settles;
+  // the hot scroll path then does math + style writes only (no re-render).
+  useEffect(() => {
+    const container = containerRef?.current;
+    if (!container) return;
+    measureCenters();
+    scheduleTaper();
+    container.addEventListener('scroll', scheduleTaper, { passive: true });
+    window.addEventListener('resize', scheduleTaper);
+    // Re-measure after expand/collapse animations settle (heights change).
+    const t1 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 120);
+    const t2 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 380);
+    return () => {
+      container.removeEventListener('scroll', scheduleTaper);
+      window.removeEventListener('resize', scheduleTaper);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      if (taperRaf.current) cancelAnimationFrame(taperRaf.current);
+      taperRaf.current = 0;
+      cancelProgScroll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerRef, songGroups.length, expandedSongKey, selectedGroupKey]);
+
+  // Keep the taper in sync when the selection extension flips without a
+  // scroll event (selection is pinned full-width via direct style write so
+  // it never waits for the next scroll tick).
+  useEffect(() => {
+    scheduleTaper();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroupKey]);
+
+  // One-time centring (osu!lazer ScrollToSelection): animate the requested
+  // group's vertical centre to the viewport centre, then leave the scroll
+  // alone — it is not sticky. A fast OutQuint keeps it snappy; user input
+  // cancels it so it never fights manual scrolling. A settle correction
+  // re-runs after the expand animation grows the centred group.
+  useEffect(() => {
+    if (!centerSignal) return;
+    const container = containerRef?.current;
+    if (!container) return;
+    let attempts = 0;
+    let cancelled = false;
+    let settleTimer = 0;
+    // Where the programmatic scroll left the container; used to detect
+    // manual user scrolling before the settle correction runs.
+    let expectedTop: number | null = null;
+    const onUserInput = () => {
+      cancelled = true;
+      expectedTop = null;
+      cancelProgScroll();
+    };
+    container.addEventListener('wheel', onUserInput, { passive: true });
+    container.addEventListener('touchstart', onUserInput, { passive: true });
+    container.addEventListener('pointerdown', onUserInput);
+
+    const animateTo = (dest: number, duration: number, onDone?: () => void) => {
+      cancelProgScroll();
+      const start = container.scrollTop;
+      const delta = dest - start;
+      const t0 = performance.now();
+      const step = (now: number) => {
+        if (cancelled) return;
+        const t = Math.min(1, (now - t0) / duration);
+        const eased = 1 - Math.pow(1 - t, 5);
+        container.scrollTop = start + delta * eased;
+        if (t < 1) {
+          progScrollRaf.current = requestAnimationFrame(step);
+        } else {
+          progScrollRaf.current = 0;
+          expectedTop = dest;
+          scheduleTaper();
+          onDone?.();
+        }
+      };
+      progScrollRaf.current = requestAnimationFrame(step);
+    };
+
+    const centreTarget = (el: HTMLElement): number => {
+      const target = el.offsetTop + el.offsetHeight / 2 - container.clientHeight / 2;
+      const max = Math.max(0, container.scrollHeight - container.clientHeight);
+      return Math.max(0, Math.min(max, target));
+    };
+
+    const scheduleSettleCorrection = () => {
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        if (cancelled || expectedTop === null) return;
+        const el = itemEls.current.get(centerSignal.key);
+        if (!el) return;
+        // User grabbed the scroll after we finished — leave it alone.
+        if (Math.abs(container.scrollTop - expectedTop) > 8) return;
+        measureCenters();
+        const dest = centreTarget(el);
+        if (Math.abs(dest - container.scrollTop) < 4) return;
+        const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+          && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced) {
+          container.scrollTop = dest;
+          expectedTop = dest;
+          return;
+        }
+        animateTo(dest, 160);
+      }, 420);
+    };
+
+    const run = () => {
+      if (cancelled) return;
+      const el = itemEls.current.get(centerSignal.key);
+      if (!el) {
+        // List may not be laid out yet (mount / filter change) — retry.
+        if (attempts++ < 10) {
+          progScrollRaf.current = requestAnimationFrame(() => {
+            progScrollRaf.current = 0;
+            window.setTimeout(run, 50);
+          });
+        }
+        return;
+      }
+      measureCenters();
+      const clamped = centreTarget(el);
+      const dist = clamped - container.scrollTop;
+      if (Math.abs(dist) < 4) {
+        expectedTop = clamped;
+        scheduleSettleCorrection();
+        return; // already centred — leave it alone
+      }
+      if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        container.scrollTop = clamped;
+        expectedTop = clamped;
+        scheduleSettleCorrection();
+        return;
+      }
+      const duration = Math.min(380, 200 + Math.abs(dist) * 0.12);
+      animateTo(clamped, duration, scheduleSettleCorrection);
+    };
+    run();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(settleTimer);
+      container.removeEventListener('wheel', onUserInput);
+      container.removeEventListener('touchstart', onUserInput);
+      container.removeEventListener('pointerdown', onUserInput);
+      cancelProgScroll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerSignal?.nonce]);
+
   if (songGroups.length === 0) {
     return (
       <div className="bg-[#0c0c14]/80 border border-white/10 p-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 shadow-xl gap-2">
@@ -179,57 +420,6 @@ export function SongSelectCarousel({
       </div>
     );
   }
-
-  // Viewport carousel taper (osu!lazer-style): every panel's left offset is
-  // a continuous function of that panel's own pixel distance from the
-  // vertical centre of what is currently on screen — nothing is quantized
-  // to index steps, so lengths glide smoothly while scrolling. Only the
-  // centred panel is longest; the rest scale along it. Selected panels keep
-  // an extra extension on top so they read longer than the rest.
-  const focusKey = expandedSongKey || selectedGroupKey;
-  let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
-  if (focusIndex < 0) focusIndex = 0;
-  // Per-group indent in px, recomputed every frame while scrolling.
-  const [taperIndents, setTaperIndents] = useState<number[] | null>(null);
-
-  useEffect(() => {
-    const container = containerRef?.current;
-    if (!container) return;
-    const MAX_INDENT_PX = 120;
-    const RANGE_PX = 300;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const items = container.querySelectorAll<HTMLElement>('.lazer-carousel-taper-item');
-      if (items.length === 0) return;
-      const viewCenter = container.scrollTop + container.clientHeight / 2;
-      const next: number[] = new Array(items.length);
-      items.forEach((el, idx) => {
-        const center = el.offsetTop + el.offsetHeight / 2;
-        const t = Math.min(1, Math.abs(center - viewCenter) / RANGE_PX);
-        next[idx] = Math.round(MAX_INDENT_PX * Math.pow(t, 0.85));
-      });
-      setTaperIndents((prev) => {
-        if (prev && prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
-        return next;
-      });
-    };
-    const schedule = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(update);
-    };
-    update();
-    container.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    // Re-measure after expand/collapse animations settle (heights change).
-    const t = window.setTimeout(update, 320);
-    return () => {
-      container.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-      window.clearTimeout(t);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [containerRef, songGroups.length, expandedSongKey]);
 
   return (
     <div
@@ -242,14 +432,13 @@ export function SongSelectCarousel({
         // Expansion is driven only by expandedSongKey so clicking the active
         // banner toggles (closes) its diff list while keeping selection.
         const isExpanded = expandedSongKey === group.songKey;
-        // Continuous scroll-driven indent (0 at the viewport centre); falls
-        // back to the discrete focus index before the first measurement.
-        const fallbackIndentPx = Math.min(Math.abs(groupIndex - focusIndex), 5) * 24;
-        const baseIndentPx = taperIndents?.[groupIndex] ?? fallbackIndentPx;
-        // Selected song extends clearly past the rest on both sides,
-        // clamped to never clip the container pad.
-        const taperIndentPx = Math.max(0, baseIndentPx - (isGroupActive ? 30 : 0));
-        const taperExtendRightPx = isGroupActive ? -8 : 0;
+        // First-paint indent before the rAF taper measures the viewport:
+        // selected pins full-width; the rest fall back to the discrete
+        // focus index. The scroll handler takes over immediately after.
+        const fallbackIndentPx = isGroupActive
+          ? 0
+          : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 16;
+        const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : 0;
         const groupBannerUrl = group.coverUrl || group.bgUrl || DEFAULT_BANNER;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
@@ -258,13 +447,20 @@ export function SongSelectCarousel({
         const diffDots = sortedDiffs.slice(0, 12).map((m) => getDiffDotColor(getStarRating(m)));
 
         return (
-          <motion.div
+          <div
             key={group.songKey}
-            layout
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             className="flex flex-col gap-1 lazer-carousel-taper-item"
-            style={{ marginLeft: taperIndentPx, marginRight: taperExtendRightPx }}
-            ref={isGroupActive ? activeItemRef : undefined}
+            style={{ marginLeft: fallbackIndentPx, marginRight: fallbackExtendRightPx }}
+            ref={(el) => {
+              if (el) {
+                itemEls.current.set(group.songKey, el);
+              } else {
+                itemEls.current.delete(group.songKey);
+              }
+              if (isGroupActive && activeItemRef) {
+                activeItemRef.current = el;
+              }
+            }}
           >
             {/* SET CARD — hud/songselect.jpg: tall art card, status pill, title/artist, mode icon + diff dots */}
             <div
@@ -354,7 +550,7 @@ export function SongSelectCarousel({
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="overflow-hidden pl-3 pr-1 flex flex-col gap-1"
+                  className="overflow-hidden pl-5 pr-1 flex flex-col gap-1"
                 >
                   {sortedDiffs.map((diff) => {
                     const isDiffSelected = selectedMapId === diff.id;
@@ -391,8 +587,12 @@ export function SongSelectCarousel({
                         style={{
                           background: tint.bg,
                           borderColor: isDiffSelected ? tint.edge : undefined,
-                          marginLeft: isDiffSelected ? -6 : 0,
-                          marginRight: isDiffSelected ? -6 : 0,
+                          // Diffs sit shorter than the banner; the selected
+                          // diff stretches back out to just inside the
+                          // banner edges (negative margins reclaim the
+                          // wrapper gutter without clipping).
+                          marginLeft: isDiffSelected ? -12 : 8,
+                          marginRight: isDiffSelected ? -2 : 6,
                         }}
                       >
                         {/* Selected edge indicator */}
@@ -445,7 +645,7 @@ export function SongSelectCarousel({
                 </motion.div>
               )}
             </AnimatePresence>
-          </motion.div>
+          </div>
         );
       })}
     </div>

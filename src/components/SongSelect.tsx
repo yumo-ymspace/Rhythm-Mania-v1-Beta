@@ -155,18 +155,17 @@ export default function SongSelect({
   const carouselContainerRef = useRef<HTMLDivElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll the active selection to stay vertically centered-ish in the carousel
-  useEffect(() => {
-    if (activeItemRef.current && carouselContainerRef.current) {
-      const container = carouselContainerRef.current;
-      const item = activeItemRef.current;
-      const itemTop = item.offsetTop;
-      const itemHeight = item.offsetHeight;
-      const containerHeight = container.clientHeight;
-      const targetScroll = itemTop - containerHeight / 2 + itemHeight / 2;
-      container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
-    }
-  }, [selectedCustomMapId, manualExpandedSongKey]);
+  // One-time carousel centring (osu!lazer ScrollToSelection behaviour):
+  // explicit selections request a single animated centre of the chosen
+  // group; free scrolling afterwards is never forced back. The carousel
+  // owns the animation and skips it when already centred.
+  const [carouselCenterSignal, setCarouselCenterSignal] = useState<{ key: string; nonce: number } | undefined>(undefined);
+  const carouselCenterNonceRef = useRef(0);
+  const requestCarouselCenter = (songKey: string) => {
+    if (!songKey) return;
+    carouselCenterNonceRef.current += 1;
+    setCarouselCenterSignal({ key: songKey, nonce: carouselCenterNonceRef.current });
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -519,6 +518,7 @@ export default function SongSelect({
           const savedMap = filteredCustomMaps.find(m => m.id === savedLastId);
           if (savedMap) {
             handleSelectCustomMap(savedMap);
+            requestCarouselCenter(getMapSongKey(savedMap));
             return;
           }
         }
@@ -527,6 +527,7 @@ export default function SongSelect({
       const defaultMap = filteredCustomMaps[0];
       if (defaultMap) {
         handleSelectCustomMap(defaultMap);
+        requestCarouselCenter(getMapSongKey(defaultMap));
       }
     }
   }, [filteredCustomMaps, selectedCustomMapId, shouldAutoSelectOnMount]);
@@ -646,6 +647,8 @@ export default function SongSelect({
       if (targetMap) {
         handleSelectCustomMap(targetMap);
       }
+      // One-time centre of the newly selected song (not sticky).
+      requestCarouselCenter(group.songKey);
     }
   };
 
@@ -864,10 +867,14 @@ export default function SongSelect({
         if (!showModsModal && filteredCustomMaps.length > 0) {
           e.preventDefault();
           const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapId);
-          if (currentIdx === -1) {
-            handleSelectCustomMap(filteredCustomMaps[0]);
-          } else if (currentIdx < filteredCustomMaps.length - 1) {
-            handleSelectCustomMap(filteredCustomMaps[currentIdx + 1]);
+          const next = currentIdx === -1
+            ? filteredCustomMaps[0]
+            : filteredCustomMaps[currentIdx + 1];
+          if (next) {
+            const nextKey = getMapSongKey(next);
+            if (nextKey !== expandedSongKey) setManualExpandedSongKey(nextKey);
+            handleSelectCustomMap(next);
+            requestCarouselCenter(nextKey);
           }
         }
       } else if (e.key === 'ArrowUp') {
@@ -875,7 +882,11 @@ export default function SongSelect({
           e.preventDefault();
           const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapId);
           if (currentIdx > 0) {
-            handleSelectCustomMap(filteredCustomMaps[currentIdx - 1]);
+            const next = filteredCustomMaps[currentIdx - 1];
+            const nextKey = getMapSongKey(next);
+            if (nextKey !== expandedSongKey) setManualExpandedSongKey(nextKey);
+            handleSelectCustomMap(next);
+            requestCarouselCenter(nextKey);
           }
         }
       }
@@ -943,6 +954,7 @@ export default function SongSelect({
         onImportBeatmap(parsedMap);
         setImportStatus({ type: 'ok', msg: `Successfully imported "${parsedMap.title}" - [${parsedMap.difficulty}] difficulty!` });
         setSelectedCustomMapId(parsedMap.id);
+        requestCarouselCenter(getMapSongKey(parsedMap));
       } else {
         if (file.size > MAX_COMPRESSED_SIZE_BYTES) {
           throw new Error(`Security Exception: Uploaded file size exceeds limit (${(file.size / (1024 * 1024)).toFixed(1)} MB, limit: ${(MAX_COMPRESSED_SIZE_BYTES / (1024 * 1024)).toFixed(1)} MB)`);
@@ -1002,7 +1014,11 @@ export default function SongSelect({
         if (successCount > 0) {
            await onImportPackage(packageId, file.name, file, stagedMaps);
            setImportStatus({ type: 'ok', msg: `Successfully unpacked ${successCount} playable difficulties!` });
-          if (lastId) setSelectedCustomMapId(lastId);
+          if (lastId) {
+            setSelectedCustomMapId(lastId);
+            const lastMap = stagedMaps.find((m) => m.id === lastId);
+            if (lastMap) requestCarouselCenter(getMapSongKey(lastMap));
+          }
         } else {
           throw new Error('No playable difficulties found in package.');
         }
@@ -1015,10 +1031,19 @@ export default function SongSelect({
   };
 
   const handleSelectRandom = () => {
-    if (filteredCustomMaps.length > 0) {
-      const randomIndex = Math.floor(Math.random() * filteredCustomMaps.length);
-      handleSelectCustomMap(filteredCustomMaps[randomIndex]);
-    }
+    if (songGroups.length === 0) return;
+    // Pick a random song group, then a random difficulty inside it so the
+    // carousel centres and expands the random pick like a manual selection.
+    const randomGroup = songGroups[Math.floor(Math.random() * songGroups.length)];
+    if (!randomGroup) return;
+    const pool = randomGroup.maps.length > 0 ? randomGroup.maps : filteredCustomMaps.filter((m) => getMapSongKey(m) === randomGroup.songKey);
+    const target = pool.length > 0
+      ? pool[Math.floor(Math.random() * pool.length)]
+      : filteredCustomMaps[Math.floor(Math.random() * filteredCustomMaps.length)];
+    if (!target) return;
+    setManualExpandedSongKey(randomGroup.songKey);
+    handleSelectCustomMap(target);
+    requestCarouselCenter(randomGroup.songKey);
   };
 
   const handleDeleteSelectedSet = () => {
@@ -1282,7 +1307,10 @@ export default function SongSelect({
             favoriteSongs={favoriteSongs}
             playHistory={playHistory}
             onSelectGroup={handleSelectGroup}
-            onSelectDifficulty={(diff) => handleSelectCustomMap(diff)}
+            onSelectDifficulty={(diff) => {
+              handleSelectCustomMap(diff);
+              requestCarouselCenter(getMapSongKey(diff));
+            }}
             onStartPlay={(diff) => handleStartPlay(diff)}
             onToggleFavorite={toggleFavorite}
             getStarRating={getStarRating}
@@ -1290,6 +1318,7 @@ export default function SongSelect({
             getGradeBadgeClass={getGradeBadgeClass}
             containerRef={carouselContainerRef}
             activeItemRef={activeItemRef}
+            centerSignal={carouselCenterSignal}
           />
 
         </div>
