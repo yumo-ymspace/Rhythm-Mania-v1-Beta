@@ -27,7 +27,7 @@ import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
 import { isBrowserPlayableVideoFilename } from '../utils/assetLifecycle';
 import { MAX_COMPRESSED_SIZE_BYTES, validateZipLimits, sanitizeCssUrl, decodeBoundedUtf8, createZipExtractionBudget } from '../utils/securityLimits';
 import { storageManager } from '../utils/storageManager';
-import { unpackBeatmap } from '../utils/unpackHelper';
+import { preloadBeatmapBackgrounds, unpackBeatmap } from '../utils/unpackHelper';
 import { computeBeatmapHash } from '../utils/replayManager';
 import { extractZipEntry } from '../utils/zipResolver';
 import { previewPlayer } from '../utils/previewPlayer';
@@ -747,6 +747,38 @@ export default function SongSelect({
       setSongSelectBgUrl(displayedBgUrl);
     }
   }, [displayedBgUrl, setSongSelectBgUrl]);
+
+  // Neighbour prefetch: unzip + decode the song art for the groups around
+  // the selection so carousel scrolling and backdrop swaps stay instant.
+  // Runs at idle priority with bounded concurrency (see unpackHelper).
+  useEffect(() => {
+    if (songGroups.length === 0) return;
+    let selectedIndex = songGroups.findIndex((g) => g.songKey === activeSongKey);
+    if (selectedIndex < 0) selectedIndex = 0;
+    const neighbours: Beatmap[] = [];
+    for (let offset = -3; offset <= 3; offset += 1) {
+      if (offset === 0) continue;
+      const group = songGroups[selectedIndex + offset];
+      const rep = group?.maps?.[0] as Beatmap | undefined;
+      if (rep?.id) neighbours.push(rep);
+    }
+    if (neighbours.length > 0) preloadBeatmapBackgrounds(neighbours);
+    // Remote catalog covers need no unzip — warm the browser image cache.
+    for (let offset = -3; offset <= 3; offset += 1) {
+      if (offset === 0) continue;
+      const cover = songGroups[selectedIndex + offset]?.coverUrl;
+      if (typeof cover === 'string' && cover.startsWith('http')) {
+        try {
+          const img = new Image();
+          (img as { decoding?: string }).decoding = 'async';
+          img.src = cover;
+        } catch {
+          // prefetch is best-effort
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songGroups, activeSongKey]);
 
   const selectedGroup = React.useMemo(() => {
     if (!selectedCustomMap) return null;

@@ -193,8 +193,11 @@ export function SongSelectCarousel({
   //
   // Performance: indents are written directly to the DOM inside a
   // rAF-throttled scroll handler. No React state per scroll frame, so fast
-  // scrolling never re-renders the list. Item centres are cached (offsetTop
-  // is scroll-invariant) so the hot path does no layout reads.
+  // scrolling never re-renders the list. Group centres are cached (offsetTop
+  // is scroll-invariant) so the hot path does no layout reads for groups;
+  // difficulty rows are measured via getBoundingClientRect (their offsetTop
+  // is relative to the group wrapper, not the scroll container, so it must
+  // not be compared against the container-space viewport centre).
   const MAX_INDENT_PX = 120;
   const CENTER_INDENT_PX = 36;
   const RANGE_PX = 300;
@@ -224,6 +227,9 @@ export function SongSelectCarousel({
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
+  // Top/bottom spacers let the first/last group reach the viewport centre,
+  // so the centred item is always the longest (edges are never stuck short).
+  const [edgeSpacerPx, setEdgeSpacerPx] = React.useState(8);
 
   const measureCenters = () => {
     const next = new Map<string, number>();
@@ -232,6 +238,15 @@ export function SongSelectCarousel({
       if (el) next.set(g.songKey, el.offsetTop + el.offsetHeight / 2);
     }
     centersCache.current = next;
+  };
+
+  const measureEdgeSpacer = () => {
+    const container = containerRef?.current;
+    if (!container) return;
+    // Half the viewport minus roughly half a banner, so edge groups can be
+    // centred exactly by the one-time ScrollToSelection glide.
+    const next = Math.max(8, Math.min(420, Math.round(container.clientHeight / 2 - 48)));
+    setEdgeSpacerPx((prev) => (prev === next ? prev : next));
   };
 
   const updateTaper = () => {
@@ -264,30 +279,37 @@ export function SongSelectCarousel({
     // Difficulty rows inside the expanded group taper with their own
     // viewport position (read phase first, writes after — no interleaved
     // layout thrash). Scoped to the single expanded group, so this stays
-    // cheap no matter how long the list is.
+    // cheap no matter how long the list is. Rows are measured in container
+    // space via getBoundingClientRect: row.offsetTop is relative to the
+    // group wrapper (its offsetParent), which lives in a different
+    // coordinate space than the container-space viewport centre.
     const expandedKey = expandedKeyRef.current;
     const selMapId = selectedMapIdRef.current;
     if (expandedKey) {
       const groupEl = itemEls.current.get(expandedKey);
       if (groupEl) {
         const rows = groupEl.querySelectorAll<HTMLElement>(':scope .lazer-carousel-diff-row');
-        const jobs: { el: HTMLElement; ml: string; mr: string }[] = [];
-        rows.forEach((row) => {
-          const id = row.dataset.diffId;
-          if (!id) return;
-          if (id === selMapId) {
-            // Selected diff: pinned just inside the banner edges.
-            jobs.push({ el: row, ml: `${DIFF_SELECTED_ML_PX}px`, mr: `${DIFF_SELECTED_MR_PX}px` });
-            return;
+        if (rows.length > 0) {
+          const containerRect = container.getBoundingClientRect();
+          const jobs: { el: HTMLElement; ml: string; mr: string }[] = [];
+          rows.forEach((row) => {
+            const id = row.dataset.diffId;
+            if (!id) return;
+            if (id === selMapId) {
+              // Selected diff: pinned just inside the banner edges.
+              jobs.push({ el: row, ml: `${DIFF_SELECTED_ML_PX}px`, mr: `${DIFF_SELECTED_MR_PX}px` });
+              return;
+            }
+            const rect = row.getBoundingClientRect();
+            const center = rect.top - containerRect.top + container.scrollTop + rect.height / 2;
+            const t = Math.min(1, Math.abs(center - viewCenter) / DIFF_RANGE_PX);
+            const extra = Math.round(DIFF_MAX_EXTRA_PX * Math.pow(t, 0.85));
+            jobs.push({ el: row, ml: `${DIFF_BASE_ML_PX + extra}px`, mr: `${DIFF_BASE_MR_PX + extra}px` });
+          });
+          for (const j of jobs) {
+            if (j.el.style.marginLeft !== j.ml) j.el.style.marginLeft = j.ml;
+            if (j.el.style.marginRight !== j.mr) j.el.style.marginRight = j.mr;
           }
-          const center = row.offsetTop + row.offsetHeight / 2;
-          const t = Math.min(1, Math.abs(center - viewCenter) / DIFF_RANGE_PX);
-          const extra = Math.round(DIFF_MAX_EXTRA_PX * Math.pow(t, 0.85));
-          jobs.push({ el: row, ml: `${DIFF_BASE_ML_PX + extra}px`, mr: `${DIFF_BASE_MR_PX + extra}px` });
-        });
-        for (const j of jobs) {
-          if (j.el.style.marginLeft !== j.ml) j.el.style.marginLeft = j.ml;
-          if (j.el.style.marginRight !== j.mr) j.el.style.marginRight = j.mr;
         }
       }
     }
@@ -305,18 +327,21 @@ export function SongSelectCarousel({
     }
   };
 
-  // Scroll + measure wiring. Centres are (re)cached after layout settles;
-  // the hot scroll path then does math + style writes only (no re-render).
+  // Scroll + measure wiring. Group centres are (re)cached after layout
+  // settles; the hot scroll path then does math + style writes only for
+  // groups (no re-render). Diff rows are rect-measured per taper tick but
+  // only inside the single expanded group.
   useEffect(() => {
     const container = containerRef?.current;
     if (!container) return;
     measureCenters();
+    measureEdgeSpacer();
     scheduleTaper();
     container.addEventListener('scroll', scheduleTaper, { passive: true });
-    window.addEventListener('resize', scheduleTaper);
+    window.addEventListener('resize', () => { measureEdgeSpacer(); scheduleTaper(); });
     // Re-measure after expand/collapse animations settle (heights change).
     const t1 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 120);
-    const t2 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 380);
+    const t2 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 420);
     return () => {
       container.removeEventListener('scroll', scheduleTaper);
       window.removeEventListener('resize', scheduleTaper);
@@ -389,7 +414,9 @@ export function SongSelectCarousel({
         }
         const a = 1 - Math.exp(-15 * dt / 1000);
         container.scrollTop = cur + diff * a;
-        measureCenters();
+        // Scroll events drive the taper; just ensure a tick is queued so
+        // the highlight follows even if events coalesce mid-glide.
+        scheduleTaper();
         progScrollRaf.current = requestAnimationFrame(step);
       };
       progScrollRaf.current = requestAnimationFrame(step);
@@ -484,9 +511,13 @@ export function SongSelectCarousel({
   return (
     <div
       ref={containerRef}
-      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-6 pr-4 flex flex-col gap-1.5 relative z-10 min-h-0"
+      // pl-8/pr-5 reserve room for the hover slide (-4px) plus card glow so
+      // non-selected cards never clip at the overflow-x edge on hover.
+      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-8 pr-5 flex flex-col gap-1.5 relative z-10 min-h-0"
       id="song-select-carousel-container"
     >
+      {/* Top spacer: lets the first group reach the viewport centre. */}
+      <div aria-hidden="true" style={{ height: edgeSpacerPx, flexShrink: 0 }} />
       {songGroups.map((group, groupIndex) => {
         const isGroupActive = selectedGroupKey === group.songKey;
         // Expansion is driven only by expandedSongKey so clicking the active
@@ -709,6 +740,8 @@ export function SongSelectCarousel({
           </div>
         );
       })}
+      {/* Bottom spacer: lets the last group reach the viewport centre. */}
+      <div aria-hidden="true" style={{ height: edgeSpacerPx, flexShrink: 0 }} />
     </div>
   );
 }

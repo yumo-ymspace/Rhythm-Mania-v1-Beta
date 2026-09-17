@@ -1632,7 +1632,9 @@ html[data-ui="lazer"] {
 }
 
 .lazer-carousel-card:hover {
-  transform: translateX(-6px);
+  /* Small slide only: the scroll container reserves pl-8/pr-5 of gutter so
+     the hovered (non-selected) card never clips at the overflow-x edge. */
+  transform: translateX(-4px);
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(30, 35, 45, 0.96);
 }
@@ -1648,14 +1650,14 @@ html[data-ui="lazer"] {
 
 /* Real-carousel taper: indents are written directly to the DOM every
    animation frame (no React re-render), so the follow stays tight with no
-   trailing lag while scrolling fast. Keep the margin-left transition very
-   short — just enough to ease the selected-group pin/unpin snap — while
-   the selection's right-side extension eases through the longer curve. */
+   trailing lag while scrolling fast. Margins must NOT transition — a CSS
+   transition on a per-frame JS-driven property lags a frame behind and
+   reads as glitching, especially near the list edges. (No
+   content-visibility here either: skipping off-screen rendering collapses
+   offsetTop/scrollHeight estimates, which breaks the centre-distance math
+   and makes the bottom of the list jump.) */
 .lazer-carousel-taper-item {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 72px;
-  transition: margin-left 70ms ease-out,
-              margin-right 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: none;
 }
 
 .lazer-carousel-taper {
@@ -1674,15 +1676,15 @@ html[data-ui="lazer"] {
   border: 1px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
   user-select: none;
+  /* Margins are taper-driven per scroll frame: no transition, or the rows
+     trail behind and glitch. Visual hover keeps transform/border only. */
   transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
               border-color 200ms ease,
-              background 200ms ease,
-              margin-left 320ms cubic-bezier(0.16, 1, 0.3, 1),
-              margin-right 320ms cubic-bezier(0.16, 1, 0.3, 1);
+              background 200ms ease;
 }
 
 .lazer-carousel-diff-row:hover {
-  transform: translateX(-4px);
+  transform: translateX(-3px);
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(24, 28, 38, 0.96);
 }

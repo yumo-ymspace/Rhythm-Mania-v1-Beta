@@ -80,6 +80,14 @@ function safeCoverUrl(value: unknown): string | undefined {
   return undefined;
 }
 
+function isQuotaError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const name = (err as { name?: unknown }).name;
+  if (name === 'QuotaExceededError') return true;
+  // Legacy DOMException numeric code for quota errors.
+  return (err as { code?: unknown }).code === 22;
+}
+
 function isPackageRecord(value: unknown, expectedId: string): value is PackageRecord {
   if (!isRecord(value) || value.id !== expectedId || !(value.zipData instanceof ArrayBuffer)) return false;
   return value.zipData.byteLength <= MAX_COMPRESSED_SIZE_BYTES;
@@ -268,7 +276,60 @@ export function sanitizeSavedBeatmap(raw: unknown): SavedBeatmap | null {
 }
 
 const DB_NAME = 'RhythmManiaDB';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
+
+/**
+ * Persistent cross-session background-art cache (IndexedDB `backgrounds`
+ * store). Blob URLs are memory-only and die with the tab, so without this
+ * every session re-decompresses each .osz to show song art. This store keeps
+ * the extracted image bytes (keyed by package + image filename, so sibling
+ * diffs sharing one art file store it once) with an LRU cap.
+ *
+ * Why not localStorage or an unlimited memory cache: localStorage is
+ * synchronous, string-only, and capped around ~5MB total (a single song
+ * backdrop can exceed that); an unbounded blob-URL cache grows RSS without
+ * limit and eventually crashes the renderer. IndexedDB is async, binary,
+ * and quota-managed by the browser.
+ */
+export const MAX_PERSISTED_BG_BYTES = 20 * 1024 * 1024;
+export const MAX_PERSISTED_BGS = 200;
+
+const PERSISTED_BG_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+]);
+
+export interface CachedBackground {
+  data: ArrayBuffer;
+  mime: string;
+}
+
+/**
+ * Stable persistent key for extracted art. Filenames are lowercased and
+ * reduced to their basename so `BG/Foo.PNG` and `foo.png` share one entry.
+ * Returns null for unusable inputs (callers then skip persistence).
+ */
+export function buildBackgroundCacheKey(packageId: string, filename: string): string | null {
+  if (!packageId || packageId.length > 300 || !filename) return null;
+  const base = filename.split(/[/\\]/).pop() || '';
+  const normalized = base.toLowerCase();
+  if (!normalized || normalized.length > 512 || normalized === '.' || normalized === '..') return null;
+  return `bg:${packageId}:${normalized}`;
+}
+
+/** Runtime guard for `backgrounds` records read from IndexedDB. */
+export function sanitizeCachedBackgroundRecord(raw: unknown, expectedKey?: string): CachedBackground | null {
+  if (!isRecord(raw)) return null;
+  if (typeof raw.key !== 'string' || raw.key.length > 400) return null;
+  if (expectedKey !== undefined && raw.key !== expectedKey) return null;
+  if (!(raw.data instanceof ArrayBuffer)) return null;
+  if (raw.data.byteLength === 0 || raw.data.byteLength > MAX_PERSISTED_BG_BYTES) return null;
+  if (typeof raw.mime !== 'string' || !PERSISTED_BG_MIMES.has(raw.mime)) return null;
+  return { data: raw.data, mime: raw.mime };
+}
 
 class SimpleBlobCache {
   private cache = new Map<string, { audioUrl: string; videoUrl: string; bgUrl: string; hitSoundUrls: Record<string, string> }>();
@@ -326,7 +387,10 @@ class SimpleBlobCache {
 class StorageManager {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<IDBDatabase> | null = null;
-  public lruMediaCache = new SimpleBlobCache(3);
+  // Holds unpacked audio/video/background blob URLs. Sized for the selected
+  // chart plus preloaded neighbour backgrounds so switching songs in Song
+  // Select does not re-unzip the .osz from IndexedDB every time.
+  public lruMediaCache = new SimpleBlobCache(12);
 
   constructor() {
     // Keep pure sanitizers and replay helpers importable in Node/test contexts.
@@ -351,6 +415,16 @@ class StorageManager {
         const d = request.result;
         if (!d.objectStoreNames.contains('beatmaps')) d.createObjectStore('beatmaps', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('packages')) d.createObjectStore('packages', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('backgrounds')) {
+          const store = d.createObjectStore('backgrounds', { keyPath: 'key' });
+          store.createIndex('updatedAt', 'updatedAt', { unique: false });
+        } else {
+          // Defensive: a v6 database should always carry the recency index.
+          const store = request.transaction?.objectStore('backgrounds');
+          if (store && !store.indexNames.contains('updatedAt')) {
+            store.createIndex('updatedAt', 'updatedAt', { unique: false });
+          }
+        }
       };
     });
   }
@@ -459,6 +533,167 @@ class StorageManager {
     });
   }
 
+  /**
+   * Read previously extracted background art. Returns null on miss or on any
+   * invalid record (hostile/legacy IndexedDB data must never reach the DOM).
+   */
+  public async getCachedBackground(key: string): Promise<CachedBackground | null> {
+    if (!key || key.length > 400) return null;
+    const database = await this.getDB();
+    const raw: unknown = await new Promise((resolve, reject) => {
+      const tx = database.transaction('backgrounds', 'readonly');
+      const req = tx.objectStore('backgrounds').get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const clean = sanitizeCachedBackgroundRecord(raw, key);
+    if (!clean) return null;
+    // Touch recency for LRU (best-effort; a missing store on old profiles
+    // simply resolves without the touch).
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = database.transaction('backgrounds', 'readwrite');
+        const store = tx.objectStore('backgrounds');
+        const getReq = store.get(key);
+        getReq.onsuccess = () => {
+          const record = getReq.result;
+          if (isRecord(record)) store.put({ ...record, updatedAt: Date.now() });
+          resolve();
+        };
+        getReq.onerror = () => reject(getReq.error);
+      });
+    } catch {
+      // Recency touch is optional; the cached bytes above are still valid.
+    }
+    return clean;
+  }
+
+  /**
+   * Persist extracted background art for cross-session reuse. Validates and
+   * bounds everything (per-image bytes, total entry count via LRU eviction)
+   * and degrades silently on quota errors so caching never breaks playback.
+   */
+  public async putCachedBackground(key: string, data: ArrayBuffer, mime: string): Promise<void> {
+    if (!key || key.length > 400) return;
+    if (!(data instanceof ArrayBuffer)) return;
+    if (data.byteLength === 0 || data.byteLength > MAX_PERSISTED_BG_BYTES) return;
+    if (!mime || !PERSISTED_BG_MIMES.has(mime)) return;
+    const database = await this.getDB();
+    const record = { key, data: data.slice(0), mime, updatedAt: Date.now() };
+    const putOnce = (): Promise<void> => new Promise((resolve, reject) => {
+      const tx = database.transaction('backgrounds', 'readwrite');
+      tx.objectStore('backgrounds').put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Failed to cache background.'));
+      tx.onabort = () => reject(tx.error || new Error('Background cache transaction aborted.'));
+    });
+    try {
+      await putOnce();
+    } catch (err) {
+      // On quota pressure, drop the oldest half and retry once; if storage
+      // is still unavailable, give up silently — playback never depends on
+      // this cache.
+      if (!isQuotaError(err)) return;
+      try {
+        await this.evictOldestBackgrounds(Math.ceil(MAX_PERSISTED_BGS / 2));
+        await putOnce();
+      } catch {
+        return;
+      }
+    }
+    try {
+      const count = await new Promise<number>((resolve, reject) => {
+        const tx = database.transaction('backgrounds', 'readonly');
+        const req = tx.objectStore('backgrounds').count();
+        req.onsuccess = () => resolve(Number(req.result) || 0);
+        req.onerror = () => reject(req.error);
+      });
+      if (count > MAX_PERSISTED_BGS) {
+        await this.evictOldestBackgrounds(count - MAX_PERSISTED_BGS);
+      }
+    } catch {
+      // Cap enforcement is best-effort.
+    }
+  }
+
+  /**
+   * Drop all persisted art for a package (called when its last beatmap is
+   * deleted). Best-effort: failures resolve silently.
+   */
+  public async deleteCachedBackgroundsForPackage(packageId: string): Promise<void> {
+    if (!packageId || packageId.length > 300 || typeof window === 'undefined' || !window.indexedDB) return;
+    try {
+      const database = await this.getDB();
+      await new Promise<void>((resolve, reject) => {
+        const tx = database.transaction('backgrounds', 'readwrite');
+        const store = tx.objectStore('backgrounds');
+        const prefix = `bg:${packageId}:`;
+        // ':' (0x3A) is followed by ';' (0x3B): bounds all keys with prefix.
+        const range = window.IDBKeyRange.bound(prefix, `bg:${packageId};`, false, true);
+        const req = store.delete(range);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error || new Error('Background cleanup failed.'));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('Background cleanup failed.'));
+      });
+    } catch {
+      // Cleanup is optional; stale entries age out via the LRU cap.
+    }
+  }
+
+  private async evictOldestBackgrounds(count: number): Promise<void> {
+    if (!Number.isInteger(count) || count <= 0) return;
+    const database = await this.getDB();
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const done = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      try {
+        const tx = database.transaction('backgrounds', 'readwrite');
+        const store = tx.objectStore('backgrounds');
+        let index;
+        try {
+          index = store.index('updatedAt');
+        } catch {
+          // No recency index (unexpected) — clear nothing, resolve.
+          done();
+          return;
+        }
+        let deleted = 0;
+        const cursorReq = index.openCursor();
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result as IDBCursorWithValue | null;
+          if (!cursor || deleted >= count) {
+            done();
+            return;
+          }
+          try {
+            cursor.delete();
+          } catch {
+            done();
+            return;
+          }
+          deleted += 1;
+          try {
+            cursor.continue();
+          } catch {
+            done();
+          }
+        };
+        cursorReq.onerror = () => reject(cursorReq.error || new Error('Background eviction failed.'));
+        tx.oncomplete = done;
+        tx.onerror = () => reject(tx.error || new Error('Background eviction failed.'));
+        tx.onabort = () => reject(tx.error || new Error('Background eviction aborted.'));
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error('Background eviction failed.'));
+      }
+    });
+  }
+
   public async deleteBeatmapAndCleanup(id: string): Promise<void> {
     const database = await this.getDB();
     this.lruMediaCache.evict(id);
@@ -492,6 +727,7 @@ class StorageManager {
           tx.onerror = () => reject(tx.error);
         });
         TempMemoryCache.remove(pkgId);
+        await this.deleteCachedBackgroundsForPackage(pkgId);
       }
     }
   }
@@ -529,6 +765,9 @@ class StorageManager {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+
+    // 5. Drop persisted art for the removed package
+    await this.deleteCachedBackgroundsForPackage(packageId);
   }
 }
 

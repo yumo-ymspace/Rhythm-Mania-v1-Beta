@@ -39,7 +39,7 @@ import ResultsScreen from './components/ResultsScreen';
 import JSZip from 'jszip';
 import { storageManager } from './utils/storageManager';
 import { convertBeatmapKeyCount, parseBeatmap } from './utils/beatmapParser';
-import { unpackBeatmap } from './utils/unpackHelper';
+import { preloadBeatmapBackgrounds, unpackBeatmap } from './utils/unpackHelper';
 import { sanitizeSettings, sanitizeHistoryRecord, sanitizeCssUrl, MAX_COMPRESSED_SIZE_BYTES, validateZipLimits, createZipExtractionBudget, decodeBoundedUtf8 } from './utils/securityLimits';
 import { createPlayHistoryRecord, migrateAndNormalizeBeatmaps, computeBeatmapHash, findMatchingBeatmap } from './utils/replayManager';
 import { HOLD_TICK_RULES_VERSION, holdTickIntervalMs } from './utils/holdTickRules';
@@ -712,6 +712,7 @@ export default function App() {
               const newOnes = importedMaps.filter(m => !existing.has(m.id));
               return [...newOnes, ...prev];
             });
+            preloadBeatmapBackgrounds(importedMaps);
           }
         } catch (e) {
           console.warn(`Auto-download for beatmapset ${setId} failed:`, e);
@@ -887,6 +888,7 @@ export default function App() {
       if (importedMaps.length === 0) throw new Error('Failed to parse beatmap files');
 
       await storageManager.savePackageWithBeatmaps(pkgId, importedMaps[0]?.title || 'Downloaded Beatmap', new Blob([arrayBuffer]), importedMaps);
+      preloadBeatmapBackgrounds(importedMaps);
       if (!isCurrentOperation()) return { success: false, error: 'Replay loading was superseded.' };
 
       setCustomMaps(prev => {
@@ -1081,6 +1083,7 @@ export default function App() {
         }
         if (importedMaps.length === 0) return;
         await storageManager.savePackageWithBeatmaps(pkgId, importedMaps[0]?.title || 'Ranked Triangles', new Blob([arrayBuffer]), importedMaps);
+        preloadBeatmapBackgrounds(importedMaps);
         setCustomMaps((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
           const fresh = importedMaps.filter((m) => !existingIds.has(m.id));
@@ -1197,6 +1200,9 @@ export default function App() {
       const importedIds = new Set(maps.map(map => map.id));
       return [...maps, ...prev.filter(map => !importedIds.has(map.id))];
     });
+    // Unzip song art immediately (background-only) so Song Select backdrops
+    // and banners are ready before the user browses to the new songs.
+    preloadBeatmapBackgrounds(maps);
   };
 
   const handleDeleteSongGroup = async (mapIds: string[]) => {
