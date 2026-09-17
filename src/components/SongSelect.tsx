@@ -663,40 +663,90 @@ export default function SongSelect({
   }, [playHistory, selectedCustomMap]);
 
   // Background cover images (Always ensure we have a beautiful wallpaper background with vibrant, lively colors)
-  const selectBgUrl = selectedCustomMap?.bgUrl || '';
+  // Group-stable: one URL per song, so switching difficulties inside a
+  // song never swaps the image (per-diff blob URLs of identical art
+  // used to reload/flash the backdrop on every switch).
+  const selectedGroupForBg = React.useMemo(() => {
+    if (!selectedCustomMap) return null;
+    const songKey = getMapSongKey(selectedCustomMap);
+    return songGroups.find(g => g.songKey === songKey) || null;
+  }, [selectedCustomMap, songGroups]);
 
+  const groupBgUrl = React.useMemo(() => {
+    if (!selectedGroupForBg) return '';
+    const found = selectedGroupForBg.maps.find(
+      (m) => m.bgUrl && m.bgUrl !== '/backgrounds/default.svg' && m.bgUrl !== '/backgrounds/Ferineon.webp',
+    );
+    return found?.bgUrl || '';
+  }, [selectedGroupForBg]);
+
+  // Displayed backdrop holds the last image until the next one is fully
+  // preloaded — it never unmounts or flashes mid-switch.
+  const [displayedBgUrl, setDisplayedBgUrl] = useState('');
+  const displayedBgUrlRef = useRef('');
+  const pendingBgRef = useRef('');
   const defaultRandomBgRef = React.useRef<string | null>(null);
 
+  const getDefaultRandomBg = () => {
+    if (!defaultRandomBgRef.current) {
+      const bgs = [
+        '- Y u m i J i-.webp',
+        'Arushii.webp',
+        'Ferineon.webp',
+        'MPDisplay.webp',
+        'PEALEERD_TAK.webp',
+        'Porukana.webp',
+        'RedcXca.webp',
+        'Sm0llBanana.webp',
+        'THICC Jeff.webp',
+        'Triantafyllia.webp',
+        'YellowX21.webp',
+        'mimile1606.webp',
+        'nikio.webp',
+        'serr.webp',
+        'soncak.webp',
+        'wxyz.webp'
+      ];
+      defaultRandomBgRef.current = bgs[Math.floor(Math.random() * bgs.length)];
+    }
+    return `/backgrounds/${defaultRandomBgRef.current}`;
+  };
+
   useEffect(() => {
-    if (typeof setSongSelectBgUrl === 'function') {
-      if (selectBgUrl && selectBgUrl !== '/backgrounds/default.svg' && selectBgUrl !== '/backgrounds/Ferineon.webp') {
-        setSongSelectBgUrl(selectBgUrl);
-      } else if (!selectedCustomMap) {
-        if (!defaultRandomBgRef.current) {
-          const bgs = [
-            '- Y u m i J i-.webp',
-            'Arushii.webp',
-            'Ferineon.webp',
-            'MPDisplay.webp',
-            'PEALEERD_TAK.webp',
-            'Porukana.webp',
-            'RedcXca.webp',
-            'Sm0llBanana.webp',
-            'THICC Jeff.webp',
-            'Triantafyllia.webp',
-            'YellowX21.webp',
-            'mimile1606.webp',
-            'nikio.webp',
-            'serr.webp',
-            'soncak.webp',
-            'wxyz.webp'
-          ];
-          defaultRandomBgRef.current = bgs[Math.floor(Math.random() * bgs.length)];
-        }
-        setSongSelectBgUrl(`/backgrounds/${defaultRandomBgRef.current}`);
+    if (groupBgUrl) {
+      if (groupBgUrl === displayedBgUrlRef.current || groupBgUrl === pendingBgRef.current) return;
+      const next = groupBgUrl;
+      pendingBgRef.current = next;
+      const img = new Image();
+      const apply = () => {
+        // A newer request superseded this one — drop the stale load.
+        if (pendingBgRef.current !== next) return;
+        pendingBgRef.current = '';
+        if (displayedBgUrlRef.current === next) return;
+        displayedBgUrlRef.current = next;
+        setDisplayedBgUrl(next);
+      };
+      img.onload = apply;
+      img.onerror = apply;
+      img.src = next;
+    } else if (!selectedCustomMap) {
+      const fallback = getDefaultRandomBg();
+      pendingBgRef.current = '';
+      if (displayedBgUrlRef.current !== fallback) {
+        displayedBgUrlRef.current = fallback;
+        setDisplayedBgUrl(fallback);
       }
     }
-  }, [selectBgUrl, selectedCustomMap, setSongSelectBgUrl, unpackTrigger]);
+    // No clearing while a new group's art is still unpacking — the old
+    // backdrop holds instead of flashing away.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupBgUrl, selectedCustomMap]);
+
+  useEffect(() => {
+    if (typeof setSongSelectBgUrl === 'function' && displayedBgUrl) {
+      setSongSelectBgUrl(displayedBgUrl);
+    }
+  }, [displayedBgUrl, setSongSelectBgUrl]);
 
   const selectedGroup = React.useMemo(() => {
     if (!selectedCustomMap) return null;
@@ -1074,12 +1124,14 @@ export default function SongSelect({
     <div
       className="relative w-full h-full min-h-0 text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
-      {/* 1. Full-bleed background cover artwork with no dim overlay */}
-      {selectBgUrl && (
-        <div 
+      {/* 1. Full-bleed background cover artwork with no dim overlay.
+          Group-stable + preloaded: never unmounts mid-switch, so no flash
+          when changing difficulties. */}
+      {displayedBgUrl && (
+        <div
           className="absolute inset-0 bg-cover bg-center pointer-events-none transition-all duration-700 scale-105"
           style={{
-            backgroundImage: `url("${sanitizeCssUrl(selectBgUrl)}")`,
+            backgroundImage: `url("${sanitizeCssUrl(displayedBgUrl)}")`,
             zIndex: 0
           }}
         />

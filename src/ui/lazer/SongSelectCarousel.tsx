@@ -198,7 +198,15 @@ export function SongSelectCarousel({
   const MAX_INDENT_PX = 120;
   const CENTER_INDENT_PX = 36;
   const RANGE_PX = 300;
-  const SELECTED_RIGHT_EXTEND_PX = -8;
+  const SELECTED_RIGHT_EXTEND_PX = -6;
+  // Difficulty-row taper: centred rows longest, edge rows shorter; the
+  // selected row stays pinned near banner width above them all.
+  const DIFF_BASE_ML_PX = 8;
+  const DIFF_BASE_MR_PX = 6;
+  const DIFF_SELECTED_ML_PX = -12;
+  const DIFF_SELECTED_MR_PX = -2;
+  const DIFF_RANGE_PX = 220;
+  const DIFF_MAX_EXTRA_PX = 22;
 
   const focusKey = expandedSongKey || selectedGroupKey;
   let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
@@ -206,6 +214,10 @@ export function SongSelectCarousel({
 
   const selectedKeyRef = useRef(selectedGroupKey);
   selectedKeyRef.current = selectedGroupKey;
+  const expandedKeyRef = useRef(expandedSongKey);
+  expandedKeyRef.current = expandedSongKey;
+  const selectedMapIdRef = useRef(selectedMapId);
+  selectedMapIdRef.current = selectedMapId;
   const groupsRef = useRef(songGroups);
   groupsRef.current = songGroups;
   const itemEls = useRef(new Map<string, HTMLDivElement>());
@@ -248,6 +260,37 @@ export function SongSelectCarousel({
       if (el.style.marginLeft !== left) el.style.marginLeft = left;
       if (el.style.marginRight !== '0px') el.style.marginRight = '0px';
     }
+
+    // Difficulty rows inside the expanded group taper with their own
+    // viewport position (read phase first, writes after — no interleaved
+    // layout thrash). Scoped to the single expanded group, so this stays
+    // cheap no matter how long the list is.
+    const expandedKey = expandedKeyRef.current;
+    const selMapId = selectedMapIdRef.current;
+    if (expandedKey) {
+      const groupEl = itemEls.current.get(expandedKey);
+      if (groupEl) {
+        const rows = groupEl.querySelectorAll<HTMLElement>(':scope .lazer-carousel-diff-row');
+        const jobs: { el: HTMLElement; ml: string; mr: string }[] = [];
+        rows.forEach((row) => {
+          const id = row.dataset.diffId;
+          if (!id) return;
+          if (id === selMapId) {
+            // Selected diff: pinned just inside the banner edges.
+            jobs.push({ el: row, ml: `${DIFF_SELECTED_ML_PX}px`, mr: `${DIFF_SELECTED_MR_PX}px` });
+            return;
+          }
+          const center = row.offsetTop + row.offsetHeight / 2;
+          const t = Math.min(1, Math.abs(center - viewCenter) / DIFF_RANGE_PX);
+          const extra = Math.round(DIFF_MAX_EXTRA_PX * Math.pow(t, 0.85));
+          jobs.push({ el: row, ml: `${DIFF_BASE_ML_PX + extra}px`, mr: `${DIFF_BASE_MR_PX + extra}px` });
+        });
+        for (const j of jobs) {
+          if (j.el.style.marginLeft !== j.ml) j.el.style.marginLeft = j.ml;
+          if (j.el.style.marginRight !== j.mr) j.el.style.marginRight = j.mr;
+        }
+      }
+    }
   };
 
   const scheduleTaper = () => {
@@ -286,17 +329,17 @@ export function SongSelectCarousel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerRef, songGroups.length, expandedSongKey, selectedGroupKey]);
 
-  // Keep the taper in sync when the selection extension flips without a
-  // scroll event (selection is pinned full-width via direct style write so
-  // it never waits for the next scroll tick).
+  // Keep the taper in sync when the selection flips without a scroll
+  // event (selection pins are direct style writes so they never wait for
+  // the next scroll tick).
   useEffect(() => {
     scheduleTaper();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroupKey]);
+  }, [selectedGroupKey, selectedMapId]);
 
-  // One-time centring (osu!lazer ScrollToSelection): animate the requested
+  // One-time centring (osu!lazer ScrollToSelection): glide the requested
   // group's vertical centre to the viewport centre, then leave the scroll
-  // alone — it is not sticky. A fast OutQuint keeps it snappy; user input
+  // alone — it is not sticky. Damped tracking keeps it snappy; user input
   // cancels it so it never fights manual scrolling. A settle correction
   // re-runs after the expand animation grows the centred group.
   useEffect(() => {
@@ -318,24 +361,36 @@ export function SongSelectCarousel({
     container.addEventListener('touchstart', onUserInput, { passive: true });
     container.addEventListener('pointerdown', onUserInput);
 
-    const animateTo = (dest: number, duration: number, onDone?: () => void) => {
+    // Damped glide toward a live-recomputed target (osu!framework-style
+    // exponential damping, frame-rate independent). The destination is
+    // re-read every frame, so expand/collapse height changes mid-flight
+    // (e.g. the old group collapsing above the new one) are tracked in a
+    // single smooth motion instead of landing wrong and jumping twice.
+    const glideTo = (getDest: () => number | null, onDone?: () => void) => {
       cancelProgScroll();
-      const start = container.scrollTop;
-      const delta = dest - start;
       const t0 = performance.now();
+      let last = t0;
       const step = (now: number) => {
         if (cancelled) return;
-        const t = Math.min(1, (now - t0) / duration);
-        const eased = 1 - Math.pow(1 - t, 5);
-        container.scrollTop = start + delta * eased;
-        if (t < 1) {
-          progScrollRaf.current = requestAnimationFrame(step);
-        } else {
+        const dest = getDest();
+        if (dest === null) return;
+        const dt = Math.min(64, Math.max(1, now - last));
+        last = now;
+        const cur = container.scrollTop;
+        const diff = dest - cur;
+        if ((Math.abs(diff) < 0.75 && now - t0 > 120) || now - t0 > 1000) {
+          if (Math.abs(diff) < 0.75) container.scrollTop = dest;
           progScrollRaf.current = 0;
-          expectedTop = dest;
+          expectedTop = container.scrollTop;
+          measureCenters();
           scheduleTaper();
           onDone?.();
+          return;
         }
+        const a = 1 - Math.exp(-15 * dt / 1000);
+        container.scrollTop = cur + diff * a;
+        measureCenters();
+        progScrollRaf.current = requestAnimationFrame(step);
       };
       progScrollRaf.current = requestAnimationFrame(step);
     };
@@ -364,7 +419,10 @@ export function SongSelectCarousel({
           expectedTop = dest;
           return;
         }
-        animateTo(dest, 160);
+        glideTo(() => {
+          const target = itemEls.current.get(centerSignal.key);
+          return target ? centreTarget(target) : null;
+        });
       }, 420);
     };
 
@@ -396,8 +454,10 @@ export function SongSelectCarousel({
         scheduleSettleCorrection();
         return;
       }
-      const duration = Math.min(380, 200 + Math.abs(dist) * 0.12);
-      animateTo(clamped, duration, scheduleSettleCorrection);
+      glideTo(() => {
+        const target = itemEls.current.get(centerSignal.key);
+        return target ? centreTarget(target) : null;
+      }, scheduleSettleCorrection);
     };
     run();
     return () => {
@@ -424,7 +484,7 @@ export function SongSelectCarousel({
   return (
     <div
       ref={containerRef}
-      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-2 flex flex-col gap-1.5 relative z-10 min-h-0"
+      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-6 pr-4 flex flex-col gap-1.5 relative z-10 min-h-0"
       id="song-select-carousel-container"
     >
       {songGroups.map((group, groupIndex) => {
@@ -564,6 +624,7 @@ export function SongSelectCarousel({
                     return (
                       <div
                         key={diff.id}
+                        data-diff-id={diff.id}
                         role="button"
                         tabIndex={0}
                         onClick={() => {
@@ -587,12 +648,12 @@ export function SongSelectCarousel({
                         style={{
                           background: tint.bg,
                           borderColor: isDiffSelected ? tint.edge : undefined,
-                          // Diffs sit shorter than the banner; the selected
-                          // diff stretches back out to just inside the
-                          // banner edges (negative margins reclaim the
-                          // wrapper gutter without clipping).
-                          marginLeft: isDiffSelected ? -12 : 8,
-                          marginRight: isDiffSelected ? -2 : 6,
+                          // First-paint base; the taper refines non-selected
+                          // rows by viewport position right after. Selected
+                          // diff reclaims the wrapper gutter to sit just
+                          // inside the banner edges.
+                          marginLeft: isDiffSelected ? DIFF_SELECTED_ML_PX : DIFF_BASE_ML_PX,
+                          marginRight: isDiffSelected ? DIFF_SELECTED_MR_PX : DIFF_BASE_MR_PX,
                         }}
                       >
                         {/* Selected edge indicator */}

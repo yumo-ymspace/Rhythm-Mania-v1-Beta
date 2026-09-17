@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { motion } from 'motion/react';
 import { SlidersHorizontal, Shuffle, Sliders } from 'lucide-react';
 import { FooterBackButton } from './FooterBackButton';
@@ -42,6 +42,9 @@ export function SongSelectFooter({
   isOptionsOpen = false,
   optionsContent,
 }: SongSelectFooterProps) {
+  // Bumps every time Random is pressed so the shuffle icon replays its
+  // small pulse (keyed remount restarts the CSS animation).
+  const [randomPulse, setRandomPulse] = useState(0);
   return (
     <div className="lazer-song-select-footer" id="song-select-lazer-footer">
       {/* Left cluster: long pink Back + bigger coloured Mods / Random / Options
@@ -59,14 +62,16 @@ export function SongSelectFooter({
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Sliders className="h-5 w-5 text-[#a3e635]" />
-              <span className="lazer-footer-action-label">Mods</span>
-              <span className="lazer-footer-hotkey-badge">F1</span>
-              {selectedModsCount > 0 && (
-                <span className="lazer-footer-action-badge">
-                  {selectedModsCount}
-                </span>
-              )}
+              <Sliders className="h-6 w-6 text-[#a3e635] lazer-footer-action-icon" />
+              <span className="lazer-footer-action-label-row">
+                <span className="lazer-footer-action-label">Mods</span>
+                <span className="lazer-footer-hotkey-badge">F1</span>
+                {selectedModsCount > 0 && (
+                  <span className="lazer-footer-action-badge">
+                    {selectedModsCount}
+                  </span>
+                )}
+              </span>
             </span>
           </Shear>
         </button>
@@ -75,15 +80,23 @@ export function SongSelectFooter({
         <button
           id="bottom-random-button"
           type="button"
-          onClick={onRandom}
+          onClick={() => {
+            setRandomPulse((k) => k + 1);
+            onRandom();
+          }}
           className="lazer-footer-action-btn is-random"
           aria-label="Random Beatmap"
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Shuffle className="h-5 w-5 text-[#38bdf8]" />
-              <span className="lazer-footer-action-label">Random</span>
-              <span className="lazer-footer-hotkey-badge">F2</span>
+              <Shuffle
+                key={randomPulse}
+                className={`h-6 w-6 text-[#38bdf8] lazer-footer-action-icon${randomPulse > 0 ? ' lazer-random-pulse-icon' : ''}`}
+              />
+              <span className="lazer-footer-action-label-row">
+                <span className="lazer-footer-action-label">Random</span>
+                <span className="lazer-footer-hotkey-badge">F2</span>
+              </span>
             </span>
           </Shear>
         </button>
@@ -100,9 +113,11 @@ export function SongSelectFooter({
           >
             <Shear className="lazer-footer-action-slab">
               <span className="lazer-footer-action-inner">
-                <SlidersHorizontal className="h-5 w-5 text-[#c084fc]" />
-                <span className="lazer-footer-action-label">Options</span>
-                <span className="lazer-footer-hotkey-badge">F3</span>
+                <SlidersHorizontal className="h-6 w-6 text-[#c084fc] lazer-footer-action-icon" />
+                <span className="lazer-footer-action-label-row">
+                  <span className="lazer-footer-action-label">Options</span>
+                  <span className="lazer-footer-hotkey-badge">F3</span>
+                </span>
               </span>
             </Shear>
           </button>
