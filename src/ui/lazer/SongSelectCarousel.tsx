@@ -10,11 +10,18 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, Info } from 'lucide-react';
+import { Heart, Info, Loader2 } from 'lucide-react';
 import { Beatmap, PlayHistoryRecord } from '../../types';
 import { sanitizeCssUrl } from '../../utils/securityLimits';
+import { buildBackgroundCacheKey, storageManager } from '../../utils/storageManager';
+import { AssetLifecycleManager, isBrowserPlayableVideoFilename } from '../../utils/assetLifecycle';
+
+// Layout effects run before paint (no first-frame flash); on the server
+// they fall back to passive effects to avoid SSR warnings.
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 export interface CarouselSongGroup {
   songKey: string;
@@ -53,9 +60,157 @@ export interface SongSelectCarouselProps {
   activeItemRef?: React.RefObject<HTMLDivElement | null>;
   /** One-time "centre this group" request (selection / random / keyboard). */
   centerSignal?: CarouselCenterSignal;
+  /** True while beatmaps are still loading (IndexedDB/migration). Shows a bare spinner instead of the empty box. */
+  isLoading?: boolean;
 }
 
 const DEFAULT_BANNER = '/backgrounds/Ferineon.webp';
+
+function isUsableMemoryBg(url: unknown): url is string {
+  return typeof url === 'string'
+    && url.length > 0
+    && url !== DEFAULT_BANNER
+    && url !== '/backgrounds/default.svg';
+}
+
+/**
+ * Shared promise cache for persisted background lookups so sibling diffs
+ * sharing one art file hit IndexedDB once and reuse a single blob URL.
+ */
+const persistedBannerUrlCache = new Map<string, Promise<string | null>>();
+
+function getPersistedBannerUrl(packageId: string, bgFilename: string): Promise<string | null> {
+  const key = buildBackgroundCacheKey(packageId, bgFilename);
+  if (!key) return Promise.resolve(null);
+  const pending = persistedBannerUrlCache.get(key);
+  if (pending) return pending;
+  const next = (async (): Promise<string | null> => {
+    try {
+      const cached = await storageManager.getCachedBackground(key);
+      if (!cached) return null;
+      return AssetLifecycleManager.registerArrayBuffer(cached.data, cached.mime);
+    } catch {
+      return null;
+    }
+  })();
+  persistedBannerUrlCache.set(key, next);
+  next.catch(() => {
+    // A failed lookup must not poison later retries (e.g. art persisted after).
+    if (persistedBannerUrlCache.get(key) === next) persistedBannerUrlCache.delete(key);
+  });
+  return next;
+}
+
+/**
+ * Song banner art: slimcover from assets.ppy.sh when it exists/loads, else
+ * the local background png/jpg centred and smallened (contain, not cover).
+ * Local art is read from the memory cache first, then the persisted
+ * IndexedDB backgrounds store (written at download time), so the fallback
+ * shows quickly without re-decompressing the .osz.
+ */
+function SongBannerArt({ group }: { group: CarouselSongGroup }) {
+  const coverUrl = typeof group.coverUrl === 'string' && group.coverUrl.length > 0 ? group.coverUrl : undefined;
+  const [coverFailed, setCoverFailed] = useState(false);
+  const [localBg, setLocalBg] = useState<string>(() => (
+    isUsableMemoryBg(group.bgUrl) ? (group.bgUrl as string) : ''
+  ));
+
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [coverUrl]);
+
+  // A later unpack/preload can fill group.bgUrl after first paint.
+  useEffect(() => {
+    if (isUsableMemoryBg(group.bgUrl) && group.bgUrl !== localBg) {
+      setLocalBg(group.bgUrl as string);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group.bgUrl]);
+
+  // Fast IndexedDB fallback: no zip decompression, just the persisted bytes.
+  useEffect(() => {
+    if (localBg || typeof window === 'undefined') return;
+    let cancelled = false;
+    void (async () => {
+      const candidates = group.maps.slice(0, 3);
+      for (const map of candidates) {
+        if (cancelled) return;
+        const record = map as Beatmap & { packageId?: string; parentPackageId?: string; bgFilename?: string | null };
+        const mem = storageManager.lruMediaCache.get(map.id)?.bgUrl;
+        if (isUsableMemoryBg(mem)) {
+          if (!cancelled) setLocalBg(mem as string);
+          return;
+        }
+        const packageId = record.packageId || record.parentPackageId;
+        const bgFilename = record.bgFilename;
+        if (!packageId || !bgFilename || isBrowserPlayableVideoFilename(bgFilename)) continue;
+        const url = await getPersistedBannerUrl(packageId, bgFilename);
+        if (cancelled) return;
+        if (url) {
+          const existing = storageManager.lruMediaCache.get(map.id);
+          storageManager.lruMediaCache.put(map.id, {
+            audioUrl: existing?.audioUrl || '',
+            videoUrl: existing?.videoUrl || '',
+            bgUrl: url,
+            hitSoundUrls: existing?.hitSoundUrls ? { ...existing.hitSoundUrls } : {},
+          });
+          setLocalBg(url);
+          return;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group.songKey, localBg]);
+
+  if (coverUrl && !coverFailed) {
+    return (
+      <>
+        <div
+          className="absolute inset-0 bg-cover bg-center pointer-events-none"
+          style={{ backgroundImage: `url("${sanitizeCssUrl(coverUrl)}")` }}
+        />
+        {/* Hidden probe: background-image gives no load errors, so detect a
+            missing slimcover here and fall back to the local background.
+            Must be eager + rendered (1px, transparent): lazy + display:none
+            images may never be fetched, so the error would never fire. */}
+        <img
+          src={coverUrl}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+          onError={() => setCoverFailed(true)}
+        />
+      </>
+    );
+  }
+
+  if (localBg) {
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `url("${sanitizeCssUrl(localBg)}")`,
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="absolute inset-0 bg-cover bg-center pointer-events-none"
+      style={{ backgroundImage: `url("${sanitizeCssUrl(DEFAULT_BANNER)}")` }}
+    />
+  );
+}
 
 /**
  * Maps difficulty star rating to a 10-dot filled count
@@ -179,6 +334,7 @@ export function SongSelectCarousel({
   containerRef,
   activeItemRef,
   centerSignal,
+  isLoading = false,
 }: SongSelectCarouselProps) {
   // Viewport carousel taper (osu!lazer-style): every panel's left offset is
   // a continuous function of that panel's own pixel distance from the
@@ -230,6 +386,10 @@ export function SongSelectCarousel({
   // Top/bottom spacers let the first/last group reach the viewport centre,
   // so the centred item is always the longest (edges are never stuck short).
   const [edgeSpacerPx, setEdgeSpacerPx] = React.useState(8);
+  // Gated until the first synchronous measure+taper pass completes, so the
+  // list's first painted frame already has the measured top spacer and
+  // correct indents instead of flashing fallback positions at the top.
+  const [listReady, setListReady] = React.useState(false);
 
   const measureCenters = () => {
     const next = new Map<string, number>();
@@ -331,20 +491,40 @@ export function SongSelectCarousel({
   // settles; the hot scroll path then does math + style writes only for
   // groups (no re-render). Diff rows are rect-measured per taper tick but
   // only inside the single expanded group.
-  useEffect(() => {
+  //
+  // Runs as a layout effect with a synchronous taper pass so the first
+  // painted frame (e.g. when songs first appear after loading) already has
+  // the measured top spacer and correct indents — no position jump at the
+  // top of the list.
+  useIsomorphicLayoutEffect(() => {
     const container = containerRef?.current;
     if (!container) return;
+    // Drop element/centre entries for groups that no longer exist, so
+    // filter changes can't leave stale positions behind.
+    if (itemEls.current.size > 0) {
+      const alive = new Set(groupsRef.current.map((g) => g.songKey));
+      for (const key of Array.from(itemEls.current.keys())) {
+        if (!alive.has(key)) {
+          itemEls.current.delete(key);
+          centersCache.current.delete(key);
+        }
+      }
+    }
     measureCenters();
     measureEdgeSpacer();
-    scheduleTaper();
+    // Synchronous pre-paint pass: fallback indents from render are corrected
+    // before anything reaches the screen.
+    updateTaper();
+    setListReady(groupsRef.current.length > 0);
+    const handleResize = () => { measureEdgeSpacer(); scheduleTaper(); };
     container.addEventListener('scroll', scheduleTaper, { passive: true });
-    window.addEventListener('resize', () => { measureEdgeSpacer(); scheduleTaper(); });
+    window.addEventListener('resize', handleResize);
     // Re-measure after expand/collapse animations settle (heights change).
     const t1 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 120);
     const t2 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 420);
     return () => {
       container.removeEventListener('scroll', scheduleTaper);
-      window.removeEventListener('resize', scheduleTaper);
+      window.removeEventListener('resize', handleResize);
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       if (taperRaf.current) cancelAnimationFrame(taperRaf.current);
@@ -498,12 +678,35 @@ export function SongSelectCarousel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerSignal?.nonce]);
 
+  // The scroll container stays mounted across loading → loaded → filtered
+  // transitions (same element, same ref). Remounting it when songs first
+  // appear resets scrollTop and replays the spacer/taper measurements from
+  // scratch, which reads as a position glitch at the top of the list.
+  // pl-8/pr-5 reserve room for the hover slide (-4px) plus card glow so
+  // non-selected cards never clip at the overflow-x edge on hover.
+  const carouselClassName =
+    'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-8 pr-5 flex flex-col gap-1.5 relative z-10 min-h-0';
+
   if (songGroups.length === 0) {
     return (
-      <div className="bg-[#0c0c14]/80 border border-white/10 p-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 shadow-xl gap-2">
-        <Info className="h-6 w-6 text-slate-500" />
-        <p className="text-xs font-sans font-black tracking-widest uppercase">No beatmaps matches discovered</p>
-        <p className="text-[10px] text-slate-500 font-mono max-w-xs uppercase">Tweak your star rating boundaries or search query</p>
+      <div
+        ref={containerRef}
+        className={carouselClassName}
+        id="song-select-carousel-container"
+      >
+        {isLoading ? (
+          <div className="flex-1 flex items-center justify-center min-h-[240px]" role="status" aria-label="Loading beatmaps">
+            <Loader2 className="h-8 w-8 text-white/70 animate-spin" />
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center min-h-[240px]">
+            <div className="bg-[#0c0c14]/80 border border-white/10 p-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 shadow-xl gap-2">
+              <Info className="h-6 w-6 text-slate-500" />
+              <p className="text-xs font-sans font-black tracking-widest uppercase">No beatmaps matches discovered</p>
+              <p className="text-[10px] text-slate-500 font-mono max-w-xs uppercase">Tweak your star rating boundaries or search query</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -511,10 +714,11 @@ export function SongSelectCarousel({
   return (
     <div
       ref={containerRef}
-      // pl-8/pr-5 reserve room for the hover slide (-4px) plus card glow so
-      // non-selected cards never clip at the overflow-x edge on hover.
-      className="lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-8 pr-5 flex flex-col gap-1.5 relative z-10 min-h-0"
+      className={carouselClassName}
       id="song-select-carousel-container"
+      // Hidden until the pre-paint taper pass lands, so fallback indents are
+      // never flashed at the top when the banners first appear.
+      style={listReady ? undefined : { visibility: 'hidden' }}
     >
       {/* Top spacer: lets the first group reach the viewport centre. */}
       <div aria-hidden="true" style={{ height: edgeSpacerPx, flexShrink: 0 }} />
@@ -530,7 +734,6 @@ export function SongSelectCarousel({
           ? 0
           : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 16;
         const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : 0;
-        const groupBannerUrl = group.coverUrl || group.bgUrl || DEFAULT_BANNER;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
         const uniqueKeys = Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
@@ -567,10 +770,7 @@ export function SongSelectCarousel({
               onClick={() => onSelectGroup(group)}
               className={`lazer-carousel-card ${isGroupActive ? 'is-active' : ''}`}
             >
-              <div
-                className="absolute inset-0 bg-cover bg-center pointer-events-none"
-                style={{ backgroundImage: `url("${sanitizeCssUrl(groupBannerUrl)}")` }}
-              />
+              <SongBannerArt group={group} />
               <div className="absolute inset-0 pointer-events-none lazer-carousel-card-shade" />
 
               {/* Set Card Content */}

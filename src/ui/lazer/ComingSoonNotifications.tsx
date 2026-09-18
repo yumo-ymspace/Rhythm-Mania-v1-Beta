@@ -110,23 +110,9 @@ export const ComingSoonNotificationStack: React.FC<{
             role="status"
             aria-live="polite"
             layout
-            initial={{ opacity: 0, x: 48 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={
-              notif.clickDismissed
-                ? {
-                    opacity: 0,
-                    x: -340,
-                    y: 28,
-                    rotate: -14,
-                    transition: { duration: 0.42, ease: [0.4, 0, 0.9, 0.55] },
-                  }
-                : {
-                    opacity: 0,
-                    x: 48,
-                    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-                  }
-            }
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             onClick={() => onDismiss(notif.id)}
           >

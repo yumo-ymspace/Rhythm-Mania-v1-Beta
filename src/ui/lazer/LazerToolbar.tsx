@@ -26,7 +26,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   LAZER_DURATION,
   LAZER_EASE_OUT_QUINT,
-  useLazerReducedMotion,
 } from './motion';
 import {
   ComingSoonNotificationStack,
@@ -60,8 +59,6 @@ export interface ToolbarTooltipProps {
 }
 
 export const ToolbarTooltip: React.FC<ToolbarTooltipProps> = ({ data, anchorRect }) => {
-  const reducedMotion = useLazerReducedMotion();
-
   if (!data || !anchorRect) return null;
 
   const winWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -76,9 +73,9 @@ export const ToolbarTooltip: React.FC<ToolbarTooltipProps> = ({ data, anchorRect
     <motion.div
       className={`lazer-toolbar-tooltip ${isRight ? 'is-align-right' : ''}`}
       role="tooltip"
-      initial={reducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -4, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.96 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={{ duration: LAZER_DURATION.tooltip, ease: LAZER_EASE_OUT_QUINT }}
       style={{
         position: 'fixed',
@@ -555,9 +552,9 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
             className="lazer-notifications-panel"
             role="region"
             aria-label="Notifications panel"
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: LAZER_DURATION.overlay, ease: LAZER_EASE_OUT_QUINT }}
           >
             <div className="lazer-notifications-header">

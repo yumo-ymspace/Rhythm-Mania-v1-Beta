@@ -286,10 +286,10 @@ html[data-skin="argon"] {
 }
 .settings-shake { animation: settings-shake 250ms ease; }
 
-/* Slide-in for the drawer */
+/* Fade-in for the drawer (in place, no slide) */
 @keyframes settings-slide-in {
-  from { transform: translateX(-100%); opacity: 0.6; }
-  to   { transform: translateX(0);     opacity: 1; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .settings-slide-in { animation: settings-slide-in 180ms ease-out; }
 

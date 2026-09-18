@@ -678,12 +678,12 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
           {/* Modal Container */}
           <motion.div
             key="mod-select-panel"
-            initial={{ y: '100%', opacity: 0.5 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
             className="fixed inset-2 sm:inset-5 md:inset-8 lg:inset-[5vh_auto] lg:left-1/2 lg:-translate-x-1/2 z-[110] w-auto lg:w-[min(1180px,calc(100vw-48px))] max-h-[calc(100vh-16px)] md:max-h-[90vh] bg-[#14151b]/95 border border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.85)] flex flex-col rounded-2xl overflow-hidden font-sans text-slate-100"
-            style={{ willChange: 'transform, opacity' }}
+            style={{ willChange: 'opacity' }}
           >
             {/* Header: Title, Live Multiplier, Close Button */}
             <div className="flex-none px-5 sm:px-8 py-4 border-b border-white/[.08] bg-[#1a1b24] flex flex-col sm:flex-row sm:items-center justify-between gap-4">

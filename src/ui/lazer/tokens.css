@@ -732,18 +732,15 @@ html[data-ui="lazer"] {
   padding: 0 14px;
   z-index: 50;
   user-select: none;
-  transition: transform var(--lazer-dur-overlay, 200ms) var(--lazer-ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1)),
-              opacity var(--lazer-dur-overlay, 200ms) var(--lazer-ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
+  transition: opacity var(--lazer-dur-overlay, 200ms) var(--lazer-ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .lazer-toolbar.is-hidden {
-  transform: translateY(-100%);
   opacity: 0;
   pointer-events: none;
 }
 
 .lazer-toolbar.is-visible {
-  transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
 }
@@ -1400,6 +1397,7 @@ html[data-ui="lazer"] {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transform-origin: center center;
   transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
 }
 
@@ -1408,8 +1406,12 @@ html[data-ui="lazer"] {
   border-color: rgba(255, 255, 255, 0.22);
 }
 
+/* Press feedback is a pure shrink: the shear is re-applied inside the
+   active transform so the slab keeps its parallelogram shape and only
+   gets smaller (a bare scale() would override the skew and snap the
+   slab back to a rectangle while pressed). */
 .lazer-footer-action-btn:active .lazer-footer-action-slab {
-  transform: scale(0.97);
+  transform: skewX(var(--lazer-shear, -11.31deg)) scale(0.96);
 }
 
 .lazer-footer-action-btn.is-active .lazer-footer-action-slab {
@@ -1446,22 +1448,9 @@ html[data-ui="lazer"] {
   gap: 7px;
 }
 
-/* Random feedback is a small icon-only pulse — the sheared slab itself
-   never scales or flashes, so the button keeps its shape. */
-.lazer-footer-action-btn.is-random:active .lazer-footer-action-slab {
-  transform: none;
-}
-
-.lazer-random-pulse-icon {
-  animation: lazer-random-pulse 320ms ease-out;
-  transform-origin: center;
-}
-
-@keyframes lazer-random-pulse {
-  0% { transform: scale(1) rotate(0deg); }
-  40% { transform: scale(1.22) rotate(-12deg); }
-  100% { transform: scale(1) rotate(0deg); }
-}
+/* Random presses shrink exactly like Mods/Options (generic active rule
+   above); no separate icon pulse, so the click reads as a single
+   parallelogram-preserving shrink. */
 
 /* Bigger coloured tool slabs (hud bottom-left refs). */
 .lazer-footer-action-btn.is-mods .lazer-footer-action-slab {

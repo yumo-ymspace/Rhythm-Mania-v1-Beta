@@ -202,11 +202,105 @@ export default function OnlineBeatmapCatalog({
 
   useEffect(() => {
     if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    // Drop focus from any background control so Space/Enter can't re-trigger
+    // it while the beatmap listing is open (same pattern as SettingsDrawer).
+    const active = document.activeElement as HTMLElement | null;
+    if (active && !active.closest?.('[data-beatmap-listing], [role="dialog"]')) {
+      active.blur();
+    }
+    // Text fields handle their own keys (Enter searches, Escape cancels).
+    // Capture-phase stopPropagation below would otherwise swallow those keys
+    // before React ever sees them, so leave them alone. Background listeners
+    // (Song Select, toolbar) already ignore typing targets on their own.
+    const isTextEditingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target.isContentEditable) return true;
+      const tag = target.tagName;
+      if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (tag === 'INPUT') {
+        const type = (target as HTMLInputElement).type;
+        return type === 'text' || type === 'search' || type === 'number';
+      }
+      return false;
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const isInsideListing = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      Boolean(target.closest?.('[data-beatmap-listing], [role="dialog"]'));
+    // Keys the Song Select screen treats as global actions. While the listing
+    // is open these must stay confined to the listing and never leak behind.
+    const SONG_SELECT_KEYS = new Set([
+      'Enter',
+      ' ',
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'F1',
+      'F2',
+      'F3',
+      'F4',
+      'F6',
+    ]);
+    // Capture-phase trap: runs before background window listeners (song
+    // select, toolbar) so they never see these keys.
+    const trap = (e: KeyboardEvent) => {
+      if (isTextEditingTarget(e.target)) {
+        // Let the search field handle typing/Enter. Escape still closes the
+        // listing without leaking to Song Select behind it.
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      // Ctrl/Cmd chords owned by Song Select / toolbar (open settings,
+      // scroll-speed, listing toggle) must not fire behind the listing.
+      if (e.ctrlKey || e.metaKey) {
+        e.stopPropagation();
+        const k = e.key.toLowerCase();
+        if (k === 'o' || k === 'b' || e.key === '-' || e.key === '_' || e.key === '=' || e.key === '+') {
+          e.preventDefault();
+        }
+        return;
+      }
+      if (SONG_SELECT_KEYS.has(e.key)) {
+        // Always hide the key from background listeners.
+        e.stopPropagation();
+        if (!isInsideListing(e.target)) {
+          // Focus is still on the screen behind: swallow so Space/Enter can't
+          // trigger it. Native listing controls keep their default behavior.
+          e.preventDefault();
+        } else if (e.key.startsWith('F')) {
+          e.preventDefault();
+        }
+      }
+    };
+    // Also swallow Space/Enter keyup from a background focused button (native
+    // click activation happens on keyup for Space).
+    const trapKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      if (isTextEditingTarget(e.target)) return;
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest?.('[data-beatmap-listing], [role="dialog"]')) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else {
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', trap, true);
+    window.addEventListener('keyup', trapKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', trap, true);
+      window.removeEventListener('keyup', trapKeyUp, true);
+    };
   }, [open, onClose]);
 
   const handleDownload = async (s: CatalogSet) => {
@@ -481,9 +575,9 @@ export default function OnlineBeatmapCatalog({
 
   const closedDownloadNotice = !open && downloadNotice ? (
     <motion.div
-      initial={{ opacity: 0, x: 24, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 24, scale: 0.95 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="fixed right-4 top-4 z-[130] flex max-w-sm items-stretch overflow-hidden rounded-2xl border border-white/15 bg-[#141522]/95 text-white shadow-[0_15px_40px_rgba(0,0,0,0.7),0_0_20px_rgba(255,204,34,0.1)] backdrop-blur-xl"
     >
       <div className="flex w-12 shrink-0 items-center justify-center border-r border-emerald-500/30 bg-emerald-500/20 text-emerald-400">
@@ -512,14 +606,15 @@ export default function OnlineBeatmapCatalog({
           <motion.div
             key="catalog-panel"
             ref={containerRef}
+            data-beatmap-listing
             role="dialog"
             aria-label="beatmap listing"
             className="lazer-listing-panel fixed z-[110] top-[38px] min-[481px]:top-[50px] bottom-0 inset-x-2 lg:left-[102px] lg:right-[102px] flex flex-col overflow-hidden font-sans text-slate-200"
-            initial={{ y: '-100%', opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '-100%', opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            style={{ willChange: 'transform, opacity' }}
+            style={{ willChange: 'opacity' }}
           >
             <div className="relative flex-none px-4 md:px-8 pt-4 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -531,8 +626,8 @@ export default function OnlineBeatmapCatalog({
 
               {headerDownloadMessage && (
                 <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   className={`pointer-events-none absolute left-1/2 top-1/2 hidden w-[42%] -translate-x-1/2 -translate-y-1/2 flex-col items-stretch justify-center gap-1 truncate rounded-xl border px-3 py-2 text-center text-[10px] font-mono sm:flex sm:text-xs shadow-lg backdrop-blur-md ${
                     importStatus?.type !== 'err'
                       ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 shadow-emerald-950/40'

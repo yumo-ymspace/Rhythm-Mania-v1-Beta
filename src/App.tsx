@@ -85,9 +85,9 @@ function getRandomDefaultBackground(): string {
 }
 
 const PAGE_TRANSITION_VARIANTS = {
-  initial: { opacity: 0, y: 14, scale: 0.995 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
-  exit: { opacity: 0, y: -10, scale: 0.995, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
+  exit: { opacity: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }
 } satisfies Variants;
 
 const LOCAL_STORAGE_SETTINGS_KEY = 'rhythm_mania_v1_settings';
@@ -1347,8 +1347,8 @@ export default function App() {
           {currentScreen !== 'play' && currentScreen !== 'menu' && activeBackgroundUrl && (
             <motion.div
               key={activeBackgroundUrl}
-              initial={{ opacity: 0, scale: 1.02 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               className="absolute inset-0 bg-cover bg-center bg-no-repeat bg-fixed"
@@ -1571,9 +1571,9 @@ export default function App() {
                     <motion.div
                       key="mobile-nav-panel"
                       ref={mobileMenuRef}
-                      initial={{ opacity: 0, y: -12, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -12, scale: 0.98 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
                       transition={{ duration: 0.2, ease: 'easeOut' }}
                       className="fixed left-3 right-3 top-[66px] z-50 max-h-[calc(100vh-80px)] overflow-y-auto rounded-2xl border border-white/[0.14] bg-[#071932]/95 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.6),0_0_24px_rgba(0,176,255,0.12)] backdrop-blur-2xl md:hidden"
                     >
@@ -1769,6 +1769,7 @@ export default function App() {
                 onOpenSettings={openSettings}
                 customMaps={customMaps}
                 shouldAutoSelectOnMount={hasPlayedThisSession}
+                isLoading={!mapsReady}
                  onImportBeatmap={handleImportBeatmap}
                  onImportPackage={handleImportPackage}
                 onDeleteSongGroup={handleDeleteSongGroup}

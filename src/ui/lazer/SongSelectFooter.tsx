@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { ReactNode, useState } from 'react';
+import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { SlidersHorizontal, Shuffle, Sliders } from 'lucide-react';
 import { FooterBackButton } from './FooterBackButton';
@@ -42,9 +42,6 @@ export function SongSelectFooter({
   isOptionsOpen = false,
   optionsContent,
 }: SongSelectFooterProps) {
-  // Bumps every time Random is pressed so the shuffle icon replays its
-  // small pulse (keyed remount restarts the CSS animation).
-  const [randomPulse, setRandomPulse] = useState(0);
   return (
     <div className="lazer-song-select-footer" id="song-select-lazer-footer">
       {/* Left cluster: long pink Back + bigger coloured Mods / Random / Options
@@ -80,19 +77,13 @@ export function SongSelectFooter({
         <button
           id="bottom-random-button"
           type="button"
-          onClick={() => {
-            setRandomPulse((k) => k + 1);
-            onRandom();
-          }}
+          onClick={onRandom}
           className="lazer-footer-action-btn is-random"
           aria-label="Random Beatmap"
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Shuffle
-                key={randomPulse}
-                className={`h-6 w-6 text-[#38bdf8] lazer-footer-action-icon${randomPulse > 0 ? ' lazer-random-pulse-icon' : ''}`}
-              />
+              <Shuffle className="h-6 w-6 text-[#38bdf8] lazer-footer-action-icon" />
               <span className="lazer-footer-action-label-row">
                 <span className="lazer-footer-action-label">Random</span>
                 <span className="lazer-footer-hotkey-badge">F2</span>

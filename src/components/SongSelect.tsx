@@ -98,6 +98,9 @@ interface SongSelectProps {
   // When false (fresh app load), Song Select will not pre-select any map.
   // When true (returning from gameplay/replay), it resumes the last selected map.
   shouldAutoSelectOnMount?: boolean;
+  // True while beatmaps are still loading (IndexedDB/migration). Shows a
+  // bare spinner in the carousel until song banners are ready.
+  isLoading?: boolean;
 }
 
 export default function SongSelect({
@@ -115,6 +118,7 @@ export default function SongSelect({
   onWatchReplay,
   playHistory = [],
   shouldAutoSelectOnMount = false,
+  isLoading = false,
 }: SongSelectProps) {
   // Search & Basic UI State
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -935,18 +939,22 @@ export default function SongSelect({
           onBack();
         }
       } else if (e.key === 'Enter') {
-        if (!showModsModal && !showOptionsMenu && selectedCustomMap) {
+        if (!showModsModal && !showOptionsMenu && !openFilterMenu && selectedCustomMap) {
           e.preventDefault();
           handleStartPlay();
         }
       } else if (e.key === 'F1') {
+        // While a beatmap-listing dropdown is open, keys stay confined to it.
+        if (showOptionsMenu || openFilterMenu) return;
         e.preventDefault();
         setShowModsModal((prev) => !prev);
       } else if (e.key === 'F2') {
+        // Random select is a Song Select action, not a dropdown action.
+        if (showModsModal || showOptionsMenu || openFilterMenu) return;
         e.preventDefault();
         handleSelectRandom();
       } else if (e.key === 'ArrowDown') {
-        if (!showModsModal && filteredCustomMaps.length > 0) {
+        if (!showModsModal && !showOptionsMenu && !openFilterMenu && filteredCustomMaps.length > 0) {
           e.preventDefault();
           const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapId);
           const next = currentIdx === -1
@@ -960,7 +968,7 @@ export default function SongSelect({
           }
         }
       } else if (e.key === 'ArrowUp') {
-        if (!showModsModal && filteredCustomMaps.length > 0) {
+        if (!showModsModal && !showOptionsMenu && !openFilterMenu && filteredCustomMaps.length > 0) {
           e.preventDefault();
           const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapId);
           if (currentIdx > 0) {
@@ -1157,17 +1165,25 @@ export default function SongSelect({
       className="relative w-full h-full min-h-0 text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
       {/* 1. Full-bleed background cover artwork with no dim overlay.
-          Group-stable + preloaded: never unmounts mid-switch, so no flash
-          when changing difficulties. */}
-      {displayedBgUrl && (
-        <div
-          className="absolute inset-0 bg-cover bg-center pointer-events-none transition-all duration-700 scale-105"
-          style={{
-            backgroundImage: `url("${sanitizeCssUrl(displayedBgUrl)}")`,
-            zIndex: 0
-          }}
-        />
-      )}
+          Group-stable + preloaded + cross-fading in place: no slide,
+          no flash when changing difficulties or songs. */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+        <AnimatePresence initial={false}>
+          {displayedBgUrl && (
+            <motion.div
+              key={displayedBgUrl}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0 bg-cover bg-center scale-105"
+              style={{
+                backgroundImage: `url("${sanitizeCssUrl(displayedBgUrl)}")`,
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
       {/* Version Tag */}
       <div className="absolute bottom-20 left-6 text-[10px] text-white/30 font-mono z-30 select-none pointer-events-none hidden lg:block">
         {metadata.version}
@@ -1403,6 +1419,7 @@ export default function SongSelect({
             containerRef={carouselContainerRef}
             activeItemRef={activeItemRef}
             centerSignal={carouselCenterSignal}
+            isLoading={isLoading}
           />
 
         </div>

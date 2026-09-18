@@ -208,10 +208,10 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
               key="mobile-settings"
               data-settings-drawer
               className="fixed inset-0 z-50 bg-gradient-to-b from-[#0e121b] via-[#0b0e14] to-[#07090e] flex flex-col font-sans select-none overflow-hidden"
-              initial={{ x: '100vw' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100vw' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
             >
               {/* Header */}
               <div className="flex-none px-4 py-4 border-b border-white/[0.08] flex items-center gap-3 bg-[#0a0d14]/95 backdrop-blur-md">
@@ -473,9 +473,9 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
               key="drawer"
               data-settings-drawer
               className="settings-shell fixed inset-y-0 left-0 z-50 w-full md:w-[640px] md:max-w-[92vw] flex flex-col md:flex-row"
-              initial={{ x: '-100%', opacity: 0.6 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '-100%', opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <SettingsSidebar 
