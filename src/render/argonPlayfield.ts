@@ -347,18 +347,24 @@ export function renderArgonPlayfield(
     const ovalY = upscroll
       ? receptorY - 30 - ovalH / 2
       : receptorY + 30 - ovalH / 2;
+    // Cheap outer glow (no shadowBlur: shadow forces a software raster pass).
+    if (pressed) {
+      ctx.save();
+      ctx.fillStyle = hexToRgba(color, 0.28);
+      ctx.beginPath();
+      ctx.roundRect(inset.x + (inset.width - ovalW) / 2 - 6, ovalY - 6, ovalW + 12, ovalH + 12, (ovalH + 12) / 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.beginPath();
     ctx.roundRect(inset.x + (inset.width - ovalW) / 2, ovalY, ovalW, ovalH, ovalH / 2);
     ctx.lineWidth = 4;
     ctx.strokeStyle = '#ffffff';
     if (pressed) {
-      ctx.shadowColor = hexToRgba(color, 0.7);
-      ctx.shadowBlur = 18;
       ctx.fillStyle = hexToRgba(color, 0.85);
       ctx.fill();
     }
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     if (showKeyLabels && keyLabels[i]) {
       ctx.font = '900 18px system-ui, -apple-system, sans-serif';

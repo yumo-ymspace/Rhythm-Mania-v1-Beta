@@ -173,24 +173,30 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         ctx.stroke();
         ctx.setLineDash([]);
 
+        // Cheap glow: translucent under-fill instead of shadowBlur.
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.5 + 5, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(noteColor, 0.30);
+        ctx.fill();
         ctx.beginPath();
         ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = noteColor;
-        ctx.shadowBlur = 12;
         ctx.fill();
-        ctx.shadowBlur = 0;
       } else if (isDynamicStyle && !isCircleMode) {
         const dynamicColor = noteObj.isHoldFailed ? '#64748b' : noteColorFor(noteObj.column);
         const barHeight = 8 * noteScale;
+        if (!noteObj.isHoldFailed) {
+          ctx.strokeStyle = hexToRgba(dynamicColor, 0.35);
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.roundRect(rx, ey - barHeight / 2, rw, barHeight, 2);
+          ctx.stroke();
+        }
         ctx.strokeStyle = dynamicColor;
         ctx.lineWidth = 2;
-        ctx.shadowColor = dynamicColor;
-        ctx.shadowBlur = noteObj.isHoldFailed ? 0 : 7;
         ctx.beginPath();
         ctx.roundRect(rx, ey - barHeight / 2, rw, barHeight, 2);
         ctx.stroke();
-        ctx.shadowBlur = 0;
       } else if (settingsSlice.squareRenderStyle === 'rhythmplus' && !isCircleMode) {
         const barHeight = 8 * noteScale;
         ctx.fillStyle = noteColorFor(noteObj.column);
@@ -412,12 +418,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
                  const segment = getHoldSegmentRect(segmentStartY, segmentEndY, trimStart, trimEnd);
                  const isCompactDiscreteTail = n.holdRulesVersion === 2 &&
                    Math.abs(segmentStartY - segmentEndY) <= Math.max(24, 20 * noteScale);
-                 ctx.save();
-                 ctx.strokeStyle = applyFade(dynamicHoldColor, Math.min(1, fadeStart));
-                  ctx.lineWidth = 2;
-                  ctx.shadowColor = dynamicHoldColor;
-                  ctx.shadowBlur = n.isHoldFailed ? 0 : 7;
-                  ctx.beginPath();
+                  ctx.save();
+                  ctx.strokeStyle = applyFade(dynamicHoldColor, Math.min(1, fadeStart));
+                   ctx.lineWidth = 2;
+                   ctx.beginPath();
                   if (isCompactDiscreteTail) {
                     ctx.rect(rx, segment.drawY, rw, segment.drawH);
                     if (skipStartEdge || skipEndEdge) {
@@ -634,14 +638,16 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
             const r = (colW * noteScale) / 2.0;
             const noteColor = noteColorFor(n.column);
 
+            // Cheap glow underlay instead of shadowBlur.
+            ctx.beginPath();
+            ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(noteColor, 0.30);
+            ctx.fill();
             ctx.beginPath();
             ctx.arc(cx, cy, r, 0, Math.PI * 2);
 
             ctx.fillStyle = noteColor;
-            ctx.shadowColor = noteColor;
-            ctx.shadowBlur = 10;
             ctx.fill();
-            ctx.shadowBlur = 0;
 
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
@@ -652,15 +658,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
             ctx.fillStyle = isDynamicHold ? 'rgba(0,0,0,0)' : dynamicColor;
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = isDynamicHold ? 2 : 1.5;
-            if (!isDynamicHold) {
-              ctx.shadowColor = dynamicColor;
-              ctx.shadowBlur = 8;
-            }
             drawNoteShape(0);
             if (!isDynamicHold) ctx.fill();
             ctx.stroke();
             if (!isDynamicHold) {
-              ctx.shadowBlur = 0;
               ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
               ctx.beginPath();
               ctx.roundRect(rx + 3, ry + rh / 2 - 1, Math.max(1, rw - 6), 2, 1);
@@ -682,10 +683,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
             ctx.fill();
             ctx.stroke();
 
-            ctx.shadowColor = noteStroke;
-            ctx.shadowBlur = 8;
+            // Second pass replaces the shadowBlur glow with a cheap alpha stroke.
+            ctx.strokeStyle = hexToRgba(noteStroke, 0.35);
+            ctx.lineWidth = 5;
             ctx.stroke();
-            ctx.shadowBlur = 0;
           } else {
             grad.addColorStop(0, noteStroke);
             grad.addColorStop(0.3, noteFill);
@@ -789,13 +790,14 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
           ctx.stroke();
           ctx.setLineDash([]);
 
+          ctx.fillStyle = hexToRgba(rcColor, 0.22);
+          ctx.beginPath();
+          ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+          ctx.fill();
           ctx.fillStyle = 'rgba(15, 23, 42, 0.15)';
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.shadowColor = rcColor;
-          ctx.shadowBlur = 8;
           ctx.fill();
-          ctx.shadowBlur = 0;
         }
       } else if (isDynamicStyle || settingsSlice.squareRenderStyle === 'rhythmplus') {
         const rw = colW;
@@ -804,11 +806,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         const ry = receptorY - rh / 2;
 
         if (isPressed) {
+          ctx.fillStyle = hexToRgba(rcColor, 0.45);
+          ctx.fillRect(rx, ry - 3, rw, rh + 6);
           ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = rcColor;
-          ctx.shadowBlur = 12;
           ctx.fillRect(rx, ry, rw, rh);
-          ctx.shadowBlur = 0;
 
           // Lane-pressed glowing flash on this specific lane
           const flashGrad = ctx.createLinearGradient(

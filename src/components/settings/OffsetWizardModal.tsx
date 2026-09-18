@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Volume2, Check, X } from 'lucide-react';
+import { mainAudio } from '../../audio/AudioEngine';
 
 interface OffsetWizardModalProps {
   initial: number;
@@ -195,6 +196,12 @@ export default function OffsetWizardModal({ initial, onApply, onClose }: OffsetW
               When you click Start, you will hear a metronome beat. Tap the pad (or press <strong>Spacebar</strong>) in time with the sound.
               <br/><br/>
               Do this 8 times consistently to calculate your hardware&apos;s audio latency offset.
+              <br/><br/>
+              <span className="text-xs text-[#8f8fa8]">
+                Measured device output latency: {Math.round(mainAudio.getOutputLatencyMs())}ms
+                (baseLatency + outputLatency). Enable &quot;Compensate output latency&quot; in
+                Audio settings to subtract it automatically instead of baking it into your offset.
+              </span>
             </p>
             <div className="flex justify-end pt-2">
               <button 

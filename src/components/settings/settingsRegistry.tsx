@@ -186,6 +186,14 @@ export const ROWS: RowDef[] = [
     showWhen: (s) => s.renderEngine === 'babylon',
     keywords: ['babylon', 'floor', 'runway', 'matte', '3d'],
   },
+  {
+    id: 'babylonHighPerformance', section: 'graphics', label: 'High-performance 3D',
+    description: 'Disable bloom and antialiasing in the Babylon renderer for lower frame latency.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.babylonHighPerformance,
+    showWhen: (s) => s.renderEngine === 'babylon',
+    keywords: ['babylon', 'bloom', 'performance', 'latency', 'fps', '3d', 'antialias'],
+  },
   // ── GAMEPLAY ──────────────────────────────────────────────────────────
   {
     id: 'scrollSpeed', section: 'gameplay', label: 'Scroll speed',
@@ -275,6 +283,13 @@ export const ROWS: RowDef[] = [
     description: 'Milliseconds added to every beatmap. Use the wizard to find your value.',
     control: { kind: 'slider', min: -300, max: 300, step: 5, format: ms },
     defaultValue: DEFAULT_SETTINGS.audioOffset,
+  },
+  {
+    id: 'compensateOutputLatency', section: 'audio', label: 'Compensate output latency',
+    description: 'Subtract the measured device output latency (baseLatency + outputLatency) from the judgement clock. Keep off if you already baked it into your offset.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.compensateOutputLatency,
+    keywords: ['latency', 'output', 'bluetooth', 'offset', 'calibration', 'audio'],
   },
   {
     id: 'offsetWizard', section: 'audio', label: 'Offset wizard',

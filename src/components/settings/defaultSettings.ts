@@ -86,6 +86,8 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   bindSkipIntro: 'enter',
   renderEngine: 'canvas',
   babylonFloor: true,
+  babylonHighPerformance: false,
+  compensateOutputLatency: false,
   enableMapSV: true,
   disableLaneShake: false,
   enableSongPreview: true,

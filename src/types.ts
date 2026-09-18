@@ -321,6 +321,8 @@ export interface GameSettings {
   bindSkipIntro?: string; // gameplay skip-intro keybind
   renderEngine?: 'canvas' | 'babylon';
   babylonFloor?: boolean;
+  babylonHighPerformance?: boolean; // disable bloom/AA in the Babylon renderer for lower latency
+  compensateOutputLatency?: boolean; // subtract measured baseLatency+outputLatency from the judgement clock
   enableMapSV?: boolean;
   disableLaneShake?: boolean;
   enableSongPreview?: boolean; // play an audio preview of the selected map on Song Select

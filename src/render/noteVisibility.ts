@@ -42,6 +42,60 @@ function mergeTailIntervals(
   return merged;
 }
 
+const sortednessCache = new WeakMap<readonly HitObject[], boolean>();
+
+function isSortedByTime(notes: readonly HitObject[]): boolean {
+  const cached = sortednessCache.get(notes);
+  if (cached !== undefined) return cached;
+  let sorted = true;
+  for (let i = 1; i < notes.length; i++) {
+    if (notes[i].time < notes[i - 1].time) {
+      sorted = false;
+      break;
+    }
+  }
+  // Only cache sorted arrays: unsorted inputs are mutated/sorted by callers,
+  // and a stale "unsorted" flag must never stick to a later-sorted array.
+  // Unsorted arrays take the (correct) full-scan fallback below.
+  if (sorted) sortednessCache.set(notes, true);
+  return sorted;
+}
+
+function lowerBoundNoteTime(notes: readonly HitObject[], t: number): number {
+  let lo = 0;
+  let hi = notes.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (notes[mid].time < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function upperBoundNoteTime(notes: readonly HitObject[], t: number): number {
+  let lo = 0;
+  let hi = notes.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (notes[mid].time <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+// Minimum positive SV multiplier in the model, or null when indexing is
+// unsafe (frozen/reverse/non-finite segments can park far-off-time notes
+// on screen, so callers must fall back to the full scan).
+function minPositiveSvMultiplier(model?: ScrollModel | null): number | null {
+  if (!model || !model.isEnabled || model.segments.length === 0) return 1;
+  let min = Infinity;
+  for (const s of model.segments) {
+    if (!Number.isFinite(s.multiplier) || s.multiplier <= 0) return null;
+    if (s.multiplier < min) min = s.multiplier;
+  }
+  return Number.isFinite(min) ? Math.max(0.05, min) : 1;
+}
+
 export function getVisibleNotes(
   notes: HitObject[],
   settings: PlayfieldVisualSettings,
@@ -58,14 +112,65 @@ export function getVisibleNotes(
   const up = settings.upsurfaceNoteMode;
   const noteOpacityVal = settings.noteOpacity ?? 1.0;
   const coverState = computeCoverRatio(settings.selectedMods || [], combo, visualTime, breaks);
-  const orderedNotes = notes.every((note, index) => index === 0 || note.time >= notes[index - 1].time)
+  const sorted = isSortedByTime(notes);
+  const orderedNotes: readonly HitObject[] = sorted
     ? notes
     : [...notes].sort((a, b) => a.time - b.time);
+
+  // Indexed fast path for constant/positive SV scroll: binary-search a
+  // conservative time window instead of projecting every note. Falls back to
+  // the full scan when SV can freeze/reverse (a global time window is not
+  // safe then) or when the window degenerates (tiny multipliers).
+  // Holds that started before the window but extend into/through it are
+  // picked up by a bounded backward scan (2-minute max hold span).
+  let windowed: readonly HitObject[] | null = null;
+  if (sorted && Number.isFinite(speedFactor) && speedFactor > 0) {
+    const minMult = minPositiveSvMultiplier(scrollModel);
+    if (minMult !== null) {
+      const travelWindowMs = (height + paddingLimit * 2) / speedFactor / minMult;
+      if (Number.isFinite(travelWindowMs) && travelWindowMs <= 15000) {
+        const windowMs = travelWindowMs + 1000;
+        const loTime = visualTime - windowMs;
+        const hiTime = visualTime + windowMs;
+        const startIdx = lowerBoundNoteTime(orderedNotes, loTime);
+        const endIdx = upperBoundNoteTime(orderedNotes, hiTime);
+        if (endIdx - startIdx < orderedNotes.length) {
+          const picked: HitObject[] = [];
+          // Bounded backward scan for holds spanning into the window.
+          const spanCutoff = loTime - 120000;
+          let spanFallback = false;
+          for (let i = startIdx - 1; i >= 0; i--) {
+            const n = orderedNotes[i];
+            if (n.time < spanCutoff) break;
+            if (n.type === 'hold' && n.endTime !== undefined && n.endTime >= loTime) {
+              picked.push(n);
+            } else if (n.type !== 'hold') {
+              // Non-holds before the window can never be visible; keep
+              // scanning past them only while a spanning hold is plausible.
+              // (No early break: an earlier long hold may still span.)
+              continue;
+            }
+            // Bound the scan so hold-heavy maps cannot degenerate to O(n).
+            if (picked.length >= 512 || startIdx - i >= 4096) {
+              // Give up windowing and fall back to the exact full scan.
+              spanFallback = true;
+              break;
+            }
+          }
+          if (!spanFallback) {
+            picked.reverse();
+            const slice = orderedNotes.slice(startIdx, endIdx);
+            windowed = picked.length > 0 ? [...picked, ...slice] : slice;
+          }
+        }
+      }
+    }
+  }
 
   // Evaluate every note against its actual SV-projected position. A global
   // time window is not safe when timing points change scroll direction or
   // speed, because a note outside that window can still be on screen.
-  for (const n of orderedNotes) {
+  for (const n of windowed ?? orderedNotes) {
 
     // Hold geometry is timeline-driven. Judgement state may change its color or
     // anchoring, but it must not consume the note before it scrolls off-screen.

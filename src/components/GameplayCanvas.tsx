@@ -238,6 +238,48 @@ const formatMsToMinSec = (timeMs: number) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Low-latency input helpers: resolve the audio-clock time of a DOM input event
+// by subtracting main-thread handler delay (performance.now - event.timeStamp).
+// Falls back to a fresh audio-clock read when no timestamp is available.
+export function resolveEventInputDelayMs(eventTimeStamp?: number): number {
+  if (typeof eventTimeStamp !== 'number' || !Number.isFinite(eventTimeStamp)) return 0;
+  const delay = performance.now() - eventTimeStamp;
+  if (!Number.isFinite(delay)) return 0;
+  return Math.max(0, Math.min(100, delay));
+}
+
+function codeForBinding(binding: string): string | null {
+  if (binding === ' ') return 'Space';
+  if (binding === ';') return 'Semicolon';
+  if (binding === ',') return 'Comma';
+  if (binding === '.') return 'Period';
+  if (binding === '/') return 'Slash';
+  if (binding === "'") return 'Quote';
+  if (binding === '[') return 'BracketLeft';
+  if (binding === ']') return 'BracketRight';
+  if (binding === '-') return 'Minus';
+  if (binding === '=') return 'Equal';
+  if (/^[a-zA-Z]$/.test(binding)) return `Key${binding.toUpperCase()}`;
+  if (/^[0-9]$/.test(binding)) return `Digit${binding}`;
+  return null;
+}
+
+// Physical-position lookup first (e.code, layout-independent), then legacy
+// e.key fallback so custom bindings keep working.
+export function findColumnForKeyboardEvent(
+  e: Pick<KeyboardEvent, 'key' | 'code'>,
+  keyLayout: string[],
+): number {
+  if (e.code) {
+    for (let i = 0; i < keyLayout.length; i++) {
+      const expected = codeForBinding(keyLayout[i]);
+      if (expected && expected === e.code) return i;
+    }
+  }
+  const key = (e.key || '').toLowerCase();
+  return keyLayout.findIndex((k) => (k || '').toLowerCase() === key);
+}
+
 interface GameplayCanvasProps {
   beatmap: Beatmap;
   settings: GameSettings;
@@ -507,6 +549,10 @@ export default function GameplayCanvas({
   const lockedScrollSpeedRef = useRef<number>(settings.scrollSpeed);
 
   const handleExit = () => {
+    try {
+      const nav = navigator as Navigator & { keyboard?: { unlock?: () => void } };
+      nav.keyboard?.unlock?.();
+    } catch { /* ignore */ }
     if (finishTimeoutRef.current) {
       clearTimeout(finishTimeoutRef.current);
       finishTimeoutRef.current = null;
@@ -724,6 +770,13 @@ export default function GameplayCanvas({
   const [uiHp, setUiHp] = useState<number>(100);
   const [uiJudgement, setUiJudgement] = useState<{ text: string; color: string; time: number } | null>(null);
   const [comboBurst, setComboBurst] = useState<number | null>(null);
+  // Throttled HUD sync: applyJudgement only writes these refs (no setState in
+  // the input path). The rAF loop flushes to React at ~12Hz, so per-note
+  // reconciliation never blocks judgement or audio.
+  const hudPendingRef = useRef({ score: 0, combo: 0, hp: 100 });
+  const hudJudgementRef = useRef<{ text: string; color: string; time: number } | null>(null);
+  const hudBurstRef = useRef<{ value: number; time: number } | null>(null);
+  const lastHudFlushRef = useRef<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [unpauseCountdown, setUnpauseCountdown] = useState<number>(0);
   const [retryCount, setRetryCount] = useState<number>(0);
@@ -865,6 +918,8 @@ export default function GameplayCanvas({
   const rendererCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playfieldSurfaceRef = useRef<HTMLDivElement | null>(null);
   const activeRendererRef = useRef<IPlayfieldRenderer | null>(null);
+  // Cached CSS size avoids a forced layout (clientWidth) on every rAF tick.
+  const canvasCssSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   useEffect(() => {
     let active = true;
@@ -934,7 +989,7 @@ export default function GameplayCanvas({
         activeRendererRef.current = null;
       }
     };
-  }, [settings.renderEngine, settings.limitDprToOne, beatmap.keyCount, isAudioLoaded]);
+  }, [settings.renderEngine, settings.limitDprToOne, settings.babylonHighPerformance, beatmap.keyCount, isAudioLoaded]);
 
   // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD; DT/HT/NC/DC scale song-time hit-windows with clock rate.
   // Classic mod restores stable-style hit windows without speed compensation.
@@ -1038,10 +1093,17 @@ export default function GameplayCanvas({
     syncControllerRef.current = null;
     audioStartPendingRef.current = false;
     
+    hudPendingRef.current.score = 0;
+    hudPendingRef.current.combo = 0;
+    hudPendingRef.current.hp = 100;
+    hudJudgementRef.current = null;
+    hudBurstRef.current = null;
+    lastHudFlushRef.current = 0;
     setUiScore(0);
     setUiCombo(0);
     setUiHp(100);
     setUiJudgement(null);
+    setComboBurst(null);
     setIsPaused(false);
     setIsFailed(false);
     isPlayingRef.current = false;
@@ -1120,6 +1182,7 @@ export default function GameplayCanvas({
       mainAudio.init();
       mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
       mainAudio.setOffset(settings.audioOffset);
+      mainAudio.compensateOutputLatency = settings.compensateOutputLatency === true;
 
       const activeRate = getSpeedMultiplier(settings.selectedMods);
       mainAudio.playbackRate = activeRate;
@@ -1169,8 +1232,9 @@ export default function GameplayCanvas({
     if (isAudioLoaded) {
       mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
       mainAudio.setOffset(settings.audioOffset);
+      mainAudio.compensateOutputLatency = settings.compensateOutputLatency === true;
     }
-  }, [isAudioLoaded, settings.musicVolume, settings.hitsoundVolume, settings.masterVolume, settings.audioOffset]);
+  }, [isAudioLoaded, settings.musicVolume, settings.hitsoundVolume, settings.masterVolume, settings.audioOffset, settings.compensateOutputLatency]);
 
   const snapVideoToAudio = (audioTimeMs?: number, playIfReady: boolean = true) => {
     const video = videoRef.current;
@@ -1295,7 +1359,9 @@ export default function GameplayCanvas({
     }
     
     // Refcounted lane press so keyboard + touch on the same column do not fight.
-    const virtualKeyDown = (colIndex: number) => {
+    // explicitTime is the event-time audio clock (already corrected for handler
+    // delay). When omitted, a fresh audio-clock read is used.
+    const virtualKeyDown = (colIndex: number, explicitTime?: number) => {
       if (isPrePlayRef.current || isPausedRef.current || scoreStateRef.current.failed || isAutoplay) return;
       if (colIndex < 0 || colIndex >= keyCount) return;
 
@@ -1305,7 +1371,8 @@ export default function GameplayCanvas({
 
       updateKeyCounterUi(colIndex, true, true);
 
-      const inputTime = readGameplayTime();
+      const freshTime = readGameplayTime();
+      const inputTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime) ? explicitTime : freshTime;
       advanceHoldTailTicks(notesRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
       keysPressedRef.current[colIndex] = true;
       activeColumnsRef.current[colIndex] = true;
@@ -1313,7 +1380,7 @@ export default function GameplayCanvas({
       if (hasKeyPressedOnceRef.current) {
         hasKeyPressedOnceRef.current[colIndex] = true;
       }
-      triggerHitEvent(colIndex);
+      triggerHitEvent(colIndex, inputTime);
       advanceHoldTailTicks(notesRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
 
       if (!isReplayMode) {
@@ -1324,7 +1391,7 @@ export default function GameplayCanvas({
       }
     };
 
-    const virtualKeyUp = (colIndex: number) => {
+    const virtualKeyUp = (colIndex: number, explicitTime?: number) => {
       if (isPrePlayRef.current || isPausedRef.current || scoreStateRef.current.failed || isAutoplay) return;
       if (colIndex < 0 || colIndex >= keyCount) return;
 
@@ -1335,13 +1402,14 @@ export default function GameplayCanvas({
 
       updateKeyCounterUi(colIndex, false, false);
 
-      const inputTime = readGameplayTime();
+      const freshTime = readGameplayTime();
+      const inputTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime) ? explicitTime : freshTime;
       advanceHoldTailTicks(notesRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
       keysPressedRef.current[colIndex] = false;
       activeColumnsRef.current[colIndex] = false;
       advanceHoldTailTicks(notesRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
       
-      triggerReleaseEvent(colIndex);
+      triggerReleaseEvent(colIndex, inputTime);
 
       if (!isReplayMode) {
         replayFramesRef.current.push({
@@ -1409,10 +1477,10 @@ export default function GameplayCanvas({
       if (isReplayMode || isAutoplay) return; // ignore user key taps in replay mode or autoplay
 
       const keyLayout = currentSettings.bindings[keyCount] || [];
-      const key = e.key.toLowerCase();
-      const colIndex = keyLayout.findIndex((k) => k.toLowerCase() === key);
+      const colIndex = findColumnForKeyboardEvent(e, keyLayout);
       if (colIndex !== -1) {
-        virtualKeyDown(colIndex);
+        const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+        virtualKeyDown(colIndex, corrected);
       }
     };
 
@@ -1423,10 +1491,10 @@ export default function GameplayCanvas({
 
       const currentSettings = settingsRef.current;
       const keyLayout = currentSettings.bindings[keyCount] || [];
-      const key = e.key.toLowerCase();
-      const colIndex = keyLayout.findIndex((k) => k.toLowerCase() === key);
+      const colIndex = findColumnForKeyboardEvent(e, keyLayout);
       if (colIndex !== -1) {
-        virtualKeyUp(colIndex);
+        const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+        virtualKeyUp(colIndex, corrected);
       }
     };
 
@@ -1446,67 +1514,178 @@ export default function GameplayCanvas({
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('focus', reconcileInputOnFocus);
 
-    // 2. Tactile multi-touch adapter tracking (touchstart, touchmove, touchend, touchcancel)
+    // 2. Pointer + touch input. Pointer Events are preferred (lower latency,
+    // no compatibility double-fire); Touch Events are the Safari fallback.
+    // Interaction rects are cached (~500ms) to avoid layout thrash per event.
     let touchAdapter: TouchInputAdapter | null = null;
     let handleTouchStart: ((e: TouchEvent) => void) | null = null;
     let handleTouchMove: ((e: TouchEvent) => void) | null = null;
     let handleTouchEnd: ((e: TouchEvent) => void) | null = null;
     let handleTouchCancel: ((e: TouchEvent) => void) | null = null;
+    let handlePointerDown: ((e: PointerEvent) => void) | null = null;
+    let handlePointerMove: ((e: PointerEvent) => void) | null = null;
+    let handlePointerUp: ((e: PointerEvent) => void) | null = null;
+    let handlePointerCancel: ((e: PointerEvent) => void) | null = null;
+    const activePointers = new Map<number, number>();
+    let cachedRect: DOMRect | null = null;
+    let cachedRectAt = 0;
+    const getInteractionRect = (): DOMRect | null => {
+      if (!touchTarget) return null;
+      const now = performance.now();
+      if (!cachedRect || now - cachedRectAt > 500) {
+        cachedRect = touchTarget.getBoundingClientRect();
+        cachedRectAt = now;
+      }
+      return cachedRect;
+    };
+    const invalidateInteractionRect = () => {
+      cachedRect = null;
+    };
+    const laneFromClientX = (clientX: number, rect: DOMRect): number => {
+      if (!Number.isFinite(clientX) || rect.width <= 0 || keyCount <= 0) return -1;
+      const relX = Math.max(0, Math.min(rect.width - 1, clientX - rect.left));
+      const idx = Math.floor(relX / (rect.width / keyCount));
+      return idx >= 0 && idx < keyCount ? idx : -1;
+    };
+    const inTouchZone = (clientY: number, rect: DOMRect): boolean => {
+      if (settings.renderEngine === 'babylon') return true;
+      const ratio = (clientY - rect.top) / rect.height;
+      return settingsRef.current.upsurfaceNoteMode ? ratio <= 0.4 : ratio >= 0.6;
+    };
+    const inHoldStickyBand = (clientY: number, rect: DOMRect): boolean => {
+      if (settings.renderEngine === 'babylon') return true;
+      const ratio = (clientY - rect.top) / rect.height;
+      if (settingsRef.current.upsurfaceNoteMode) return ratio <= 0.65;
+      return ratio >= 0.35;
+    };
+    const usePointer = typeof window !== 'undefined' && 'PointerEvent' in window;
 
     if (touchTarget) {
-      touchAdapter = new TouchInputAdapter(
-        virtualKeyDown,
-        virtualKeyUp,
-        settings.renderEngine === 'babylon'
-      );
+      if (usePointer) {
+        handlePointerDown = (e: PointerEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          const rect = getInteractionRect();
+          if (!rect) return;
+          if (!inTouchZone(e.clientY, rect)) return;
+          const lane = laneFromClientX(e.clientX, rect);
+          if (lane < 0) return;
+          if (activePointers.has(e.pointerId)) return;
+          activePointers.set(e.pointerId, lane);
+          const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+          virtualKeyDown(lane, corrected);
+        };
+        handlePointerMove = (e: PointerEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          const prevLane = activePointers.get(e.pointerId);
+          if (prevLane === undefined) return;
+          const rect = getInteractionRect();
+          if (!rect) return;
+          if (!inHoldStickyBand(e.clientY, rect)) {
+            activePointers.delete(e.pointerId);
+            const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+            virtualKeyUp(prevLane, corrected);
+            return;
+          }
+          if (!inTouchZone(e.clientY, rect)) return;
+          const lane = laneFromClientX(e.clientX, rect);
+          if (lane < 0 || lane === prevLane) return;
+          activePointers.set(e.pointerId, lane);
+          const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+          virtualKeyUp(prevLane, corrected);
+          virtualKeyDown(lane, corrected);
+        };
+        handlePointerUp = (e: PointerEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          const lane = activePointers.get(e.pointerId);
+          if (lane === undefined) return;
+          activePointers.delete(e.pointerId);
+          const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+          virtualKeyUp(lane, corrected);
+        };
+        handlePointerCancel = (e: PointerEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          const lane = activePointers.get(e.pointerId);
+          if (lane === undefined) return;
+          activePointers.delete(e.pointerId);
+          const corrected = readGameplayTime() - resolveEventInputDelayMs(e.timeStamp);
+          virtualKeyUp(lane, corrected);
+        };
+        touchTarget.addEventListener('pointerdown', handlePointerDown);
+        touchTarget.addEventListener('pointermove', handlePointerMove);
+        touchTarget.addEventListener('pointerup', handlePointerUp);
+        touchTarget.addEventListener('pointercancel', handlePointerCancel);
+        window.addEventListener('resize', invalidateInteractionRect);
+      } else {
+        touchAdapter = new TouchInputAdapter(
+          (lane) => virtualKeyDown(lane, readGameplayTime()),
+          (lane) => virtualKeyUp(lane, readGameplayTime()),
+          settings.renderEngine === 'babylon'
+        );
 
-      handleTouchStart = (e: TouchEvent) => {
-        if (isReplayMode || isAutoplay) return;
-        const rect = touchTarget.getBoundingClientRect();
-        touchAdapter?.handleTouchStart(e, rect, keyCount, settingsRef.current.upsurfaceNoteMode);
-      };
+        handleTouchStart = (e: TouchEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          const rect = getInteractionRect();
+          if (!rect) return;
+          touchAdapter?.handleTouchStart(e, rect, keyCount, settingsRef.current.upsurfaceNoteMode);
+        };
 
-      handleTouchMove = (e: TouchEvent) => {
-        if (isReplayMode || isAutoplay) return;
-        const rect = touchTarget.getBoundingClientRect();
-        touchAdapter?.handleTouchMove(e, rect, keyCount, settingsRef.current.upsurfaceNoteMode);
-      };
+        handleTouchMove = (e: TouchEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          const rect = getInteractionRect();
+          if (!rect) return;
+          touchAdapter?.handleTouchMove(e, rect, keyCount, settingsRef.current.upsurfaceNoteMode);
+        };
 
-      handleTouchEnd = (e: TouchEvent) => {
-        if (isReplayMode || isAutoplay) return;
-        touchAdapter?.handleTouchEnd(e);
-      };
+        handleTouchEnd = (e: TouchEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          touchAdapter?.handleTouchEnd(e);
+        };
 
-      handleTouchCancel = (e: TouchEvent) => {
-        if (isReplayMode || isAutoplay) return;
-        touchAdapter?.handleTouchCancel(e);
-      };
+        handleTouchCancel = (e: TouchEvent) => {
+          if (isReplayMode || isAutoplay) return;
+          touchAdapter?.handleTouchCancel(e);
+        };
 
-      // Register non-passive events to allow explicit preventDefault override inside raw handlers, blocking system browser zooms
-      touchTarget.addEventListener('touchstart', handleTouchStart, { passive: false });
-      touchTarget.addEventListener('touchmove', handleTouchMove, { passive: false });
-      touchTarget.addEventListener('touchend', handleTouchEnd, { passive: false });
-      touchTarget.addEventListener('touchcancel', handleTouchCancel, { passive: false });
+        // Register non-passive events to allow explicit preventDefault override inside raw handlers, blocking system browser zooms
+        touchTarget.addEventListener('touchstart', handleTouchStart, { passive: false });
+        touchTarget.addEventListener('touchmove', handleTouchMove, { passive: false });
+        touchTarget.addEventListener('touchend', handleTouchEnd, { passive: false });
+        touchTarget.addEventListener('touchcancel', handleTouchCancel, { passive: false });
+        window.addEventListener('resize', invalidateInteractionRect);
+      }
     }
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('focus', reconcileInputOnFocus);
+      window.removeEventListener('resize', invalidateInteractionRect);
       
       if (touchTarget) {
         if (handleTouchStart) touchTarget.removeEventListener('touchstart', handleTouchStart);
         if (handleTouchMove) touchTarget.removeEventListener('touchmove', handleTouchMove);
         if (handleTouchEnd) touchTarget.removeEventListener('touchend', handleTouchEnd);
         if (handleTouchCancel) touchTarget.removeEventListener('touchcancel', handleTouchCancel);
+        if (handlePointerDown) touchTarget.removeEventListener('pointerdown', handlePointerDown);
+        if (handlePointerMove) touchTarget.removeEventListener('pointermove', handlePointerMove);
+        if (handlePointerUp) touchTarget.removeEventListener('pointerup', handlePointerUp);
+        if (handlePointerCancel) touchTarget.removeEventListener('pointercancel', handlePointerCancel);
       }
+      for (const lane of new Set(activePointers.values())) {
+        try { virtualKeyUp(lane); } catch { /* ignore */ }
+      }
+      activePointers.clear();
       touchAdapter?.reset();
     };
   }, [beatmap.keyCount, replayData, isAudioLoaded, settings.renderEngine, introSkippable, performIntroSkip]);
 
-  // Judgement scoring evaluator
-  const triggerHitEvent = (colIndex: number) => {
-    const playTime = audioTimeRef.current;
+  // Judgement scoring evaluator. explicitTime is the corrected event-time
+  // audio clock; falls back to the last render-loop time for rAF-driven callers.
+  const triggerHitEvent = (colIndex: number, explicitTime?: number) => {
+    const playTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime)
+      ? explicitTime
+      : audioTimeRef.current;
 
     // Version 3 Lazer hold rules
     if (holdRulesVersion === LAZER_HOLD_RULES_VERSION) {
@@ -1756,8 +1935,10 @@ export default function GameplayCanvas({
     }
   };
 
-  const triggerReleaseEvent = (colIndex: number) => {
-    const playTime = audioTimeRef.current;
+  const triggerReleaseEvent = (colIndex: number, explicitTime?: number) => {
+    const playTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime)
+      ? explicitTime
+      : audioTimeRef.current;
 
     // Version 3 Lazer hold release rules:
     if (holdRulesVersion === LAZER_HOLD_RULES_VERSION) {
@@ -1939,15 +2120,7 @@ export default function GameplayCanvas({
         state.maxCombo = state.combo;
       }
       if (state.combo >= 50 && state.combo % 50 === 0 && !settingsRef.current.disableParticles) {
-        const burstCombo = state.combo;
-        setComboBurst(burstCombo);
-        if (comboBurstTimeoutRef.current) clearTimeout(comboBurstTimeoutRef.current);
-        comboBurstTimeoutRef.current = setTimeout(() => {
-          comboBurstTimeoutRef.current = null;
-          if (isMountedRef.current) {
-            setComboBurst(current => current === burstCombo ? null : current);
-          }
-        }, 900);
+        hudBurstRef.current = { value: state.combo, time: Date.now() };
       }
       
       if (judg.type === 'marvelous') state.marvelousCount++;
@@ -2030,34 +2203,23 @@ export default function GameplayCanvas({
       mainAudio.setVolumes(settings.musicVolume * muteFactor, settings.hitsoundVolume, settings.masterVolume);
     }
 
-    // Update canvas visual trackers
+    // Update canvas visual trackers (no React setState here — the rAF loop
+    // flushes hudPendingRef at ~12Hz so input never waits on reconciliation).
+    const now = Date.now();
     currentJudgementRef.current = {
       text: judg.name,
       color: judg.color,
-      time: Date.now(),
+      time: now,
       size: 1.4 // trigger pulse size scaling
     };
-
-    const now = Date.now();
-    setUiJudgement({ text: judg.name, color: judg.color, time: now });
-    // Clear judgment text overlay after 600ms
-    if (uiJudgementTimeoutRef.current) {
-      clearTimeout(uiJudgementTimeoutRef.current);
+    hudPendingRef.current.score = state.score;
+    hudPendingRef.current.combo = state.combo;
+    hudPendingRef.current.hp = state.hp;
+    hudJudgementRef.current = { text: judg.name, color: judg.color, time: now };
+    // A miss/combo-break or fail must surface immediately even between flushes.
+    if (judg.type === 'miss' || state.failed || state.combo === 0) {
+      lastHudFlushRef.current = 0;
     }
-    uiJudgementTimeoutRef.current = setTimeout(() => {
-      uiJudgementTimeoutRef.current = null;
-      if (isMountedRef.current) {
-        setUiJudgement(curr => {
-          if (curr && curr.time === now) return null;
-          return curr;
-        });
-      }
-    }, 600);
-
-    // Reflect to fast visual UI hooks (triggered carefully)
-    setUiScore(state.score);
-    setUiCombo(state.combo);
-    setUiHp(state.hp);
   };
 
   // Sparkles particle engine
@@ -2109,18 +2271,26 @@ export default function GameplayCanvas({
     const resizeCanvas = () => {
       const container = containerRef.current;
       if (!container || !canvas) return;
-      
+       
        const rect = canvas.getBoundingClientRect();
       const currentSettings = settingsRef.current;
       const dpr = currentSettings.limitDprToOne ? 1 : Math.min(1.5, window.devicePixelRatio || 1);
+      const cssW = rect.width || container.getBoundingClientRect().width;
+      const cssH = rect.height || container.getBoundingClientRect().height;
+      canvasCssSizeRef.current.width = cssW;
+      canvasCssSizeRef.current.height = cssH;
       
       if (activeRendererRef.current) {
-           activeRendererRef.current.resize(rect.width || container.getBoundingClientRect().width, rect.height || container.getBoundingClientRect().height, dpr);
+           activeRendererRef.current.resize(cssW, cssH, dpr);
       }
     };
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    const sizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => resizeCanvas()) : null;
+    try {
+      if (sizeObserver && canvas) sizeObserver.observe(canvas);
+    } catch { /* ResizeObserver unavailable */ }
 
     // Track notes elapsed to trigger automatic Miss judgments
     const checkAutonomousMisses = (currentTime: number) => {
@@ -2157,8 +2327,9 @@ export default function GameplayCanvas({
       if (!activeCanvas) return;
 
       const dpr = currentSettings.limitDprToOne ? 1 : Math.min(1.5, window.devicePixelRatio || 1);
-      const width = activeCanvas.clientWidth || activeCanvas.width / dpr;
-      const height = activeCanvas.clientHeight || activeCanvas.height / dpr;
+      const cached = canvasCssSizeRef.current;
+      const width = cached.width || activeCanvas.clientWidth || activeCanvas.width / dpr;
+      const height = cached.height || activeCanvas.clientHeight || activeCanvas.height / dpr;
 
       // Smoothly slide the rendering offset towards the actual audioOffset to prevent note visual teleportations mid-flight:
       smoothOffsetRef.current += (currentSettings.audioOffset - smoothOffsetRef.current) * 0.08;
@@ -2258,6 +2429,35 @@ export default function GameplayCanvas({
         }
       }
 
+      // Throttled HUD flush (~12Hz): moves React reconciliation off the input
+      // path. Judgement popups expire after 600ms and combo bursts after 900ms
+      // without per-hit setTimeout churn.
+      {
+        const nowMs = performance.now();
+        if (nowMs - lastHudFlushRef.current >= 80) {
+          lastHudFlushRef.current = nowMs;
+          const pending = hudPendingRef.current;
+          setUiScore((prev) => (prev === pending.score ? prev : pending.score));
+          setUiCombo((prev) => (prev === pending.combo ? prev : pending.combo));
+          setUiHp((prev) => (prev === pending.hp ? prev : pending.hp));
+          const wallNow = Date.now();
+          const j = hudJudgementRef.current;
+          if (j && wallNow - j.time < 600) {
+            setUiJudgement((prev) => (prev && prev.time === j.time ? prev : j));
+          } else {
+            if (j) hudJudgementRef.current = null;
+            setUiJudgement((prev) => (prev === null ? prev : null));
+          }
+          const b = hudBurstRef.current;
+          if (b && wallNow - b.time < 900) {
+            setComboBurst((prev) => (prev === b.value ? prev : b.value));
+          } else {
+            if (b) hudBurstRef.current = null;
+            setComboBurst((prev) => (prev === null ? prev : null));
+          }
+        }
+      }
+
       // Replay simulation playback
       if (replayData && replayData.length > 0 && isPlayingRef.current && !isPaused) {
         consumeReplayFrames(replayData, replayCursorRef.current, songTime, frame => {
@@ -2281,12 +2481,12 @@ export default function GameplayCanvas({
               activeColumnsRef.current[col] = true;
               laneGlowRef.current[col] = 1.0;
               hasKeyPressedOnceRef.current[col] = true;
-              triggerHitEvent(col);
+              triggerHitEvent(col, frame.time);
             } else if (wasPressed && !isCurrentlyPressed) {
               updateKeyCounterUi(col, false, false);
               keysPressedRef.current[col] = false;
               activeColumnsRef.current[col] = false;
-              triggerReleaseEvent(col);
+              triggerReleaseEvent(col, frame.time);
             }
           }
           if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
@@ -2687,6 +2887,7 @@ export default function GameplayCanvas({
         animationFrameRef.current = null;
       }
       window.removeEventListener('resize', resizeCanvas);
+      try { sizeObserver?.disconnect(); } catch { /* ignore */ }
     };
   }, [beatmap, settings.renderEngine, isPaused, isPrePlay, unpauseCountdown]);
 
@@ -3200,7 +3401,11 @@ export default function GameplayCanvas({
     lastProcessedReplayTimeRef.current = targetTimeMs;
     resetReplayCursor(replayCursorRef.current, replayData, targetTimeMs);
 
-    // Synchronize UI view hooks
+    // Synchronize UI view hooks (scrub path is infrequent: flush immediately)
+    hudPendingRef.current.score = scoreStateRef.current.score;
+    hudPendingRef.current.combo = scoreStateRef.current.combo;
+    hudPendingRef.current.hp = scoreStateRef.current.hp;
+    lastHudFlushRef.current = 0;
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
@@ -3249,6 +3454,10 @@ export default function GameplayCanvas({
 
     audioTimeRef.current = boundedTime;
     isPlayingRef.current = wasPlayingRef.current;
+    hudPendingRef.current.score = scoreStateRef.current.score;
+    hudPendingRef.current.combo = scoreStateRef.current.combo;
+    hudPendingRef.current.hp = scoreStateRef.current.hp;
+    lastHudFlushRef.current = 0;
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
@@ -3327,6 +3536,12 @@ export default function GameplayCanvas({
 
   const handleStartGameplay = () => {
     if (!isAudioLoaded || rendererLoading) return;
+    // Request raw keyboard lock where supported so gameplay keys are not
+    // intercepted by the browser/OS (best-effort, failures are ignored).
+    try {
+      const nav = navigator as Navigator & { keyboard?: { lock?: () => Promise<void>; unlock?: () => void } };
+      void nav.keyboard?.lock?.()?.catch(() => {});
+    } catch { /* keyboard lock unsupported */ }
     lockedScrollSpeedRef.current = settingsRef.current.scrollSpeed;
     setIsPaused(false);
     isPausedRef.current = false;

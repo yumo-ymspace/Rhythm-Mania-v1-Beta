@@ -188,40 +188,55 @@ export class AudioEngine {
   }
 
   /**
-   * Play the low-latency hitsound immediately
+   * Play the low-latency hitsound immediately.
+   * Fire-and-forget: one-shot voices are NOT added to scheduledSources (that
+   * Set + ended-listener per tap is GC churn in the input path). They decay
+   * in <100ms, so reset() does not need to stop them; music/synth voices
+   * remain tracked.
    */
   public playHitsound() {
     this.init();
     if (!this.ctx || !this.sfxGain) return;
-    
+
     // Ensure context is running (user interactions unlock it)
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      void this.ctx.resume();
     }
 
     if (this.hitsoundBuffer) {
-      const source = this.trackSource(this.ctx.createBufferSource());
+      const source = this.ctx.createBufferSource();
       source.buffer = this.hitsoundBuffer;
       source.connect(this.sfxGain);
       // Tiny schedule ahead reduces under-run clicks on some devices
       const when = this.ctx.currentTime + 0.003;
-      source.start(when);
+      try {
+        source.start(when);
+      } catch { /* context closed mid-hit */ }
+      source.onended = () => {
+        try { source.disconnect(); } catch { /* ignore */ }
+      };
     } else {
       // Fallback synthesizer hitsound if buffer failed to create
-      const osc = this.trackSource(this.ctx.createOscillator());
+      const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
       const t0 = this.ctx.currentTime + 0.003;
       osc.frequency.setValueAtTime(800, t0);
       osc.frequency.exponentialRampToValueAtTime(150, t0 + 0.05);
-      
+
       gain.gain.setValueAtTime(0.4, t0);
       gain.gain.exponentialRampToValueAtTime(0.01, t0 + 0.06);
-      
+
       osc.connect(gain);
       gain.connect(this.sfxGain);
-      osc.start(t0);
-      osc.stop(t0 + 0.06);
+      try {
+        osc.start(t0);
+        osc.stop(t0 + 0.06);
+      } catch { /* ignore */ }
+      osc.onended = () => {
+        try { osc.disconnect(); } catch { /* ignore */ }
+        try { gain.disconnect(); } catch { /* ignore */ }
+      };
     }
 
   }
@@ -261,10 +276,15 @@ export class AudioEngine {
     this.init();
     if (!this.ctx || !this.sfxGain) return;
     if (this.ctx.state === 'suspended') void this.ctx.resume();
-    const source = this.trackSource(this.ctx.createBufferSource());
+    const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(this.sfxGain);
-    source.start(this.ctx.currentTime + 0.003);
+    try {
+      source.start(this.ctx.currentTime + 0.003);
+    } catch { /* context closed mid-hit */ }
+    source.onended = () => {
+      try { source.disconnect(); } catch { /* ignore */ }
+    };
   }
 
   /**

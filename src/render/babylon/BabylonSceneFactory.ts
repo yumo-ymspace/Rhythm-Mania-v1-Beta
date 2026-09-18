@@ -51,12 +51,13 @@ export class BabylonSceneFactory {
     settings: GameSettings
   ): BabylonSceneBundle {
     const dpr = settings.limitDprToOne ? 1 : Math.min(1.5, window.devicePixelRatio || 1);
+    const highPerformance = settings.babylonHighPerformance === true;
 
     const engine = new Engine(canvas, true, {
       preserveDrawingBuffer: false,
       stencil: false,
       adaptToDeviceRatio: false,
-      antialias: true,
+      antialias: !highPerformance,
     });
     engine.setHardwareScalingLevel(1 / dpr);
 
@@ -78,15 +79,17 @@ export class BabylonSceneFactory {
     dir.intensity = 0.55;
 
     let pipeline: DefaultRenderingPipeline | null = null;
-    try {
-      pipeline = new DefaultRenderingPipeline('bloomPipeline', true, scene, [camera]);
-      pipeline.bloomEnabled = true;
-      pipeline.bloomWeight = 0.6;
-      pipeline.bloomThreshold = 0.6;
-      pipeline.samples = 4;
-      pipeline.imageProcessingEnabled = false;
-    } catch {
-      pipeline = null;
+    if (!highPerformance) {
+      try {
+        pipeline = new DefaultRenderingPipeline('bloomPipeline', true, scene, [camera]);
+        pipeline.bloomEnabled = true;
+        pipeline.bloomWeight = 0.6;
+        pipeline.bloomThreshold = 0.6;
+        pipeline.samples = 4;
+        pipeline.imageProcessingEnabled = false;
+      } catch {
+        pipeline = null;
+      }
     }
 
     // Let Babylon size the drawing buffer from the canvas CSS size + hardware scaling.

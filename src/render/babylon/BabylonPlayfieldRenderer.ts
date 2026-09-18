@@ -92,6 +92,13 @@ export class BabylonPlayfieldRenderer implements IPlayfieldRenderer {
   render(frame: PlayfieldFrame): void {
     if (!this.engine || !this.scene || !this.camera) return;
 
+    // Runtime perf toggle: kill bloom without requiring a renderer re-init.
+    if ((frame.settingsSlice as { babylonHighPerformance?: boolean }).babylonHighPerformance === true && this.pipeline) {
+      try {
+        this.pipeline.bloomEnabled = false;
+      } catch { /* ignore */ }
+    }
+
     // On-hit shake is the only camera motion; already zero when disableLaneShake is on.
     if (frame.shake > 0) {
       this.camera.position.x = this.baseCamX + (Math.random() - 0.5) * frame.shake * 0.02;

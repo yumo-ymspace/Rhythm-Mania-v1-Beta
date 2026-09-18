@@ -94,6 +94,7 @@ export interface PlayfieldVisualSettings {
   disableLaneShake?: boolean;
   enableMapSV?: boolean;
   babylonFloor?: boolean;
+  babylonHighPerformance?: boolean;
   playfieldWidthPercent?: number;
 }
 
