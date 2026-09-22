@@ -8,12 +8,12 @@
 | **Author** | Design (draft) |
 | **Date** | 2026-09-12 |
 | **Status** | Draft |
-| **App version** | `v0.9.8` (`metadata.json` / `index.html`); `package.json` `"version": "latest"`. Visual target for remaining `TASK-V-*` work. |
+| **App version** | `v0.9.8` (`metadata.json` / `index.html`); `package.json` `"version": "latest"`. Visual target for session chrome. |
 | **Visual SoT** | Every still under `visual-refs/` (measured). Not the previous `DESIGN.md`. Not the current React chrome. |
-| **Behaviour SoT** | `plan.md` product IA, except where this document records a **user-locked override** |
+| **Behaviour SoT** | Shipped behaviour in `src/` (gameplay, scoring, storage), except where this document records a **user-locked override** |
 | **Audience** | Senior engineers implementing the lazer visual rebuild |
 
-This is a **visual and interaction specification**, not a backend architecture document. Gameplay windows, scoring, holds, HP, and mods multipliers are already shipped (`TASK-001`–`082`) and must not be reopened here. Catalog **chrome** is in this spec; catalog **search/download hosts** are not — see Key Decisions.
+This is a **visual and interaction specification**, not a backend architecture document. Gameplay windows, scoring, holds, HP, and mods multipliers are already shipped and must not be reopened here. Catalog **chrome** is in this spec; catalog **search/download hosts** are not — see Key Decisions.
 
 ---
 
@@ -27,7 +27,7 @@ The proposed solution **extends the in-tree lazer UI module** (`html[data-ui="la
 
 ## Background & Motivation
 
-`plan.md` locks the mechanical target to current lazer mania and the visual target to `visual-refs/`. The previous `DESIGN.md` described an arcade/indigo/cyan language that is **not** this product. `docs/lazer-visual-plan.md` does not exist. Remaining work is the serial `TASK-V-*` queue plus the surfaces this spec adds (global toolbar, PlayerLoader, in-client listing overlay, coming-soon wedges).
+The mechanical target is current lazer mania and the visual target is `visual-refs/`. The previous `DESIGN.md` described an arcade/indigo/cyan language that is **not** this product. `docs/lazer-visual-plan.md` does not exist. This spec covers the session surfaces (global toolbar, PlayerLoader, in-client listing overlay, coming-soon wedges) alongside the screen chrome.
 
 Pain points this spec removes:
 
@@ -36,7 +36,7 @@ Pain points this spec removes:
 - Shipping trademarked marks, mascots, or Torus.
 - Treating Babylon 3D as the Argon source of truth.
 
-Current implementation starting points (rebuild targets, not visual truth): `src/components/MainMenu.tsx`, `SongSelect.tsx`, `ManiaHud.tsx`, `ModSelectOverlay.tsx`, `OnlineBeatmapCatalog.tsx`, `PauseOverlay.tsx`, `ResultsScreen.tsx`, `GameplayCanvas.tsx`, `src/render/argonPlayfield.ts`, `src/render/argonSkin.ts`, `src/index.css`. Shared chrome already lives in `src/ui/lazer/` (imported from `src/index.css`; `App.tsx` calls `applyLazerChrome`). `plan.md` may still mark TASK-V-001 pending; the tree has moved — new work is a **delta**, not a greenfield duplicate.
+Current implementation files (reference, not visual truth): `src/components/MainMenu.tsx`, `SongSelect.tsx`, `ManiaHud.tsx`, `ModSelectOverlay.tsx`, `OnlineBeatmapCatalog.tsx`, `PauseOverlay.tsx`, `ResultsScreen.tsx`, `GameplayCanvas.tsx`, `src/render/argonPlayfield.ts`, `src/render/argonSkin.ts`, `src/index.css`. Shared chrome already lives in `src/ui/lazer/` (imported from `src/index.css`; `App.tsx` calls `applyLazerChrome`). Extend that module; do not duplicate files.
 
 ---
 
@@ -48,18 +48,17 @@ Current implementation starting points (rebuild targets, not visual truth): `src
 2. Give every surface: layout regions + z-order, 1366×768 design units **and** a CSS mapping rule, sampled colour tokens, type, geometry, states, motion, and a “what is not copied” list.
 3. Keep the offline product: Local ranking only, device history (`rhythm_mania_v1_play_history` / IndexedDB). Listing **chrome** matches lazer; search/download stay on the live helper until a non-visual catalog task lands.
 4. Keep Canvas2D Argon as the playfield visual/latency source of truth. Babylon is an extra skin.
-5. Preserve equal-width mania lanes, 64-bin density histogram, judgement display names Perfect → Great → Good → Ok → Meh → Miss, and the PENAR stub (`—`).
+5. Preserve equal-width mania lanes, 64-bin density histogram, judgement display names Perfect → Great → Good → Ok → Meh → Miss, and the PENAR counter (`—` when uncalculated).
 
 ### Non-Goals
 
-- Computing a real osu! pp / PENAR formula (TASK-090).
 - Playable osu! / taiko / catch, editor, multiplayer, playlists, storyboards, chat, wiki, medals, skin JSON editor.
 - Google OAuth, RM accounts, PostgreSQL, global/RM leaderboards, replay upload.
-- Mixing catalog **backend** (hosts, auth, failover) into a visual PR. Live search is still Bearer + `/api/catalog/search`; live download is Catboy then osudl.org on 404. Planned unauthenticated hinai / osu.direct / Catboy hosts live in the retired `TASK-C-*` contract if revived — a **dependency of the listing product**, not of overlay chrome.
-- Restyling Settings / Skins / History chrome in the current visual queue (`plan.md`: no stills; keep routes working). Those surfaces are specified only as a gated appendix.
+- Mixing catalog **backend** (hosts, auth, failover) into overlay chrome. Live search is still Bearer + `/api/catalog/search`; live download is Catboy then osudl.org on 404. Planned unauthenticated hinai / osu.direct / Catboy hosts are **not** part of overlay chrome.
+- Restyling Settings / Skins / History chrome (no stills; keep routes working). Those surfaces are specified only as an appendix.
 - Copying `osu-resources` bitmaps, samples, the osu! wordmark, official mascots, or Torus.
 - Redesigning `limitDprToOne` (sanitizers always write `false`).
-- Reopening TASK-001–082 mechanics.
+- Reopening shipped gameplay mechanics (timing, scoring, holds, HP, mods).
 - Pixel-identical match to `osu.exe` GPU output. Fail the review if HUD corners, note construction, chrome family, or branding are wrong.
 
 ---
@@ -70,30 +69,30 @@ User-locked (do not re-open) plus architectural choices this spec had to make.
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Catalog chrome vs data | **Chrome** (this spec / visual PRs): in-client overlay from `hud/beatmaplisting.jpg` + `beatmaplistingnosongs.jpg`. Ignore osu-web PNGs. Consumes **whatever search API exists**. **Live hosts:** `GET /api/catalog/search` (Bearer osu! token; 401 “Connect osu! to search the catalog”) and download `https://catboy.best/d/<id>` then, on HTTP 404 only, `https://osudl.org/s/<id>` (`osuTokenManager.ts`). **Planned hosts** (product IA / `TASK-C-*` if revived, **not** a visual PR): unauthenticated search hinai → osu.direct → Catboy; download Catboy → osu.direct → hinai; token-gate removed. Overlay chrome **must ship** against the live helper; do not wait for hinai/osu.direct. | User lock on chrome. `plan.md` forbids mixing catalog backend into a visual task. |
+| Catalog chrome vs data | **Chrome** (this spec): in-client overlay from `hud/beatmaplisting.jpg` + `beatmaplistingnosongs.jpg`. Ignore osu-web PNGs. Consumes **whatever search API exists**. **Live hosts:** `GET /api/catalog/search` (Bearer osu! token; 401 “Connect osu! to search the catalog”) and download `https://catboy.best/d/<id>` then, on HTTP 404 only, `https://osudl.org/s/<id>` (`osuTokenManager.ts`). **Planned hosts** (unauthenticated search hinai → osu.direct → Catboy; download Catboy → osu.direct → hinai; token-gate removed) are **not** part of overlay chrome. Overlay chrome **must ship** against the live helper; do not wait for hinai/osu.direct. | User lock on chrome. Do not mix catalog backend into overlay chrome. |
 | Main menu options | Show **all** lazer options (settings, play, edit, browse, exit; play → solo / multi / playlists). Unavailable items visible, slightly greyed, “Coming soon”. | User lock. Do not delete chrome to simplify. |
-| Global toolbar | Recreate the stills **except omit** ruleset icons, news, chat, social. Keep settings, home, changelog, wiki, beatmap listing, globe, now-playing, local name + avatar, clock, bell. Out-of-scope destinations: greyed / coming-soon unless a real route exists. | User lock (overrides `plan.md` TASK-V-012 ruleset dots). Rankings (people) is present in stills between wiki and listing; **keep it, coming-soon** — it was not in the omit list. |
-| Pause / fail red button | Label **Quit**, not Exit. Keep `onExit` / `pause-quit-btn` ids. | User lock; stills win over older plan copy. |
+| Global toolbar | Recreate the stills **except omit** ruleset icons, news, chat, social. Keep settings, home, changelog, wiki, beatmap listing, globe, now-playing, local name + avatar, clock, bell. Out-of-scope destinations: greyed / coming-soon unless a real route exists. | User lock. Rankings (people) is present in stills between wiki and listing; **keep it, coming-soon** — it was not in the omit list. |
+| Pause / fail red button | Label **Quit**, not Exit. Keep `onExit` / `pause-quit-btn` ids. | User lock; stills win over older copy. |
 | Song Select ranking | Lazer chrome (Details / Ranking, Scope / Sort / Selected Mods) but **Local only**. No Global tab. No “Please sign in to view online leaderboards!”. Empty copy **“No records yet!”**. | User lock. Stills that show Global + sign-in (`song-select/song select.png`) are layout references only for the rest of V2. |
-| Results | Layout from `visual-refs/results/osu_2026-09-12_19-51-20.jpg` and `19-51-31.jpg` (osu!standard captures). Adapt judgements to mania; PP cell → **PENAR** (`—` while stubbed). After a just-finished play, add Retry / Replay without breaking the history-browse footer. | User lock. See §12 for the mapping. |
+| Results | Layout from `visual-refs/results/osu_2026-09-12_19-51-20.jpg` and `19-51-31.jpg` (osu!standard captures). Adapt judgements to mania; PP cell → **PENAR** (`—` when uncalculated). After a just-finished play, add Retry / Replay without breaking the history-browse footer. | User lock. See §12 for the mapping. |
 | PlayerLoader | **Include**, matching `hud/pre game stage.png`. Replace osu! mark with RhythmMania cookie. | User lock. First paint of `/play`. |
 | Coordinate system | Stills are **1366×768 du**. Toolbar/footer **bars** are `100%` viewport. Listing **panel** is inset (x=102–1264 du desktop; 8px inset compact — not edge-to-edge). Only **inner** sizes multiply `--rm-u`. Desktop ≥721px: `--rm-u: min(100vw / 1366, 100vh / 768)` in CSS. ≤720px: `--rm-u: 1`. Chrome shear-off at **`max-width: 720px`** (axis-aligned compact band). | User-required dual labelling. 1365×767 PNGs are 1px crops of 1366×768. |
 | Coming-soon pattern | Opacity **0.50**, no grayscale wash that changes hue, `cursor: default`, click no-op, tooltip **“Coming soon”**. Hover captions still show the lazer title/subtitle. | One pattern for menu wedges, toolbar icons, mods, listing filters, and footer extras. |
 | Listing mode | **osu!mania locked selected**. Other modes visible, greyed, unclickable. Converts dropped (Show converts greyed on Song Select). | Product is mania-only. |
 | Empty listing art | Keep layout + copy **“… nope, nothing found.”** Do **not** copy the empty-listing character. Type-only empty state; optional original triangle-field motif in the illustration slot. | Legal: official mascots are not ours. |
 | Logo | Pink disc `#e967a1`, white ring, inner triangles, spectrum bars, **“RM”** (or RhythmMania wordmark if art exists). Never “osu!”. | Legal + still construction. |
-| Fonts | **Inter / Space Grotesk / JetBrains Mono**. Torus is forbidden. Space Grotesk stands in for Torus Alternate on large titles. PR-V1 **extends** the Google Fonts query with Space Grotesk **600**. Score/combo use JetBrains Mono **700** (already loaded) — do not specify 800–900. | User lock + current `src/index.css` weights. |
+| Fonts | **Inter / Space Grotesk / JetBrains Mono**. Torus is forbidden. Space Grotesk stands in for Torus Alternate on large titles. The Google Fonts query includes Space Grotesk **600**. Score/combo use JetBrains Mono **700** (already loaded) — do not specify 800–900. | User lock + current `src/index.css` weights. |
 | Argon column colours | Cite `getArgonColumnColor` / `argonPaletteForKeyCount` in `src/render/argonSkin.ts`. Do **not** apply “UPDATED” mock rows from the colour-spec stills. | Live gameplay stills + shipped table. |
 | Results action mapping | History-browse footer from stills: Back, download (green), playlist (coming-soon), heart (favourite). **Just-finished play** inserts Retry + Replay (watch) in the gap between Back and the green cluster **without translating** Back or green. Exact widths in §12. Compact wrap/priority in §12 / §16. | User lock; stills lack Retry/Replay because they are history browse. |
 | Song Select V2 wedge | Decorative left metadata **500 du ±20** on desktop. No shear at 390×844. | User lock (~480–520). |
 | Density histogram | 64 bins in map time, rate-invariant (`computeSongDensityBins`). | Already shipped; HUD must keep it. |
-| Canvas2D vs Babylon | Canvas2D Argon is SoT. Babylon (`rhythmmania-3d`) is an **EXTRA** skin, not Argon SoT and not a visual review target. | Existing renderer split. TASK-090 is the PENAR formula, not skins. |
-| Shared primitives | **Delta** on `src/ui/lazer/` (`tokens.css`, `applyLazerChrome`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts` / `useLazerReducedMotion`). Add `ComingSoon` and `--rm-u`. Do not duplicate files. | Tree already shipped V-001 primitives. |
+| Canvas2D vs Babylon | Canvas2D Argon is SoT. Babylon (`rhythmmania-3d`) is an **EXTRA** skin, not Argon SoT and not a visual review target. | Existing renderer split. |
+| Shared primitives | Extend `src/ui/lazer/` (`tokens.css`, `applyLazerChrome`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts` / `useLazerReducedMotion`). Add `ComingSoon` and `--rm-u`. Do not duplicate files. | The `src/ui/lazer/` primitives already exist. |
 | Display name | Persist `localDisplayName: ''`. Render fallback **`Guest`** (stills: menu chip, pause rank pill). One constant. | `defaultSettings.ts` empty; `SongSelect.tsx` already falls back to Guest. |
-| Parked cookie | **200 du** diameter (±20 du still-diff). Stills win over plan’s ~0.2× menu (~96 du). | Measured clipped disc on Song Select stills. |
+| Parked cookie | **200 du** diameter (±20 du still-diff). Stills win; do not use the ~0.2× menu estimate (~96 du). | Measured clipped disc on Song Select stills. |
 | Rankings toolbar icon | Keep, **coming-soon** (no global boards). | Present in stills; not in the omit list. |
-| PlayerLoader fields | See §7 table. `backgroundDim` exists. Play blur: **coming-soon**. Hitsounds toggle = `hitsoundVolume > 0`. Per-map offset: App-owned **`playSessionOffsetMs: number`** (not `GameSettings`). PlayerLoader writes it; App passes `settings.audioOffset + playSessionOffsetMs` into `GameplayCanvas`; **clear on leaving `/play`**. Do not persist via `sanitizeSettings`. Auto-advance: **decode + 400ms**. | Still has no click-to-start; do not invent persistence in a visual PR. |
-| History entry | Keep route `/history`. Add Song Select Options → **View play history**. Results already browses local scores. **No** main-menu History wedge (lazer has none). Settings / Skins / History **chrome restyle is gated** (appendix; not PR-V15–V17 in the current queue). | `plan.md` forbids inventing those screens without stills; menu rebuild must not orphan History. |
+| PlayerLoader fields | See §7 table. `backgroundDim` exists. Play blur: **coming-soon**. Hitsounds toggle = `hitsoundVolume > 0`. Per-map offset: App-owned **`playSessionOffsetMs: number`** (not `GameSettings`). PlayerLoader writes it; App passes `settings.audioOffset + playSessionOffsetMs` into `GameplayCanvas`; **clear on leaving `/play`**. Do not persist via `sanitizeSettings`. Auto-advance: **decode + 400ms**. | Still has no click-to-start; do not invent persistence for visual chrome. |
+| History entry | Keep route `/history`. Add Song Select Options → **View play history**. Results already browses local scores. **No** main-menu History wedge (lazer has none). Settings / Skins / History chrome restyle is out of scope (appendix). | Do not invent those screens without stills; menu chrome must not orphan History. |
 | Cinema | `CN` stays the shipped cinema/autoplay path (`GameplayCanvas` hides `.playfield-chassis-container`). Do **not** alias to `disableVideo`. | Still: “Watch the video without visual distractions.” |
 | Exit confirm | Copy **“Return to the title screen?”**. Confirm → menu **Initial**. Never `window.close()`. | User lock. No still. |
 | Details tab | Source, tags, mapper. Inter 13. Spacing unverified (no filled still). | User lock. |
@@ -191,7 +190,7 @@ A size of `N` du becomes `calc(N * var(--rm-u))` on desktop. Compact (≤720px C
 
 Scope: chrome tokens on `html[data-ui="lazer"]` **in the existing** `src/ui/lazer/tokens.css`. Argon playfield tokens stay on `html[data-skin="argon"]`. Do not restyle legacy skins. Do not create a second tokens file.
 
-#### Motion (from osu!framework + `plan.md`; do not substitute Tailwind `ease-out`)
+#### Motion (from osu!framework; do not substitute Tailwind `ease-out`)
 
 | Token | Value | Use |
 |---|---|---|
@@ -209,7 +208,7 @@ Properties: `transform` and `opacity` only (shear is a transform). Never `transi
 
 | Token | Hex / rgb | Sample / source |
 |---|---|---|
-| `--lazer-pink` | `#e967a1` | Cookie fill (plan + menu2 cookie `#ea5e9d`) |
+| `--lazer-pink` | `#e967a1` | Cookie fill (`--lazer-pink`; menu2 cookie `#ea5e9d`) |
 | `--lazer-pink-light` | `#ff7db7` | Cookie inner triangles |
 | `--lazer-cookie-ring` | `#ffffff` | Idle ring |
 | `--lazer-yellow` | `#ffcc22` | `paused` / `failed` titles |
@@ -273,7 +272,7 @@ ARGON_COLUMN_GAP = 1
 | Results grade letter | Space Grotesk | 700 | **120** ±8 | 0 | grade colour | uppercase |
 | Coming-soon tooltip | Inter | 500 | 12 | 0 | `#ffffff` | none |
 
-PR-V1 extends the Google Fonts query in `src/index.css` with Space Grotesk **600** (titles). Inter 600 and JetBrains Mono 700 are already loaded. Do not add Torus. Do not specify 800–900.
+The Google Fonts query in `src/index.css` includes Space Grotesk **600** (titles). Inter 600 and JetBrains Mono 700 are already loaded. Do not add Torus. Do not specify 800–900.
 
 #### Shared primitives — **delta** on `src/ui/lazer/`
 
@@ -289,7 +288,7 @@ Already shipped (do not recreate):
 | `src/ui/lazer/index.ts` | Public exports |
 | `src/App.tsx` | `applyLazerChrome(settings)` |
 
-**Add in PR-V1 (delta only):**
+**Add (delta only):**
 
 - `--rm-u: min(100vw / 1366, 100vh / 768)` at `min-width: 721px`; `--rm-u: 1` and **chrome shear-off** at `max-width: 720px` (move the in-tree 480px shear-off up so 481–720 is axis-aligned)
 - `--lazer-back-footer-dark` / `--lazer-back-footer-light`; keep `--lazer-back-footer: #e91e8a` as mid
@@ -431,7 +430,7 @@ z5  Exit confirm (modal)
 | Element | Geometry | Colour / motion |
 |---|---|---|
 | Field | Full viewport | `#172639`–`#20324a`. Filled triangles drift; outline triangles spawn/fade. Lazer spawn ~every 22ms / fade ~120ms — **cap** browser spawn (e.g. max 80 triangles, spawn every 50ms) so it stays cheap. Density like the still. |
-| Cookie | Centre. Outer diameter **480 du ±16** (white ring measured 478–501). Inner pink ~434 du. Ring thickness ~22 du. Drive with `LazerCookie` size prop (in-tree default 280px is **not** idle). | Fill token `#e967a1` (plan / `--lazer-pink`). PNG cookie in `first menu 2.png` samples `#ea5e9d` — **±6** still-diff, do not fork the token. Ring `#ffffff`. Inner faint triangles `#ff7db7` @ low alpha. **RM** in Space Grotesk 700 ~64 du white, never “osu!”. |
+| Cookie | Centre. Outer diameter **480 du ±16** (white ring measured 478–501). Inner pink ~434 du. Ring thickness ~22 du. Drive with `LazerCookie` size prop (in-tree default 280px is **not** idle). | Fill token `#e967a1` (`--lazer-pink`). PNG cookie in `first menu 2.png` samples `#ea5e9d` — **±6** still-diff, do not fork the token. Ring `#ffffff`. Inner faint triangles `#ff7db7` @ low alpha. **RM** in Space Grotesk 700 ~64 du white, never “osu!”. |
 | Spectrum | Radiate from ring | Audio analyser when menu music/preview plays; else idle **60 BPM** pulse. |
 | Pulse | Scale ±4% on beat, damped | OutQuint; disabled under reduced motion. |
 | Toolbar / strip | **Absent** | |
@@ -589,7 +588,7 @@ Footer background: dark `#1a1e27`–`#22272a` (sampled), height 50, full width. 
 
 #### Parked cookie
 
-Bottom-right, overlapping footer. Diameter **200 du ±20**, white ring and triangles, pulsing on preview BPM. Clicking it **starts** the selected chart. Shared-element from menu strip-centre, OutQuint, interruptible. (Plan text ~0.2 of menu size is **not** used.)
+Bottom-right, overlapping footer. Diameter **200 du ±20**, white ring and triangles, pulsing on preview BPM. Clicking it **starts** the selected chart. Shared-element from menu strip-centre, OutQuint, interruptible.
 
 #### Options popover — `hud/option menu.png`
 
@@ -626,16 +625,16 @@ osu! cookie in the corner; Global tab; sign-in empty state; convert diffs as pla
 
 Opened from menu Browse **or** toolbar listing icon (highlights pink).
 
-**Chrome vs data (do not mix backend into PR-V8 / TASK-V-040):**
+**Chrome vs data (do not mix backend into overlay chrome):**
 
 | Layer | Contract |
 |---|---|
 | Chrome (this spec) | Overlay layout, filters greyed table, empty copy, cards. Consumes the search function already imported by `OnlineBeatmapCatalog.tsx`. |
 | Live data | Search: `GET /api/catalog/search` with Bearer osu! token (`api/catalog/_search.ts`; 401 copy “Connect osu! to search the catalog”). Download: `https://catboy.best/d/<id>` then **only on HTTP 404** `https://osudl.org/s/<id>` (`downloadBeatmapsetArchive` in `osuTokenManager.ts`). |
-| No token | Keep listing chrome; show the existing connect-osu! / empty panel. Do not invent a second search client in the visual PR. |
-| Planned (not this PR) | Unauthenticated search hinai → osu.direct → Catboy; download Catboy → osu.direct → hinai; token-gate removed. That is `TASK-C-*` if revived — **dependency of the listing product**, not of overlay chrome. Chrome **must ship** before those hosts exist. |
+| No token | Keep listing chrome; show the existing connect-osu! / empty panel. Do not invent a second search client for overlay chrome. |
+| Planned (not overlay chrome) | Unauthenticated search hinai → osu.direct → Catboy; download Catboy → osu.direct → hinai; token-gate removed. That is a **dependency of the listing product**, not of overlay chrome. Chrome **must ship** before those hosts exist. |
 
-Visual PR must not change mirror failover or add hinai/osu.direct.
+Overlay chrome must not change mirror failover or add hinai/osu.direct.
 
 #### Layout
 
@@ -727,7 +726,7 @@ Each row: hex icon, name, one-line description. Selected row uses the column acc
 - Any other still row we do not own
 - Personal Presets `+`
 
-Do not add unowned mechanics. Visual tasks must not change score multipliers.
+Do not add unowned mechanics. Do not change score multipliers for visual chrome.
 
 #### Search / tooltips / customise / rate / unranked
 
@@ -735,9 +734,9 @@ Do not add unowned mechanics. Visual tasks must not change score multipliers.
 |---|---|
 | Search `tab to search…` / `search…` | Filters rows by name/acronym |
 | Tooltip (`mods.jpg`, `mod2.jpg`) | Dark 12-radius card: title, “Compatible with all mods” **or** “Incompatible with:” + hex chips |
-| Customise (`modcustomise.jpg`) | Dropdown, green header. DA sliders wire to existing `DifficultyAdjustSettings` (OD/HP). Nightcore **Speed increase** slider is **chrome**: DT/NC/HT stay **fixed** 1.5 / 1.5 / 0.75 (`plan.md` V-032). Do not invent a variable rate `GameSettings` field in this visual task |
+| Customise (`modcustomise.jpg`) | Dropdown, green header. DA sliders wire to existing `DifficultyAdjustSettings` (OD/HP). Nightcore **Speed increase** slider is **chrome**: DT/NC/HT stay **fixed** 1.5 / 1.5 / 0.75. Do not invent a variable rate `GameSettings` field for visual chrome |
 | Rate slider (`mod3.jpg`) | Show above footer when HT/DT/NC selected: capsule + icon + `0.75x` / `1.50x` (not a free 1.00× custom rate). Footer BPM chip uses that multiplier (180 → 270 DT / 405 if the still’s map is 270 BPM at 1.5×). Thumb is non-adjustable until a real rate setting exists |
-| Unranked (`modunranked.jpg`) | Yellow `UNRANKED` badge when `isUnranked` is true: **AT or CN only** (current `ModSelectOverlay.tsx`). Do **not** mark WU/WD/AS unranked in a visual PR (that would be a ruleset change). Footer Mods button grows to fit |
+| Unranked (`modunranked.jpg`) | Yellow `UNRANKED` badge when `isUnranked` is true: **AT or CN only** (current `ModSelectOverlay.tsx`). Do **not** mark WU/WD/AS unranked in visual chrome (that would be a ruleset change). Footer Mods button grows to fit |
 
 #### Footer chips
 
@@ -781,12 +780,12 @@ z4  Toolbar
 
 Yellow sliders: track dark, fill + thumb `#eeaa00` / `#ffcc22`. Toggles: yellow capsules.
 
-**PlayerLoader field table (V-050 — no invented persistence except as noted)**
+**PlayerLoader field table (no invented persistence except as noted)**
 
 | Still row | Control | Wire | Persistence |
 |---|---|---|---|
 | Background dim | Slider | `GameSettings.backgroundDim` (exists, 0–1) | Existing sanitizer |
-| Background blur | Slider | **Coming soon** (greyed). Do not add `gameplayBackgroundBlur` in this visual PR; `menuBackgroundDim` is menus-only | None |
+| Background blur | Slider | **Coming soon** (greyed). Do not add `gameplayBackgroundBlur`; `menuBackgroundDim` is menus-only | None |
 | Storyboard / video | Toggle | `disableVideo` **inverted** (on = allow video). Storyboard half is no-op / coming-soon | Existing |
 | Beatmap skins | Toggle | Coming soon | None |
 | Beatmap colours | Toggle | Coming soon | None |
@@ -801,7 +800,7 @@ Yellow sliders: track dark, fill + thumb `#eeaa00` / `#ffcc22`. Toggles: yellow 
 
 Metadata fade in; settings groups slide from the right 300–400ms OutQuint. Back → Song Select.
 
-**Start gameplay:** auto-advance after **audio decode + 400ms** (still has no click-to-start). Cookie click may start **early** but is not required. Then countdown (§9 / V-062).
+**Start gameplay:** auto-advance after **audio decode + 400ms** (still has no click-to-start). Cookie click may start **early** but is not required. Then countdown (§9).
 
 Compact: settings stack **below** metadata, full width, no right column.
 
@@ -839,7 +838,7 @@ z20 Song progress + density                bottom
 | Judgement boxes | Directly under the capsule, five rotated squares + one axis-aligned square (last). Fill as judgements occur. |
 | Rank pill | Green-left capsule: `#1`, 28 du avatar, name, score, `100.00%`, `{n}x`. |
 | ACCURACY | Tiny label `ACCURACY` Inter 9 uppercase. Row of ~5 hollow boxes that fill with accuracy (Argon segment display). **Do not** put a big `%` number in this corner — the pill already has accuracy. |
-| PENAR | Tiny label **must not be `PP`**. Use `PENAR` (Inter 9). Two boxes as in the PP slot. Numeric value **`—`** while stubbed (`formatPenar`). Never print “pp”. |
+| PENAR | Tiny label **must not be `PP`**. Use `PENAR` (Inter 9). Two boxes as in the PP slot. Numeric value via `formatPenar` (`—` when uncalculated). Never print “pp”. |
 | Combo | **Centre of the playfield**, large outlined digits (`21`, `92`, `132`, `783` in stills), ~48–64 du, white stroke. Current `ArgonComboCounter` bottom-left is wrong vs stills. |
 | Hit error | Vertical rainbow bar + centre arrow, both sides in full HUD stills; left-only in some crops. Keep dual meters as in 19-55-*. |
 | Progress | Bottom 8 du track, white fill. Optional density histogram (64 bins) sitting on the track (`19-56-07` shows a thick white bar + `4:32 (67%)`). Times: elapsed left `m:ss`, remaining right. |
@@ -901,7 +900,7 @@ Do **not** apply 1k/3k/6k/7k/8k/10k “UPDATED” mock rows.
 | Key overlay | Hollow oval in column colour + **3-dot cluster** below (`192820`). Pressed: `×` in the oval (`192855` column 2) |
 | Lane dim | Translucent column colour; playfield BG is the beatmap art at `backgroundDim` |
 | Countdown | Centre dark disc ~120 du, white arc draining with the beat, number 3-2-1 then go (`192820` shows `2`) |
-| Skip intro | Existing TASK-041–044 control; visual: small skip chip if present — **no still**, keep functional, do not invent a second language |
+| Skip intro | Existing skip control; visual: small skip chip if present — **no still**, keep functional, do not invent a second language |
 
 Canvas2D is SoT. Babylon extra skin may approximate but is not the review target.
 
@@ -1044,7 +1043,7 @@ MEH                  | MISS
 
 - ACCURACY `96.49%` (two decimals)
 - MAX COMBO `119/227` (current / map max)
-- PENAR `—` while stubbed (never `PP`)
+- PENAR via `formatPenar` (never `PP`)
 - Six mania judgements, colours from `JUDGEMENT_COLORS` in `src/ruleset/mania/judgements.ts`
 - **No slider tick/end rows.** Do not invent hold-tick rows unless a still appears.
 
@@ -1089,9 +1088,9 @@ osu!standard slider rows; `PP` label; osu! grade assets — draw the ring in SVG
 
 ---
 
-### 13–15. Settings, Skins, History — **gated / unverified appendix**
+### 13–15. Settings, Skins, History — **appendix (no stills; keep working)**
 
-`plan.md`: no dedicated stills; **do not restyle** the global settings drawer, skins page, or history screen until stills exist. This appendix is complete-for-the-document only. **Not in the current implementation queue** (no PR-V15–V17). Keep existing routes working.
+No dedicated stills; **do not restyle** the global settings drawer, skins page, or history screen until stills exist. This appendix is reference only. Keep existing routes working.
 
 #### 13. Settings overlay (unverified-no-still)
 
@@ -1106,7 +1105,7 @@ Opens from toolbar gear and menu Settings. Keep `SettingsDrawer` behaviour and *
 | Input | `bindings` |
 | Maintenance | `restoreDefaults` |
 
-`limitDprToOne` is not a user-facing row. Until a still exists: **no left-dock restyle PR**.
+`limitDprToOne` is not a user-facing row. Until a still exists: keep the drawer as-is.
 
 #### 14. Skins screen (unverified-no-still)
 
@@ -1197,7 +1196,7 @@ Use existing `useLazerReducedMotion()` and the `prefers-reduced-motion` block al
 | History | `src/components/PersonalHistoryScreen.tsx` |
 | Argon CSS | `src/index.css` `html[data-skin="argon"]` |
 | Judgement names/colours | `src/ruleset/mania/judgements.ts` (do not rename internals in `scoreProcessor.ts`) |
-| PENAR stub | `src/utils/penar.ts` |
+| PENAR | `src/utils/penar.ts` |
 | Density 64-bin | `src/render/argonSkin.ts` `computeSongDensityBins` |
 | Preview audio | `src/utils/previewPlayer.ts` |
 
@@ -1207,7 +1206,7 @@ Use existing `useLazerReducedMotion()` and the `prefers-reduced-motion` block al
 
 ## API / Interface Changes
 
-No HTTP API changes in visual PRs. Listing chrome consumes the **live** `GET /api/catalog/search` + Catboy/osudl helper. Changing hosts or dropping the token gate is **not** a visual PR (`TASK-C-*` if revived).
+No HTTP API changes for overlay chrome. Listing chrome consumes the **live** `GET /api/catalog/search` + Catboy/osudl helper. Changing hosts or dropping the token gate is **not** overlay chrome.
 
 UI-level interfaces this spec adds:
 
@@ -1236,7 +1235,7 @@ interface PlayerLoaderProps {
 }
 ```
 
-Settings patches still flow through `sanitizeSettings`. V-050 does **not** add `gameplayBackgroundBlur` or a persisted per-map offset map. **`playSessionOffsetMs` is App React state**, not `GameSettings`. `GameplayCanvas` effective offset = `settings.audioOffset + playSessionOffsetMs`. Clear `playSessionOffsetMs` to `0` when leaving `/play`.
+Settings patches still flow through `sanitizeSettings`. Do **not** add `gameplayBackgroundBlur` or a persisted per-map offset map. **`playSessionOffsetMs` is App React state**, not `GameSettings`. `GameplayCanvas` effective offset = `settings.audioOffset + playSessionOffsetMs`. Clear `playSessionOffsetMs` to `0` when leaving `/play`.
 
 ---
 
@@ -1269,14 +1268,14 @@ Rejected by user lock. Chrome is `beatmaplisting.jpg`.
 **5. Treat Babylon as Argon SoT.**  
 Rejected. Canvas2D is latency/visual SoT; Babylon is EXTRA.
 
-**6. Listing data: keep osu! token search vs ship hinai/osu.direct in the visual PR vs local-only listing.**  
-Chosen: **chrome-only visual PR** against the live Bearer + Catboy/osudl helper. Planned unauthenticated hinai → osu.direct → Catboy is `TASK-C-*` if revived — not a visual dependency. Local-only listing would make Browse a no-op.
+**6. Listing data: keep osu! token search vs ship hinai/osu.direct in overlay chrome vs local-only listing.**  
+Chosen: **chrome-only** overlay against the live Bearer + Catboy/osudl helper. Planned unauthenticated hinai → osu.direct → Catboy is not a visual dependency. Local-only listing would make Browse a no-op.
 
 **7. History entry: menu wedge vs route-only vs Options row.**  
-Chosen: keep `/history` + Options “View play history” + Results local browse. **No** menu wedge (lazer has none). Chrome restyle gated until a still.
+Chosen: keep `/history` + Options “View play history” + Results local browse. **No** menu wedge (lazer has none). Chrome restyle waits for a still.
 
 **8. Greenfield `src/ui/lazer/` vs extend in-tree module.**  
-Chosen: **delta** on existing `tokens.css` / `applyLazerChrome` / primitives. Duplicating files would clobber V-001.
+Chosen: extend the existing `tokens.css` / `applyLazerChrome` / primitives. Duplicating files would clobber the existing module.
 
 ---
 
@@ -1304,7 +1303,7 @@ This is a visual spec; “observability” is **regression against stills**, not
 | Compact | Playwright **390×844**. Assert hit targets ≥44px, no sheared clip |
 | Motion | Hover Play at 2× duration; elastic width not CSS `ease`. Reduced-motion: no pulse/elastic |
 | Tokens | `/` has `html[data-ui="lazer"]`. Cookie tokens present |
-| Unit | Existing Vitest stays green (`npm run lint`, `npm test`). Visual PRs do not claim “looks like lazer” from unit tests alone |
+| Unit | Existing Vitest stays green (`npm run lint`, `npm test`). Chrome changes must not claim “looks like lazer” from unit tests alone |
 
 No production metrics required for chrome. Optional: count coming-soon clicks in local debug only — not a product analytics pipeline.
 
@@ -1312,11 +1311,11 @@ No production metrics required for chrome. Optional: count coming-soon clicks in
 
 ## Rollout Plan
 
-Lazer chrome is the **default Argon path**. Escape hatch: `skinId → rhythmmania` and `data-skin=legacy` still render old skins (`plan.md`).
+Lazer chrome is the **default Argon path**. Escape hatch: `skinId → rhythmmania` and `data-skin=legacy` still render old skins.
 
-Staged by PR (see **PR Plan**). `applyLazerChrome` already sets `data-ui="lazer"` for Argon. Mid-queue mixed chrome (lazer menu + old select) is **expected**; do not mix surfaces inside one task to hide it. Settings/Skins/History restyles are **out of this queue**.
+`applyLazerChrome` already sets `data-ui="lazer"` for Argon. Mixed chrome across surfaces (lazer menu + old select) is **expected** during restyle work; keep each surface change self-contained. Settings/Skins/History restyles are out of scope here.
 
-Rollback: revert the visual PR; mechanics are untouched. Do not feature-flag individual pixels beyond `data-ui`.
+Rollback: revert the chrome change; mechanics are untouched. Do not feature-flag individual pixels beyond `data-ui`.
 
 ---
 
@@ -1329,7 +1328,7 @@ None. Remaining leftovers were locked by the user on 2026-09-12.
 ## References
 
 - Stills: `visual-refs/**` (this spec’s visual SoT)
-- Product IA: `plan.md` (offline client, Local ranking, mirrors, PENAR stub, TASK-V queue)
+- Product surface: offline client, Local ranking, mirrors
 - Lazer MIT source (numbers only, no assets):
   - `osu.Game/Screens/Ranking/Expanded/Accuracy/AccuracyCircle.cs` — `VIRTUAL_SS_PERCENTAGE`, `GRADE_SPACING_PERCENTAGE`, badge lerp
   - `osu.Game/Screens/Ranking/Expanded/Accuracy/GradedCircles.cs` — D–SS arc bands, `Rotation = startProgress * 360`
@@ -1344,7 +1343,7 @@ None. Remaining leftovers were locked by the user on 2026-09-12.
   - `osu.Game/Screens/Footer/ScreenBackButton.cs` — width 240, `#DE31AE` / `#FF86DD`
   - `osu.Game/Screens/Play/GameplayMenuOverlay.cs` — 200ms In, 80px bars, 0.75 scrim
 - In-tree: `src/ui/lazer/*` (extend), `src/render/argonSkin.ts`, `src/ruleset/mania/judgements.ts`, `src/utils/penar.ts`, `src/utils/osuTokenManager.ts`, `src/components/*`
-- Fonts: Inter, Space Grotesk, JetBrains Mono via `src/index.css` (add Space Grotesk 600 in PR-V1)
+- Fonts: Inter, Space Grotesk, JetBrains Mono via `src/index.css`
 
 ---
 
@@ -1352,12 +1351,12 @@ None. Remaining leftovers were locked by the user on 2026-09-12.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Mid-queue mixed chrome | Low (expected) | Serial TASK-V; do not “fix” other surfaces inside a task |
+| Mixed chrome across surfaces | Low (expected) | Restyle one surface at a time; do not “fix” other surfaces inside a change |
 | Elastic hover + triangle field cost | Medium | Cap triangles; Motion only on menu width; playfield stays Canvas2D |
 | Shear clipping at 390×844 | High | Compact layout, Playwright 390×844 gate |
 | PENAR looking like a bug | Medium | Intentional `—` + `PENAR` label, never `pp` |
 | Trademark slip | High | Cookie/empty-state/listing icon rules; screenshot CI for “osu!” text in chrome |
 | Colour-spec “UPDATED” rows | Medium | Cite `argonSkin.ts` only |
 | Catalog filters over-promising | Medium | Greyed table in §5 |
-| Mixing catalog backend into V-040 | High | Chrome-only PR; live Catboy/osudl + token search |
+| Mixing catalog backend into overlay chrome | High | Chrome-only change; live Catboy/osudl + token search |
 

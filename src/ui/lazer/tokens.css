@@ -1424,21 +1424,21 @@ html[data-ui="lazer"] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
-  padding: 10px 12px 12px;
+  padding: 8px 12px;
   font-family: Inter, "Space Grotesk", sans-serif;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-align: center;
 }
 
-/* Tool icon rides the top of the tall slab; label row sits at the bottom. */
+/* Centred tool icon: sits with the label in the middle of the slab. */
 .lazer-footer-action-icon {
-  margin-bottom: auto;
-  margin-top: 8px;
+  margin: 0;
 }
 
 .lazer-footer-action-label-row {
@@ -1452,26 +1452,54 @@ html[data-ui="lazer"] {
    above); no separate icon pulse, so the click reads as a single
    parallelogram-preserving shrink. */
 
-/* Bigger coloured tool slabs (hud bottom-left refs). */
+/* Solid pastel tool slabs: flat colour, no outline. */
+.lazer-footer-action-btn.is-mods,
+.lazer-footer-action-btn.is-random,
+.lazer-footer-action-btn.is-options {
+  color: #0f172a;
+}
+
 .lazer-footer-action-btn.is-mods .lazer-footer-action-slab {
-  background: linear-gradient(180deg, #33431f 0%, #232d16 100%);
-  border-color: rgba(163, 230, 53, 0.35);
+  background: #86efac;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .lazer-footer-action-btn.is-random .lazer-footer-action-slab {
-  background: linear-gradient(180deg, #27405c 0%, #1a2a3e 100%);
-  border-color: rgba(56, 189, 248, 0.35);
+  background: #93c5fd;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .lazer-footer-action-btn.is-options .lazer-footer-action-slab {
-  background: linear-gradient(180deg, #3d3352 0%, #292336 100%);
-  border-color: rgba(192, 132, 252, 0.35);
+  background: #c4b5fd;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.lazer-footer-action-btn.is-mods .lazer-footer-action-icon,
+.lazer-footer-action-btn.is-random .lazer-footer-action-icon,
+.lazer-footer-action-btn.is-options .lazer-footer-action-icon {
+  color: #0f172a;
 }
 
 .lazer-footer-action-btn.is-mods:hover .lazer-footer-action-slab,
 .lazer-footer-action-btn.is-random:hover .lazer-footer-action-slab,
 .lazer-footer-action-btn.is-options:hover .lazer-footer-action-slab {
-  filter: brightness(1.12);
+  filter: brightness(1.06);
+  border-color: transparent;
+}
+
+.lazer-footer-action-btn.is-options.is-active .lazer-footer-action-slab {
+  background: #c4b5fd;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  filter: brightness(1.06);
+}
+
+.lazer-footer-action-btn.is-mods .lazer-footer-action-badge {
+  background: #0f172a;
+  color: #fff;
 }
 
 /* Inset back pill: rounded parallelogram sitting inside the footer tab. */
@@ -1568,12 +1596,13 @@ html[data-ui="lazer"] {
     height: 64px;
   }
   .lazer-footer-action-inner {
-    padding: 6px 8px 8px;
+    padding: 6px 8px;
     gap: 4px;
     font-size: 11px;
+    justify-content: center;
   }
   .lazer-footer-action-icon {
-    margin-top: 2px;
+    margin: 0;
   }
   .lazer-footer-hotkey-badge {
     display: none;
@@ -1650,7 +1679,7 @@ html[data-ui="lazer"] {
 }
 
 .lazer-carousel-taper {
-  padding-top: 4px;
+  padding-top: 0;
   padding-bottom: 12px;
   /* Left pad reserves room for the active-card shift so art never clips. */
   scrollbar-gutter: stable;

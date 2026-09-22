@@ -83,7 +83,7 @@ describe('TASK-070: Results Screen Parity', () => {
       expect(formatPenar(null)).toBe('—');
       expect(formatPenar({
         total: null,
-        version: 'penar-stub-0',
+        version: 'penar-mania-1',
         starRating: null,
         accuracy: 98,
         maxCombo: 200,

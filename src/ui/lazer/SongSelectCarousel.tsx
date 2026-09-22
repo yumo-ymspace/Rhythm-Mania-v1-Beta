@@ -383,9 +383,12 @@ export function SongSelectCarousel({
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
-  // Top/bottom spacers let the first/last group reach the viewport centre,
-  // so the centred item is always the longest (edges are never stuck short).
-  const [edgeSpacerPx, setEdgeSpacerPx] = React.useState(8);
+  // No top spacer: the list starts flush at the top and selection snaps to
+  // the top edge (not the viewport centre), so there is never an empty gap
+  // above the first card. A small bottom pad keeps the last card off the
+  // footer edge.
+  const TOP_SPACER_PX = 0;
+  const BOTTOM_SPACER_PX = 12;
   // Gated until the first synchronous measure+taper pass completes, so the
   // list's first painted frame already has the measured top spacer and
   // correct indents instead of flashing fallback positions at the top.
@@ -398,15 +401,6 @@ export function SongSelectCarousel({
       if (el) next.set(g.songKey, el.offsetTop + el.offsetHeight / 2);
     }
     centersCache.current = next;
-  };
-
-  const measureEdgeSpacer = () => {
-    const container = containerRef?.current;
-    if (!container) return;
-    // Half the viewport minus roughly half a banner, so edge groups can be
-    // centred exactly by the one-time ScrollToSelection glide.
-    const next = Math.max(8, Math.min(420, Math.round(container.clientHeight / 2 - 48)));
-    setEdgeSpacerPx((prev) => (prev === next ? prev : next));
   };
 
   const updateTaper = () => {
@@ -494,8 +488,7 @@ export function SongSelectCarousel({
   //
   // Runs as a layout effect with a synchronous taper pass so the first
   // painted frame (e.g. when songs first appear after loading) already has
-  // the measured top spacer and correct indents — no position jump at the
-  // top of the list.
+  // correct indents — no position jump at the top of the list.
   useIsomorphicLayoutEffect(() => {
     const container = containerRef?.current;
     if (!container) return;
@@ -511,12 +504,11 @@ export function SongSelectCarousel({
       }
     }
     measureCenters();
-    measureEdgeSpacer();
     // Synchronous pre-paint pass: fallback indents from render are corrected
     // before anything reaches the screen.
     updateTaper();
     setListReady(groupsRef.current.length > 0);
-    const handleResize = () => { measureEdgeSpacer(); scheduleTaper(); };
+    const handleResize = () => { scheduleTaper(); };
     container.addEventListener('scroll', scheduleTaper, { passive: true });
     window.addEventListener('resize', handleResize);
     // Re-measure after expand/collapse animations settle (heights change).
@@ -542,11 +534,11 @@ export function SongSelectCarousel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroupKey, selectedMapId]);
 
-  // One-time centring (osu!lazer ScrollToSelection): glide the requested
-  // group's vertical centre to the viewport centre, then leave the scroll
-  // alone — it is not sticky. Damped tracking keeps it snappy; user input
-  // cancels it so it never fights manual scrolling. A settle correction
-  // re-runs after the expand animation grows the centred group.
+  // One-time top snap: glide the requested group's top to the container
+  // top, then leave the scroll alone — it is not sticky. Damped tracking
+  // keeps it snappy; user input cancels it so it never fights manual
+  // scrolling. A settle correction re-runs after the expand animation
+  // grows the snapped group.
   useEffect(() => {
     if (!centerSignal) return;
     const container = containerRef?.current;
@@ -603,7 +595,7 @@ export function SongSelectCarousel({
     };
 
     const centreTarget = (el: HTMLElement): number => {
-      const target = el.offsetTop + el.offsetHeight / 2 - container.clientHeight / 2;
+      const target = el.offsetTop - TOP_SPACER_PX;
       const max = Math.max(0, container.scrollHeight - container.clientHeight);
       return Math.max(0, Math.min(max, target));
     };
@@ -720,8 +712,10 @@ export function SongSelectCarousel({
       // never flashed at the top when the banners first appear.
       style={listReady ? undefined : { visibility: 'hidden' }}
     >
-      {/* Top spacer: lets the first group reach the viewport centre. */}
-      <div aria-hidden="true" style={{ height: edgeSpacerPx, flexShrink: 0 }} />
+      {/* Flush top: no gap above the first card; list snaps to the top. */}
+      {TOP_SPACER_PX > 0 && (
+        <div aria-hidden="true" style={{ height: TOP_SPACER_PX, flexShrink: 0 }} />
+      )}
       {songGroups.map((group, groupIndex) => {
         const isGroupActive = selectedGroupKey === group.songKey;
         // Expansion is driven only by expandedSongKey so clicking the active
@@ -940,8 +934,8 @@ export function SongSelectCarousel({
           </div>
         );
       })}
-      {/* Bottom spacer: lets the last group reach the viewport centre. */}
-      <div aria-hidden="true" style={{ height: edgeSpacerPx, flexShrink: 0 }} />
+      {/* Small bottom pad only; no centring gap. */}
+      <div aria-hidden="true" style={{ height: BOTTOM_SPACER_PX, flexShrink: 0 }} />
     </div>
   );
 }

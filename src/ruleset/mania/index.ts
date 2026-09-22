@@ -11,6 +11,7 @@
  */
 
 export * from './beatmapMods';
+export * from './difficultyCalculator';
 export * from './healthProcessor';
 export * from './hitWindows';
 export * from './holdNote';

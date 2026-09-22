@@ -16,7 +16,7 @@ import PauseOverlay from './PauseOverlay';
 import ManiaHud from './ManiaHud';
 import { mainAudio } from '../audio/AudioEngine';
 import { previewPlayer } from '../utils/previewPlayer';
-import { Beatmap, GameSettings, HitObject, JudgementType, JudgementWindow, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
+import { Beatmap, GameSettings, HitObject, JudgementType, JudgementWindow, PenarBreakdown, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
 import { initializeColumnJudgements, incrementColumnJudgement } from '../utils/performanceMetrics';
 import { VideoSyncController, computeTargetVideoTimeSec } from '../utils/videoSyncController';
 import { executeTeardown } from '../utils/gameplayTeardown';
@@ -86,6 +86,7 @@ import {
 import metadata from '../../metadata.json';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { computePenar } from '../utils/penar';
+import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
 
 // HIGH PERFORMANCE INTEGRATED RENDERER IMPORTS
 import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
@@ -583,10 +584,14 @@ export default function GameplayCanvas({
     if (scoreStateRef.current.failed) {
       if (isMountedRef.current) {
         scoreStateRef.current.penar = computePenar({
-          starRating: beatmap.starRating ?? null,
-          accuracy: scoreStateRef.current.accuracy,
-          maxCombo: scoreStateRef.current.maxCombo,
+          starRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
+          marvelousCount: scoreStateRef.current.marvelousCount,
+          perfectCount: scoreStateRef.current.perfectCount,
+          greatCount: scoreStateRef.current.greatCount,
+          goodCount: scoreStateRef.current.goodCount,
+          badCount: scoreStateRef.current.badCount,
           missCount: scoreStateRef.current.missCount,
+          maxCombo: scoreStateRef.current.maxCombo,
           mods: settings.selectedMods,
         });
         onFinishRef.current(scoreStateRef.current, replayFramesRef.current, hitErrorSamplesRef.current);
@@ -768,12 +773,16 @@ export default function GameplayCanvas({
   const [uiScore, setUiScore] = useState<number>(0);
   const [uiCombo, setUiCombo] = useState<number>(0);
   const [uiHp, setUiHp] = useState<number>(100);
+  const [uiPenar, setUiPenar] = useState<PenarBreakdown | null>(null);
   const [uiJudgement, setUiJudgement] = useState<{ text: string; color: string; time: number } | null>(null);
   const [comboBurst, setComboBurst] = useState<number | null>(null);
   // Throttled HUD sync: applyJudgement only writes these refs (no setState in
   // the input path). The rAF loop flushes to React at ~12Hz, so per-note
   // reconciliation never blocks judgement or audio.
   const hudPendingRef = useRef({ score: 0, combo: 0, hp: 100 });
+  // Lazer-accurate PENAR difficulty, computed once per chart+rate at setup.
+  const penarDifficultyRef = useRef<{ starRating: number; maxCombo: number } | null>(null);
+  const lastPenarUpdateRef = useRef<number>(0);
   const hudJudgementRef = useRef<{ text: string; color: string; time: number } | null>(null);
   const hudBurstRef = useRef<{ value: number; time: number } | null>(null);
   const lastHudFlushRef = useRef<number>(0);
@@ -1078,6 +1087,21 @@ export default function GameplayCanvas({
     totalJudgementsRef.current = totalJudgements;
     maxComboPortionRef.current = computeMaxComboPortion(totalJudgements);
     currentComboPortionRef.current = 0;
+
+    // Lazer-accurate PENAR difficulty: strain pass runs once per chart+rate
+    // (~1-3ms); live PP reuses it at 2Hz so per-frame rendering stays free.
+    penarDifficultyRef.current = calculateManiaDifficultyAttributes(
+      beatmap.notes,
+      beatmap.keyCount,
+      getSpeedMultiplier(settings.selectedMods),
+    );
+    lastPenarUpdateRef.current = 0;
+    scoreStateRef.current.penar = computePenar({
+      starRating: penarDifficultyRef.current.starRating,
+      maxCombo: 0,
+      mods: settings.selectedMods,
+    });
+    setUiPenar(scoreStateRef.current.penar);
 
     // Reset replay tracking
     replayFramesRef.current = [{ time: 0, keysPressed: new Array(beatmap.keyCount).fill(false) }];
@@ -2189,13 +2213,8 @@ export default function GameplayCanvas({
       modMultiplier,
     });
 
-    state.penar = computePenar({
-      starRating: beatmap.starRating ?? null,
-      accuracy: state.accuracy,
-      maxCombo: state.maxCombo,
-      missCount: state.missCount,
-      mods: settings.selectedMods,
-    });
+    // Live PENAR is refreshed at ~2Hz by the HUD flush loop reusing the
+    // cached chart difficulty; per-judgement PP would waste frame budget.
 
     // Muted (MU) mod: fade audio as combo builds, restore on break/miss
     if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
@@ -2440,6 +2459,26 @@ export default function GameplayCanvas({
           setUiScore((prev) => (prev === pending.score ? prev : pending.score));
           setUiCombo((prev) => (prev === pending.combo ? prev : pending.combo));
           setUiHp((prev) => (prev === pending.hp ? prev : pending.hp));
+          // Live PENAR refresh at ~2Hz: O(1) PP reuse of the cached chart
+          // difficulty; the HUD counter below renders it on the next flush.
+          if (nowMs - lastPenarUpdateRef.current >= 500) {
+            lastPenarUpdateRef.current = nowMs;
+            const live = scoreStateRef.current;
+            const difficulty = penarDifficultyRef.current;
+            live.penar = computePenar({
+              starRating: difficulty ? difficulty.starRating : null,
+              marvelousCount: live.marvelousCount,
+              perfectCount: live.perfectCount,
+              greatCount: live.greatCount,
+              goodCount: live.goodCount,
+              badCount: live.badCount,
+              missCount: live.missCount,
+              maxCombo: live.maxCombo,
+              mods: settingsRef.current.selectedMods || [],
+            });
+          }
+          const flushedPenar = scoreStateRef.current.penar ?? null;
+          setUiPenar((prev) => (prev === flushedPenar ? prev : flushedPenar));
           const wallNow = Date.now();
           const j = hudJudgementRef.current;
           if (j && wallNow - j.time < 600) {
@@ -2856,10 +2895,14 @@ export default function GameplayCanvas({
           finishTimeoutRef.current = null;
           if (isMountedRef.current) {
             scoreStateRef.current.penar = computePenar({
-              starRating: beatmap.starRating ?? null,
-              accuracy: scoreStateRef.current.accuracy,
-              maxCombo: scoreStateRef.current.maxCombo,
+              starRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
+              marvelousCount: scoreStateRef.current.marvelousCount,
+              perfectCount: scoreStateRef.current.perfectCount,
+              greatCount: scoreStateRef.current.greatCount,
+              goodCount: scoreStateRef.current.goodCount,
+              badCount: scoreStateRef.current.badCount,
               missCount: scoreStateRef.current.missCount,
+              maxCombo: scoreStateRef.current.maxCombo,
               mods: settings.selectedMods,
             });
             onFinishRef.current(scoreStateRef.current, replayFramesRef.current, hitErrorSamplesRef.current);
@@ -3029,6 +3072,16 @@ export default function GameplayCanvas({
     totalJudgementsRef.current = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
     maxComboPortionRef.current = computeMaxComboPortion(totalJudgementsRef.current);
 
+    // Keep live PENAR consistent after scrub resets; the 2Hz flush loop
+    // recomputes it from these counts on its next tick.
+    lastPenarUpdateRef.current = 0;
+    scoreStateRef.current.penar = computePenar({
+      starRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
+      maxCombo: 0,
+      mods: settings.selectedMods,
+    });
+    setUiPenar(scoreStateRef.current.penar);
+
     // Reset hit error timing ticks
     hitErrorTicksRef.current = [];
     hitErrorSamplesRef.current = [];
@@ -3101,13 +3154,8 @@ export default function GameplayCanvas({
         modMultiplier,
       });
 
-      state.penar = computePenar({
-        starRating: beatmap.starRating ?? null,
-        accuracy: state.accuracy,
-        maxCombo: state.maxCombo,
-        missCount: state.missCount,
-        mods: settings.selectedMods,
-      });
+      // Live PENAR for replay simulation also flows through the 2Hz HUD
+      // flush loop; see the live applyJudgement path above.
     };
 
     const simTriggerHit = (colIndex: number, frameTime: number) => {
@@ -4120,7 +4168,7 @@ export default function GameplayCanvas({
             score={uiScore}
             hp={uiHp}
             accuracy={scoreStateRef.current.accuracy}
-            penar={scoreStateRef.current.penar}
+            penar={uiPenar}
             showPenar={settings.showPenarDuringPlay !== false}
             combo={uiCombo}
             keyCount={beatmap.keyCount}

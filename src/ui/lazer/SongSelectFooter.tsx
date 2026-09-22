@@ -59,7 +59,7 @@ export function SongSelectFooter({
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Sliders className="h-6 w-6 text-[#a3e635] lazer-footer-action-icon" />
+              <Sliders className="h-6 w-6 text-slate-900 lazer-footer-action-icon" />
               <span className="lazer-footer-action-label-row">
                 <span className="lazer-footer-action-label">Mods</span>
                 <span className="lazer-footer-hotkey-badge">F1</span>
@@ -83,7 +83,7 @@ export function SongSelectFooter({
         >
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
-              <Shuffle className="h-6 w-6 text-[#38bdf8] lazer-footer-action-icon" />
+              <Shuffle className="h-6 w-6 text-slate-900 lazer-footer-action-icon" />
               <span className="lazer-footer-action-label-row">
                 <span className="lazer-footer-action-label">Random</span>
                 <span className="lazer-footer-hotkey-badge">F2</span>
@@ -104,7 +104,7 @@ export function SongSelectFooter({
           >
             <Shear className="lazer-footer-action-slab">
               <span className="lazer-footer-action-inner">
-                <SlidersHorizontal className="h-6 w-6 text-[#c084fc] lazer-footer-action-icon" />
+                <SlidersHorizontal className="h-6 w-6 text-slate-900 lazer-footer-action-icon" />
                 <span className="lazer-footer-action-label-row">
                   <span className="lazer-footer-action-label">Options</span>
                   <span className="lazer-footer-hotkey-badge">F3</span>
