@@ -189,7 +189,10 @@ export function getVisibleNotes(
       : undefined;
 
     const isHeadAtOrPastReceptor = up ? y <= receptorY : y >= receptorY;
-    const isHoldBodyGrounded = isHoldBodyActive && isHolding && isHeadAtOrPastReceptor && isHoldBodyAnchored({
+    // Once a hold head is hit and actively held, the consumed middle
+    // disappears into the receptor: anchor the body start to the receptor
+    // immediately instead of waiting for the head sprite to scroll past.
+    const isHoldBodyGrounded = isHoldBodyActive && isHolding && isHoldBodyAnchored({
       type: n.type,
       isHit: n.isHit,
       isMissed: n.isMissed,

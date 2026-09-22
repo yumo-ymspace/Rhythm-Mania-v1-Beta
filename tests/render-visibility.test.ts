@@ -582,7 +582,7 @@ describe('Hidden, Fade In, and Cover modifiers', () => {
       expect(isHoldBodyAnchored(note)).toBe(true);
     });
 
-    it('does not anchor hold body to receptorY before head reaches receptor (early hit)', () => {
+    it('anchors hold body to receptorY immediately on hit so the middle disappears into the receptor', () => {
       const v3Hold = hold({
         holdRulesVersion: 3,
         isHit: true,
@@ -605,9 +605,12 @@ describe('Hidden, Fade In, and Cover modifiers', () => {
       });
 
       // visualTime = 950: head at y = 600 - (1000 - 950)*0.2 = 590 (above receptor 600)
+      // Once hit, the consumed middle is masked at the receptor instead of
+      // trailing from the head position.
       const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 950, 0.2);
       expect(note.isHolding).toBe(true);
-      expect(note.bodyStartY).toBe(590); // starts at head position, not 600
+      expect(note.bodyStartY).toBe(600); // grounded to receptorY on hit
+      expect(isHoldBodyAnchored(note)).toBe(true);
     });
 
     it('starts unconsumed body at earlyReleaseTime after an early release break', () => {

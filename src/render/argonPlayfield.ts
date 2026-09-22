@@ -216,8 +216,7 @@ export function renderArgonPlayfield(
     const rw = inset.width * noteScale;
     const rx = inset.x + (inset.width - rw) / 2;
 
-    const isHeadAtOrPastReceptor = upscroll ? n.y <= receptorY : n.y >= receptorY;
-    const isAnchored = isHoldBodyAnchored(n) && isHeadAtOrPastReceptor;
+    const isAnchored = isHoldBodyAnchored(n);
 
     let visualStartY = getNoteVisualY(n.bodyStartY ?? n.y, col.width, settingsSlice);
     if (isAnchored) visualStartY = receptorY;
@@ -282,10 +281,9 @@ export function renderArgonPlayfield(
     const rx = inset.x + (inset.width - rw) / 2;
     const color = col.color;
 
-    const isHeadAtOrPastReceptor = upscroll ? n.y <= receptorY : n.y >= receptorY;
     const shouldDrawHead = n.type === 'normal'
       ? (!n.isHit && !n.isMissed)
-      : (n.isMissed || !n.isHit || !isHeadAtOrPastReceptor);
+      : (n.isMissed || !n.isHit);
     if (shouldDrawHead) {
       const centerY = getNoteVisualY(n.y, col.width, settingsSlice);
       const topY = centerY - noteHeight / 2;

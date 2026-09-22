@@ -578,7 +578,9 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       const shouldDrawHead = (n.type === 'normal') || (n.type === 'hold' && (n.isMissed || !n.isHit));
 
       if (shouldDrawHead) {
-        if (!(n.type === 'hold' && (settingsSlice.squareRenderStyle === 'rhythmplus' || isDynamicStyle) && settingsSlice.playfieldStyle !== 'circle')) {
+          // Hold heads use the same bar treatment as normal notes for
+          // rhythmplus/dynamic styles (see drawNoteShape branches below),
+          // so they must not be skipped here. Skipping hid the LN start.
           const rw = colW * noteScale;
           const rh = 20 * noteScale;
           const rx = xPos + (colW - rw) / 2;
@@ -709,7 +711,6 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
           }
 
           ctx.restore();
-        }
       }
 
     });
@@ -875,8 +876,11 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
 
     // An unjudged long-note endpoint is still an actionable note. Draw its cap
     // last so the shared body texture joins the cap instead of covering it.
+    // The release cap must appear for every square style, including
+    // rhythmplus-dynamic which already has a dedicated bar treatment in
+    // drawEndReceptor.
     notes.forEach((n) => {
-      if (n.type !== 'hold' || n.endY === undefined || isDynamicStyle ||
+      if (n.type !== 'hold' || n.endY === undefined ||
         (n.holdRulesVersion !== 2 ? (n.isReleased && !n.isReleaseMissed) : n.isReleaseHit)) {
         return;
       }
