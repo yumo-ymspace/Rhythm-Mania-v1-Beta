@@ -85,8 +85,8 @@ import {
 } from '../ruleset/mania/healthProcessor';
 import metadata from '../../metadata.json';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
-import { computePenar } from '../utils/penar';
-import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
+import { computePenar, computeLivePenar } from '../utils/penar';
+import { calculateManiaDifficultyAttributes, calculateTimedManiaDifficultyAttributes, type TimedManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
 
 // HIGH PERFORMANCE INTEGRATED RENDERER IMPORTS
 import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
@@ -583,8 +583,12 @@ export default function GameplayCanvas({
     // If they failed or are at 0 HP, submit as finished fail record so they see performance telemetry and replay
     if (scoreStateRef.current.failed) {
       if (isMountedRef.current) {
-        scoreStateRef.current.penar = computePenar({
-          starRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
+        // Failed runs never reach the full chart, so evaluate PENAR with the
+        // progressive difficulty at the fail point like lazer live PP.
+        scoreStateRef.current.penar = computeLivePenar({
+          timedAttributes: timedPenarRef.current,
+          progressTime: audioTimeRef.current,
+          fallbackStarRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
           marvelousCount: scoreStateRef.current.marvelousCount,
           perfectCount: scoreStateRef.current.perfectCount,
           greatCount: scoreStateRef.current.greatCount,
@@ -782,6 +786,10 @@ export default function GameplayCanvas({
   const hudPendingRef = useRef({ score: 0, combo: 0, hp: 100 });
   // Lazer-accurate PENAR difficulty, computed once per chart+rate at setup.
   const penarDifficultyRef = useRef<{ starRating: number; maxCombo: number } | null>(null);
+  // Progressive (timed) difficulty for the live PENAR counter. lazer pairs
+  // each judgement with the difficulty processed so far; using the
+  // full-chart rating mid-map awards near-final PENAR after a few notes.
+  const timedPenarRef = useRef<TimedManiaDifficultyAttributes[]>([]);
   const lastPenarUpdateRef = useRef<number>(0);
   const hudJudgementRef = useRef<{ text: string; color: string; time: number } | null>(null);
   const hudBurstRef = useRef<{ value: number; time: number } | null>(null);
@@ -1088,12 +1096,19 @@ export default function GameplayCanvas({
     maxComboPortionRef.current = computeMaxComboPortion(totalJudgements);
     currentComboPortionRef.current = 0;
 
-    // Lazer-accurate PENAR difficulty: strain pass runs once per chart+rate
-    // (~1-3ms); live PP reuses it at 2Hz so per-frame rendering stays free.
+    // Lazer-accurate PENAR difficulty: strain passes run once per chart+rate;
+    // live PP reuses the progressive table at 4Hz so per-frame rendering
+    // stays free.
+    const penarRate = getSpeedMultiplier(settings.selectedMods);
     penarDifficultyRef.current = calculateManiaDifficultyAttributes(
       beatmap.notes,
       beatmap.keyCount,
-      getSpeedMultiplier(settings.selectedMods),
+      penarRate,
+    );
+    timedPenarRef.current = calculateTimedManiaDifficultyAttributes(
+      beatmap.notes,
+      beatmap.keyCount,
+      penarRate,
     );
     lastPenarUpdateRef.current = 0;
     scoreStateRef.current.penar = computePenar({
@@ -2213,7 +2228,7 @@ export default function GameplayCanvas({
       modMultiplier,
     });
 
-    // Live PENAR is refreshed at ~2Hz by the HUD flush loop reusing the
+    // Live PENAR is refreshed at ~4Hz by the HUD flush loop reusing the
     // cached chart difficulty; per-judgement PP would waste frame budget.
 
     // Muted (MU) mod: fade audio as combo builds, restore on break/miss
@@ -2459,14 +2474,18 @@ export default function GameplayCanvas({
           setUiScore((prev) => (prev === pending.score ? prev : pending.score));
           setUiCombo((prev) => (prev === pending.combo ? prev : pending.combo));
           setUiHp((prev) => (prev === pending.hp ? prev : pending.hp));
-          // Live PENAR refresh at ~2Hz: O(1) PP reuse of the cached chart
-          // difficulty; the HUD counter below renders it on the next flush.
-          if (nowMs - lastPenarUpdateRef.current >= 500) {
+          // Live PENAR refresh at ~4Hz: same PP formula, but evaluated with
+          // the progressive difficulty at the current progress time, exactly
+          // like lazer's live PP counter. The HUD counter below renders it
+          // on the next flush.
+          if (nowMs - lastPenarUpdateRef.current >= 250) {
             lastPenarUpdateRef.current = nowMs;
             const live = scoreStateRef.current;
             const difficulty = penarDifficultyRef.current;
-            live.penar = computePenar({
-              starRating: difficulty ? difficulty.starRating : null,
+            live.penar = computeLivePenar({
+              timedAttributes: timedPenarRef.current,
+              progressTime: songTime,
+              fallbackStarRating: difficulty ? difficulty.starRating : null,
               marvelousCount: live.marvelousCount,
               perfectCount: live.perfectCount,
               greatCount: live.greatCount,
@@ -3072,7 +3091,7 @@ export default function GameplayCanvas({
     totalJudgementsRef.current = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
     maxComboPortionRef.current = computeMaxComboPortion(totalJudgementsRef.current);
 
-    // Keep live PENAR consistent after scrub resets; the 2Hz flush loop
+    // Keep live PENAR consistent after scrub resets; the 4Hz flush loop
     // recomputes it from these counts on its next tick.
     lastPenarUpdateRef.current = 0;
     scoreStateRef.current.penar = computePenar({
@@ -3154,7 +3173,7 @@ export default function GameplayCanvas({
         modMultiplier,
       });
 
-      // Live PENAR for replay simulation also flows through the 2Hz HUD
+      // Live PENAR for replay simulation also flows through the 4Hz HUD
       // flush loop; see the live applyJudgement path above.
     };
 

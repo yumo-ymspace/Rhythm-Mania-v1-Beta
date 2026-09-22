@@ -11,6 +11,10 @@
  */
 
 import type { PenarBreakdown } from '../types';
+import {
+  getTimedStarRatingAtTime,
+  type TimedManiaDifficultyAttributes,
+} from '../ruleset/mania/difficultyCalculator';
 
 export interface ComputePenarInput {
   starRating?: number | null;
@@ -22,6 +26,18 @@ export interface ComputePenarInput {
   missCount?: number;
   maxCombo?: number;
   mods?: string[];
+}
+
+export interface ComputeLivePenarInput extends Omit<ComputePenarInput, 'starRating'> {
+  /**
+   * Progressive difficulty for the chart+rate, from
+   * calculateTimedManiaDifficultyAttributes.
+   */
+  timedAttributes?: ReadonlyArray<TimedManiaDifficultyAttributes> | null;
+  /** Current progress in original (non-clock-adjusted) ms. */
+  progressTime?: number;
+  /** Full-chart star rating fallback when no timed entry applies yet. */
+  fallbackStarRating?: number | null;
 }
 
 /**
@@ -57,6 +73,12 @@ function hasMod(mods: readonly string[], id: string): boolean {
  * Judgement mapping is marvelous->Perfect, perfect->Great, great->Good,
  * good->Ok, bad->Meh, miss->Miss. total is null only when no valid star
  * rating is available; with no judgements yet it is 0 like lazer live PP.
+ *
+ * The `starRating` MUST be the full-chart rating for completed plays and
+ * results/history surfaces. For live (in-progress) display pass the
+ * progressive rating instead — see {@link computeLivePenar}. Reusing the
+ * full-chart rating mid-map awards near-final PENAR after the first few
+ * notes, which does not match lazer's live PP counter.
  */
 export function computePenar(input: ComputePenarInput): PenarBreakdown {
   const marvelous = sanitizeCount(input.marvelousCount);
@@ -102,6 +124,38 @@ export function computePenar(input: ComputePenarInput): PenarBreakdown {
     missCount: miss,
     mods,
   };
+}
+
+/**
+ * Computes live (in-progress) PENAR, matching lazer's live PP counter
+ * (`PerformancePointsCounter`): the same performance formula, but evaluated
+ * with the progressive star rating at the current progress time instead of
+ * the full-chart rating, plus the judgements recorded so far. Before the
+ * first timed entry the progressive rating is 0, so early-map PENAR starts
+ * near 0 and grows towards the final value as the chart progresses.
+ */
+export function computeLivePenar(input: ComputeLivePenarInput): PenarBreakdown {
+  const timed = Array.isArray(input.timedAttributes) ? input.timedAttributes : null;
+  const progressTime = typeof input.progressTime === 'number' && Number.isFinite(input.progressTime)
+    ? input.progressTime
+    : null;
+  let starRating: number | null = null;
+  if (timed && timed.length > 0 && progressTime !== null) {
+    starRating = getTimedStarRatingAtTime(timed, progressTime);
+  } else if (typeof input.fallbackStarRating === 'number' && Number.isFinite(input.fallbackStarRating)) {
+    starRating = input.fallbackStarRating >= 0 ? input.fallbackStarRating : null;
+  }
+  return computePenar({
+    starRating,
+    marvelousCount: input.marvelousCount,
+    perfectCount: input.perfectCount,
+    greatCount: input.greatCount,
+    goodCount: input.goodCount,
+    badCount: input.badCount,
+    missCount: input.missCount,
+    maxCombo: input.maxCombo,
+    mods: input.mods,
+  });
 }
 
 /**
