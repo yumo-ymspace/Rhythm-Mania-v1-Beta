@@ -20,7 +20,7 @@ import { HitObject } from '../types';
 import { PlayfieldVisualSettings, VisibleNote } from './types';
 import { getScrollYPosition, computeCoverRatio, getCoverOpacityForY } from './playfieldLayout';
 import { ScrollModel } from './scrollVelocity';
-import { isHoldBodyAnchored } from './noteState';
+import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { HOLD_TICK_RULES_VERSION } from '../utils/holdTickRules';
 import { LAZER_HOLD_RULES_VERSION } from '../ruleset/mania/holdNote';
 
@@ -171,6 +171,30 @@ export function getVisibleNotes(
   // time window is not safe when timing points change scroll direction or
   // speed, because a note outside that window can still be on screen.
   for (const n of windowed ?? orderedNotes) {
+
+    // A fully-hit long note is completely consumed into the receptor: draw
+    // nothing, neither above nor underneath it. Only skip once the release
+    // has happened in the timeline so future-dated test fixtures still show
+    // the approaching tail.
+    if (n.type === 'hold') {
+      const completedByFlags = isHoldSuccessfullyCompleted({
+        type: n.type,
+        isHit: n.isHit,
+        isReleased: n.isReleased,
+        isHoldFailed: n.isHoldFailed,
+        isReleaseMissed: n.isReleaseMissed,
+        isReleaseHit: n.isReleaseHit,
+        holdRulesVersion: n.holdRulesVersion,
+      });
+      const completedByState = n.holdRulesVersion === LAZER_HOLD_RULES_VERSION &&
+        !!n.holdState?.isTailJudged && !n.holdState.tailMissed;
+      if (completedByFlags || completedByState) {
+        const releaseTime = n.releaseTime ?? n.endTime;
+        if (releaseTime === undefined || visualTime >= releaseTime - 0.001) {
+          continue;
+        }
+      }
+    }
 
     // Hold geometry is timeline-driven. Judgement state may change its color or
     // anchoring, but it must not consume the note before it scrolls off-screen.

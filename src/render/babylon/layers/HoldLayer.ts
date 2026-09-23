@@ -23,7 +23,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { PlayfieldFrame } from '../../types';
 import type { RunwayContext } from '../BabylonPlayfieldRenderer';
 import { clampNoteDepth, laneWidthAt, runwayPosition, RUNWAY_CONVERGENCE, safeColorAlpha, safeHex, yToDepthFactor } from '../coords';
-import { isHoldBodyAnchored } from '../../noteState';
+import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from '../../noteState';
 import { mergeVisibleTailSegments } from '../../tailSegments';
 
 const MAX_FRUSTUMS = 128;
@@ -133,13 +133,15 @@ export class HoldLayer {
 
     for (const note of notes) {
       if (note.type !== 'hold' || note.endY === undefined) continue;
+      // Fully-hit LNs are consumed into the receptor: no body above or underneath.
+      if (isHoldSuccessfullyCompleted(note)) continue;
       const column = columns[note.column];
       if (!column) continue;
 
       const holdColor = settingsSlice.receptorColorsByKeyCount?.[ctx.keyCount]?.[note.column] || column.color;
       let alpha = note.opacity * safeColorAlpha(holdColor) * 0.62;
       if (note.isHoldFailed) alpha *= 0.35;
-      const bodySegments = note.tailSegments || [{
+      const bodySegments = note.tailSegments !== undefined ? note.tailSegments : [{
         startY: isHoldBodyAnchored(note) ? receptorY : (note.bodyStartY ?? note.y),
         endY: note.endY,
       }];

@@ -19,7 +19,7 @@ import {
   argonLighten,
   getArgonNoteHeight,
 } from './argonSkin';
-import { isHoldBodyAnchored } from './noteState';
+import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { getNoteVisualY } from './playfieldLayout';
 import { mergeVisibleTailSegments } from './tailSegments';
 import type { PlayfieldFrame } from './types';
@@ -210,6 +210,8 @@ export function renderArgonPlayfield(
 
   notes.forEach((n) => {
     if (n.type !== 'hold' || n.endY === undefined) return;
+    // Fully-hit LNs are consumed into the receptor: no body above or underneath.
+    if (isHoldSuccessfullyCompleted(n)) return;
     const col = columns[n.column];
     if (!col) return;
     const inset = columnInset(col.x, col.width);
@@ -222,7 +224,9 @@ export function renderArgonPlayfield(
     if (isAnchored) visualStartY = receptorY;
     const visualEndY = getNoteVisualY(n.endY, col.width, settingsSlice);
 
-    const bodySegments = n.tailSegments?.length
+    // An explicitly empty tailSegments means the whole tail was consumed
+    // (successful v2 release). Fall back only when segments were never built.
+    const bodySegments = n.tailSegments !== undefined
       ? n.tailSegments
       : [{ startY: visualStartY, endY: visualEndY }];
     const renderSegments = n.holdRulesVersion === 2

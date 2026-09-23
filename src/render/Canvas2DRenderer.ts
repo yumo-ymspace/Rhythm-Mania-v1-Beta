@@ -16,7 +16,7 @@ import { isArgonSkin } from './argonSkin';
 import { hexToRgba } from './color';
 import { getLaneColors } from './skinTheme';
 import { getNoteVisualY } from './playfieldLayout';
-import { isHoldBodyAnchored } from './noteState';
+import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { mergeVisibleTailSegments } from './tailSegments';
 
 function applyFade(colorStr: string, stopOpacity: number) {
@@ -223,6 +223,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     // 2. Draw hold note bodies
     notes.forEach((n) => {
       if (n.type === 'hold' && n.endY !== undefined) {
+        // Fully-hit LNs are consumed into the receptor: no body above or underneath.
+        if (isHoldSuccessfullyCompleted(n)) {
+          return;
+        }
         const xPos = columns[n.column].x;
         const colW = columns[n.column].width;
 
