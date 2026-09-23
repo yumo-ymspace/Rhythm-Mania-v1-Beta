@@ -354,18 +354,24 @@ export function SongSelectCarousel({
   // difficulty rows are measured via getBoundingClientRect (their offsetTop
   // is relative to the group wrapper, not the scroll container, so it must
   // not be compared against the container-space viewport centre).
-  const MAX_INDENT_PX = 120;
-  const CENTER_INDENT_PX = 36;
+  const MAX_INDENT_PX = 72;
+  const CENTER_INDENT_PX = 16;
   const RANGE_PX = 300;
-  const SELECTED_RIGHT_EXTEND_PX = -6;
-  // Difficulty-row taper: centred rows longest, edge rows shorter; the
-  // selected row stays pinned near banner width above them all.
+  // The native scrollbar is hidden (see tokens.css): a custom overlay thumb
+  // floats over the art, so every banner ends exactly at the screen edge and
+  // only the left indent tapers.
+  const SELECTED_RIGHT_EXTEND_PX = 0;
+  const UNSELECTED_RIGHT_OVERLAP_PX = 0;
+  // Difficulty-row taper: every row sticks to the screen edge on the right
+  // (the -4 cancels the wrapper gutter); unselected rows read slightly
+  // shorter through their larger left indent, which still tapers with
+  // viewport position. The selected row pins near banner width above them all.
   const DIFF_BASE_ML_PX = 8;
-  const DIFF_BASE_MR_PX = 6;
+  const DIFF_BASE_MR_PX = -4;
   const DIFF_SELECTED_ML_PX = -12;
-  const DIFF_SELECTED_MR_PX = -2;
+  const DIFF_SELECTED_MR_PX = -4;
   const DIFF_RANGE_PX = 220;
-  const DIFF_MAX_EXTRA_PX = 22;
+  const DIFF_MAX_EXTRA_PX = 26;
 
   const focusKey = expandedSongKey || selectedGroupKey;
   let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
@@ -383,6 +389,9 @@ export function SongSelectCarousel({
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
+  // Custom overlay scrollbar thumb (the native bar is hidden so banners stay
+  // flush). Written directly like the taper — no React state per scroll frame.
+  const scrollThumbRef = useRef<HTMLDivElement | null>(null);
   // No top spacer: the list starts flush at the top and selection snaps to
   // the top edge (not the viewport centre), so there is never an empty gap
   // above the first card. A small bottom pad keeps the last card off the
@@ -427,7 +436,8 @@ export function SongSelectCarousel({
       const indent = Math.round(CENTER_INDENT_PX + (MAX_INDENT_PX - CENTER_INDENT_PX) * Math.pow(t, 0.85));
       const left = `${indent}px`;
       if (el.style.marginLeft !== left) el.style.marginLeft = left;
-      if (el.style.marginRight !== '0px') el.style.marginRight = '0px';
+      // Every banner ends at the screen edge; only the left indent tapers.
+      if (el.style.marginRight !== `${UNSELECTED_RIGHT_OVERLAP_PX}px`) el.style.marginRight = `${UNSELECTED_RIGHT_OVERLAP_PX}px`;
     }
 
     // Difficulty rows inside the expanded group taper with their own
@@ -458,13 +468,34 @@ export function SongSelectCarousel({
             const center = rect.top - containerRect.top + container.scrollTop + rect.height / 2;
             const t = Math.min(1, Math.abs(center - viewCenter) / DIFF_RANGE_PX);
             const extra = Math.round(DIFF_MAX_EXTRA_PX * Math.pow(t, 0.85));
-            jobs.push({ el: row, ml: `${DIFF_BASE_ML_PX + extra}px`, mr: `${DIFF_BASE_MR_PX + extra}px` });
+            // Left indent tapers; right stays stuck to the screen edge.
+            jobs.push({ el: row, ml: `${DIFF_BASE_ML_PX + extra}px`, mr: `${DIFF_BASE_MR_PX}px` });
           });
           for (const j of jobs) {
             if (j.el.style.marginLeft !== j.ml) j.el.style.marginLeft = j.ml;
             if (j.el.style.marginRight !== j.mr) j.el.style.marginRight = j.mr;
           }
         }
+      }
+    }
+
+    // Custom overlay scrollbar thumb: sized/positioned from live scroll
+    // metrics so it tracks exactly like a native bar while floating over
+    // the banner art. Hidden when nothing overflows.
+    const thumb = scrollThumbRef.current;
+    if (thumb) {
+      const scrollable = container.scrollHeight - container.clientHeight;
+      if (scrollable <= 1) {
+        if (thumb.style.opacity !== '0') thumb.style.opacity = '0';
+      } else {
+        if (thumb.style.opacity !== '1') thumb.style.opacity = '1';
+        const trackH = container.clientHeight;
+        const thumbH = Math.max(28, Math.round((container.clientHeight / container.scrollHeight) * trackH));
+        const top = Math.round((container.scrollTop / scrollable) * (trackH - thumbH));
+        const height = `${thumbH}px`;
+        const transform = `translateY(${top}px)`;
+        if (thumb.style.height !== height) thumb.style.height = height;
+        if (thumb.style.transform !== transform) thumb.style.transform = transform;
       }
     }
   };
@@ -674,44 +705,63 @@ export function SongSelectCarousel({
   // transitions (same element, same ref). Remounting it when songs first
   // appear resets scrollTop and replays the spacer/taper measurements from
   // scratch, which reads as a position glitch at the top of the list.
-  // pl-8/pr-5 reserve room for the hover slide (-4px) plus card glow so
-  // non-selected cards never clip at the overflow-x edge on hover.
+  // pl-4 reserves room for the hover slide (-4px) plus card glow on the left.
+  // The wrapper bleeds through the column gutter (negative right margin) so
+  // banners attach flush to the screen edge; the search/filter rows above
+  // keep their own padding and stay inset. The overlay thumb floats over the
+  // art because the native bar is hidden (it would otherwise sit between the
+  // banners and the edge).
+  const carouselWrapClassName =
+    'flex-1 relative min-h-0 flex flex-col mr-[-8px] lg:mr-[-12px]';
   const carouselClassName =
-    'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-8 pr-5 flex flex-col gap-1.5 relative z-10 min-h-0';
+    'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-0 flex flex-col gap-1.5 relative z-10 min-h-0';
+  const carouselOverlay = (
+    <div className="pointer-events-none absolute top-0 bottom-0 right-0 w-[7px] z-20" aria-hidden="true">
+      <div
+        ref={scrollThumbRef}
+        className="absolute right-[1px] top-0 w-[5px] rounded-full bg-white/30 shadow-[0_0_6px_rgba(0,0,0,0.55)]"
+        style={{ opacity: 0 }}
+      />
+    </div>
+  );
 
   if (songGroups.length === 0) {
     return (
-      <div
-        ref={containerRef}
-        className={carouselClassName}
-        id="song-select-carousel-container"
-      >
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center min-h-[240px]" role="status" aria-label="Loading beatmaps">
-            <Loader2 className="h-8 w-8 text-white/70 animate-spin" />
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center min-h-[240px]">
-            <div className="bg-[#0c0c14]/80 border border-white/10 p-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 shadow-xl gap-2">
-              <Info className="h-6 w-6 text-slate-500" />
-              <p className="text-xs font-sans font-black tracking-widest uppercase">No beatmaps matches discovered</p>
-              <p className="text-[10px] text-slate-500 font-mono max-w-xs uppercase">Tweak your star rating boundaries or search query</p>
+      <div className={carouselWrapClassName}>
+        <div
+          ref={containerRef}
+          className={carouselClassName}
+          id="song-select-carousel-container"
+        >
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center min-h-[240px]" role="status" aria-label="Loading beatmaps">
+              <Loader2 className="h-8 w-8 text-white/70 animate-spin" />
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex-1 flex items-center justify-center min-h-[240px]">
+              <div className="bg-[#0c0c14]/80 border border-white/10 p-8 rounded-2xl flex flex-col items-center justify-center text-center text-slate-400 shadow-xl gap-2">
+                <Info className="h-6 w-6 text-slate-500" />
+                <p className="text-xs font-sans font-black tracking-widest uppercase">No beatmaps matches discovered</p>
+                <p className="text-[10px] text-slate-500 font-mono max-w-xs uppercase">Tweak your star rating boundaries or search query</p>
+              </div>
+            </div>
+          )}
+        </div>
+        {carouselOverlay}
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={carouselClassName}
-      id="song-select-carousel-container"
-      // Hidden until the pre-paint taper pass lands, so fallback indents are
-      // never flashed at the top when the banners first appear.
-      style={listReady ? undefined : { visibility: 'hidden' }}
-    >
+    <div className={carouselWrapClassName}>
+      <div
+        ref={containerRef}
+        className={carouselClassName}
+        id="song-select-carousel-container"
+        // Hidden until the pre-paint taper pass lands, so fallback indents are
+        // never flashed at the top when the banners first appear.
+        style={listReady ? undefined : { visibility: 'hidden' }}
+      >
       {/* Flush top: no gap above the first card; list snaps to the top. */}
       {TOP_SPACER_PX > 0 && (
         <div aria-hidden="true" style={{ height: TOP_SPACER_PX, flexShrink: 0 }} />
@@ -727,7 +777,7 @@ export function SongSelectCarousel({
         const fallbackIndentPx = isGroupActive
           ? 0
           : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 16;
-        const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : 0;
+        const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : UNSELECTED_RIGHT_OVERLAP_PX;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
         const uniqueKeys = Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
@@ -875,8 +925,9 @@ export function SongSelectCarousel({
                           borderColor: isDiffSelected ? tint.edge : undefined,
                           // First-paint base; the taper refines non-selected
                           // rows by viewport position right after. Selected
-                          // diff reclaims the wrapper gutter to sit just
-                          // inside the banner edges.
+                          // diff cancels the wrapper gutter to sit flush
+                          // with the banner edge; unselected rows keep a
+                          // right inset so they read slightly shorter.
                           marginLeft: isDiffSelected ? DIFF_SELECTED_ML_PX : DIFF_BASE_ML_PX,
                           marginRight: isDiffSelected ? DIFF_SELECTED_MR_PX : DIFF_BASE_MR_PX,
                         }}
@@ -936,6 +987,8 @@ export function SongSelectCarousel({
       })}
       {/* Small bottom pad only; no centring gap. */}
       <div aria-hidden="true" style={{ height: BOTTOM_SPACER_PX, flexShrink: 0 }} />
+      </div>
+      {carouselOverlay}
     </div>
   );
 }

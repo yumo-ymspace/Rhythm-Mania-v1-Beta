@@ -1209,7 +1209,7 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-6 lg:pr-3 py-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[42%] lg:min-w-[380px] lg:max-w-[560px] xl:max-w-[600px] flex">
+        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 py-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
 
           {/* SEARCH BOX — dark rounded, italic placeholder, yellow matches, magnifier */}
           <div className="relative flex-shrink-0 lazer-song-search">

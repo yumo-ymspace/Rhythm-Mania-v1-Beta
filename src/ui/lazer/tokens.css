@@ -1586,30 +1586,28 @@ html[data-ui="lazer"] {
    ========================================================================== */
 
 .lazer-carousel-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  /* Native bar is hidden: a custom overlay thumb (see SongSelectCarousel)
+     floats over the banner art so cards stay flush with the screen edge. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .lazer-carousel-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lazer-carousel-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 9999px;
-}
-
-.lazer-carousel-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .lazer-carousel-card {
   position: relative;
   min-height: 54px;
-  border-radius: 6px;
+  /* Song-select banners bleed to the right screen edge — rounded on
+     the left only, square + borderless on the right where they attach. */
+  border-radius: 6px 0 0 6px;
   overflow: hidden;
   background: rgba(22, 25, 32, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   user-select: none;
@@ -1651,14 +1649,17 @@ html[data-ui="lazer"] {
 .lazer-carousel-taper {
   padding-top: 0;
   padding-bottom: 12px;
-  /* Left pad reserves room for the active-card shift so art never clips. */
-  scrollbar-gutter: stable;
+  /* No reserved gutter: the thin scrollbar floats over the banner art so
+     every card stays flush with the screen edge. */
+  scrollbar-gutter: auto;
 }
 
 .lazer-carousel-diff-row {
   position: relative;
   min-height: 36px;
-  border-radius: 4px;
+  /* Square on the right like the banners; unselected rows sit slightly
+     shorter via margin while the selected row pins flush to the edge. */
+  border-radius: 4px 0 0 4px;
   overflow: hidden;
   background: rgba(16, 19, 26, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.06);
