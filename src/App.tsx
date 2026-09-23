@@ -11,21 +11,6 @@
  */
 
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
-import {
-  Settings as SettingsIcon,
-  Music2,
-  RotateCcw,
-  Hammer,
-  Swords,
-  Compass,
-  Maximize2,
-  Minimize2,
-  Volume2,
-  VolumeX,
-  Paintbrush,
-  Menu,
-  X,
-} from 'lucide-react';
 import { MainMenu } from './components/MainMenu';
 import SettingsScreen from './components/SettingsScreen';
 import PersonalHistoryScreen from './components/PersonalHistoryScreen';
@@ -61,7 +46,7 @@ import LoadingScreen from './components/LoadingScreen';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
 import { resolveSkinTheme } from './render/skinTheme';
 import { cssColorToHex, parseCssColor } from './render/color';
-import { applyLazerChrome, resolveLazerChrome, LazerDebugSmoke, LazerToolbar } from './ui/lazer';
+import { applyLazerChrome, LazerDebugSmoke, LazerToolbar } from './ui/lazer';
 import type { LazerMenuPhase } from './components/MainMenu';
 import LazerCursor from './components/LazerCursor';
 
@@ -252,87 +237,12 @@ export default function App() {
   const [playHistory, setPlayHistory] = useState<PlayHistoryRecord[]>([]);
   const [historyLimit, setHistoryLimit] = useState<number>(50);
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const mobileMenuRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const previousMasterVolumeRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!isMobileMenuOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (
-        mobileMenuRef.current &&
-        !mobileMenuRef.current.contains(event.target as Node) &&
-        !(event.target as HTMLElement)?.closest('#header-mobile-menu-btn')
-      ) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsMobileMenuOpen(false);
-    };
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isMobileMenuOpen]);
-
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [path]);
-
-  useEffect(() => {
-    const syncFullscreenState = () => setIsFullscreen(FullscreenManager.isFullscreenActive());
-    syncFullscreenState();
-    document.addEventListener('fullscreenchange', syncFullscreenState);
-    document.addEventListener('webkitfullscreenchange', syncFullscreenState);
-    return () => {
-      document.removeEventListener('fullscreenchange', syncFullscreenState);
-      document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
-    };
-  }, []);
-
   useLayoutEffect(() => {
     if (typeof document !== 'undefined') {
       applyLazerChrome(settings);
     }
   }, [settings]);
 
-  const toggleFullscreen = async () => {
-    if (FullscreenManager.isFullscreenActive()) {
-      await FullscreenManager.exitFocusMode();
-    } else {
-      await FullscreenManager.enterFocusMode(document.documentElement);
-    }
-    setIsFullscreen(FullscreenManager.isFullscreenActive());
-  };
-
-  const toggleMute = () => {
-    if (isMuted) {
-      updateSettings({ masterVolume: previousMasterVolumeRef.current ?? DEFAULT_SETTINGS.masterVolume });
-      previousMasterVolumeRef.current = null;
-      setIsMuted(false);
-      return;
-    }
-
-    previousMasterVolumeRef.current = settings.masterVolume > 0
-      ? settings.masterVolume
-      : DEFAULT_SETTINGS.masterVolume;
-    updateSettings({ masterVolume: 0 });
-    setIsMuted(true);
-  };
   const [activeReplayRecord, setActiveReplayRecord] = useState<PlayHistoryRecord | null>(null);
   const [downloadingSetIds, setDownloadingSetIds] = useState<number[]>([]);
   const replayLoadGenerationRef = useRef(0);
@@ -1432,9 +1342,8 @@ export default function App() {
 
   // Lazer toolbar is position:fixed (out of flow), so the main viewport must
   // reserve its height — otherwise page tops (e.g. Song Select search/filters)
-  // render underneath it. Legacy header is sticky in-flow and needs no offset.
-  const isLazerChrome = resolveLazerChrome(settings).ui === 'lazer';
-  const showLazerToolbar = isLazerChrome && !(currentScreen === 'menu' && menuPhase === 'idle') && currentScreen !== 'play';
+  // render underneath it. All skins (Argon + legacy) use the lazer top bar.
+  const showLazerToolbar = !(currentScreen === 'menu' && menuPhase === 'idle') && currentScreen !== 'play';
 
   return (
     <div
@@ -1471,341 +1380,21 @@ export default function App() {
         <div className="absolute bottom-[-100px] right-10 w-[500px] h-[500px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none" />
       </div>
 
-      {/* 1. MASTER HEADER / TOOLBAR */}
-      {(() => {
-        const isLazer = resolveLazerChrome(settings).ui === 'lazer';
-        if (isLazer) {
-          // Lazer top toolbar:
-          // Hidden on menu Initial (idle cookie) and during live play.
-          // Shows after 200ms logo impact on menu top-level/play, and on select, history, results, skins.
-          const isMenuIdle = currentScreen === 'menu' && menuPhase === 'idle';
-          const isLivePlay = currentScreen === 'play';
-          const showToolbar = !isMenuIdle && !isLivePlay;
-
-          return (
-            <LazerToolbar
-              visible={showToolbar}
-              onOpenSettings={openSettings}
-              onGoHome={() => {
-                setMenuPhase('idle');
-                leaveProfilePath('menu');
-              }}
-              onOpenListing={() => setShowFindBeatmapOverlay((prev) => !prev)}
-              onToggleNowPlaying={() => setIsNowPlayingOpen((prev) => !prev)}
-              isListingOpen={showFindBeatmapOverlay}
-              isNowPlayingOpen={isNowPlayingOpen}
-              localDisplayName={settings.localDisplayName}
-            />
-          );
-        }
-
-        if (currentScreen !== 'play' && currentScreen !== 'menu') {
-          return (
-            <>
-              <header
-                id="main-header"
-                className="sticky top-0 z-30 h-[60px] shrink-0 border-b border-white/[0.08] bg-[#061a34]/95 px-3 shadow-[0_8px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:h-[68px] sm:px-5 md:px-7"
-              >
-                <div className="mx-auto flex h-full w-full max-w-[1440px] items-center justify-between gap-1 sm:gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      leaveProfilePath('menu');
-                    }}
-                    className="group flex shrink-0 items-center gap-2 rounded-xl py-2 pr-2 text-left transition-transform duration-150 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
-                    title="Back to menu"
-                  >
-                    <img
-                      src="/icons/favicon-64.png"
-                      alt="RhythmMania logo"
-                      className="h-8 w-8 rounded-lg object-cover shadow-[0_0_16px_rgba(0,176,255,0.4)] transition-shadow duration-150 group-hover:shadow-[0_0_22px_rgba(0,176,255,0.7)] sm:h-9 sm:w-9"
-                      draggable={false}
-                    />
-                    <span className="text-[1.2rem] font-black leading-none tracking-[-0.04em] text-white sm:text-[1.35rem] md:text-[1.55rem]">
-                      Rhythm<span className="text-cyan-300">Mania</span>
-                    </span>
-                  </button>
-
-                  <nav id="top-nav" aria-label="Primary navigation" className="scrollbar-none hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:ml-3 md:flex md:gap-1">
-                    <button
-                      id="header-nav-song-select"
-                      type="button"
-                      onClick={() => leaveProfilePath('select')}
-                      className={`group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4 ${currentScreen === 'select' ? 'bg-[#193454] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
-                      title="Song Select"
-                    >
-                      <Music2 className="h-[19px] w-[19px] shrink-0 text-slate-300 transition-colors group-hover:text-cyan-200" />
-                      <span className="hidden sm:inline">Song Select</span>
-                    </button>
-
-                    <button
-                      id="header-nav-map-maker"
-                      type="button"
-                      disabled
-                      aria-disabled="true"
-                      className="group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide text-slate-500 opacity-75 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4"
-                      title="Map Maker is coming soon"
-                    >
-                      <Hammer className="h-[19px] w-[19px] shrink-0 text-slate-400" />
-                      <span className="hidden sm:inline">Map Maker</span>
-                    </button>
-
-                    <button
-                      id="header-nav-party"
-                      type="button"
-                      disabled
-                      aria-disabled="true"
-                      className="group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide text-slate-500 opacity-75 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4"
-                      title="Party is coming soon"
-                    >
-                      <Swords className="h-[19px] w-[19px] shrink-0 text-slate-400" />
-                      <span className="hidden sm:inline">Party</span>
-                    </button>
-
-                    <button
-                      id="header-nav-beatmap-listing"
-                      type="button"
-                      onClick={() => setShowFindBeatmapOverlay((prev) => !prev)}
-                      className="group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4"
-                      title="Beatmap Listing"
-                    >
-                      <Compass className="h-[19px] w-[19px] shrink-0 text-slate-300 transition-colors group-hover:text-cyan-200" />
-                      <span className="hidden sm:inline">Beatmap Listing</span>
-                    </button>
-
-                    <button
-                      id="header-nav-skins"
-                      type="button"
-                      onClick={() => {
-                        setShowSettings(false);
-                        leaveProfilePath('skins');
-                      }}
-                      className={`group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4 ${currentScreen === 'skins' ? 'bg-[#193454] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
-                      title="Skins"
-                    >
-                      <Paintbrush className="h-[19px] w-[19px] shrink-0 text-slate-300 transition-colors group-hover:text-cyan-200" />
-                      <span className="hidden sm:inline">Skins</span>
-                    </button>
-
-                    <button
-                      id="header-nav-settings"
-                      type="button"
-                      onClick={() => showSettings ? setShowSettings(false) : openSettings()}
-                      className={`group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4 ${showSettings ? 'bg-[#193454] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
-                      title="Settings"
-                    >
-                      <SettingsIcon className="h-[19px] w-[19px] shrink-0 text-slate-300 transition-colors group-hover:text-cyan-200" />
-                      <span className="hidden sm:inline">Settings</span>
-                    </button>
-
-                    <button
-                      id="header-nav-history"
-                      type="button"
-                      onClick={() => leaveProfilePath('history')}
-                      className={`group flex h-10 w-9 items-center justify-center gap-2 rounded-xl px-0 text-[11px] font-bold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-auto sm:justify-start sm:px-3 md:px-4 ${currentScreen === 'history' ? 'bg-[#193454] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
-                      title="History"
-                    >
-                      <RotateCcw className="h-[19px] w-[19px] shrink-0 text-slate-300 transition-colors group-hover:text-cyan-200" />
-                      <span className="hidden sm:inline">History</span>
-                    </button>
-                  </nav>
-
-                  <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-                    {/* Fullscreen Button: Visible on both mobile and desktop! */}
-                    <button
-                      id="header-nav-fullscreen"
-                      type="button"
-                      onClick={() => void toggleFullscreen()}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-11"
-                      title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                      aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                    >
-                      {isFullscreen ? <Minimize2 className="h-[19px] w-[19px]" /> : <Maximize2 className="h-[19px] w-[19px]" />}
-                    </button>
-
-                    {/* Desktop Mute Button (hidden on mobile) */}
-                    <button
-                      id="header-nav-mute"
-                      type="button"
-                      onClick={toggleMute}
-                      className={`hidden md:flex h-10 w-9 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 sm:h-11 sm:w-11 ${isMuted ? 'text-rose-200 hover:bg-white/[0.06]' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
-                      title={isMuted ? 'Unmute audio' : 'Mute audio'}
-                      aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
-                    >
-                      {isMuted ? <VolumeX className="h-[19px] w-[19px]" /> : <Volume2 className="h-[19px] w-[19px]" />}
-                    </button>
-
-                    {/* Mobile Hamburger Menu Toggle Button (visible on mobile only) */}
-                    <button
-                      id="header-mobile-menu-btn"
-                      type="button"
-                      onClick={() => setIsMobileMenuOpen((open) => !open)}
-                      className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
-                        isMobileMenuOpen
-                          ? 'border border-cyan-400/40 bg-cyan-500/20 text-cyan-200 shadow-[0_0_12px_rgba(0,176,255,0.3)]'
-                          : 'border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white'
-                      }`}
-                      title={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-                      aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-                      aria-expanded={isMobileMenuOpen}
-                    >
-                      {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-              </header>
-
-              {/* Mobile Navigation Drawer / Dropdown */}
-              <AnimatePresence>
-                {isMobileMenuOpen && (
-                  <>
-                    <motion.div
-                      key="mobile-nav-backdrop"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm md:hidden"
-                      aria-hidden="true"
-                    />
-
-                    <motion.div
-                      key="mobile-nav-panel"
-                      ref={mobileMenuRef}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeOut' }}
-                      className="fixed left-3 right-3 top-[66px] z-50 max-h-[calc(100vh-80px)] overflow-y-auto rounded-2xl border border-white/[0.14] bg-[#071932]/95 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.6),0_0_24px_rgba(0,176,255,0.12)] backdrop-blur-2xl md:hidden"
-                    >
-                      {/* Navigation Links */}
-                      <div className="space-y-1">
-                        <div className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">Navigation</div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            leaveProfilePath('select');
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors ${
-                            currentScreen === 'select'
-                              ? 'border border-cyan-400/30 bg-cyan-500/20 text-cyan-200'
-                              : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
-                          }`}
-                        >
-                          <Music2 className="h-[18px] w-[18px] text-cyan-300" />
-                          <span>Song Select</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            setShowFindBeatmapOverlay(true);
-                          }}
-                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
-                        >
-                          <Compass className="h-[18px] w-[18px] text-cyan-300" />
-                          <span>Beatmap Listing</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            setShowSettings(false);
-                            leaveProfilePath('skins');
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors ${
-                            currentScreen === 'skins'
-                              ? 'border border-cyan-400/30 bg-cyan-500/20 text-cyan-200'
-                              : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
-                          }`}
-                        >
-                          <Paintbrush className="h-[18px] w-[18px] text-cyan-300" />
-                          <span>Skins</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            leaveProfilePath('history');
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors ${
-                            currentScreen === 'history'
-                              ? 'border border-cyan-400/30 bg-cyan-500/20 text-cyan-200'
-                              : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
-                          }`}
-                        >
-                          <RotateCcw className="h-[18px] w-[18px] text-cyan-300" />
-                          <span>History</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            openSettings();
-                          }}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors ${
-                            showSettings
-                              ? 'border border-cyan-400/30 bg-cyan-500/20 text-cyan-200'
-                              : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
-                          }`}
-                        >
-                          <SettingsIcon className="h-[18px] w-[18px] text-cyan-300" />
-                          <span>Settings</span>
-                        </button>
-
-                        <div className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500 opacity-60">
-                          <div className="flex items-center gap-3">
-                            <Hammer className="h-[18px] w-[18px]" />
-                            <span>Map Maker</span>
-                          </div>
-                          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Soon</span>
-                        </div>
-
-                        <div className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500 opacity-60">
-                          <div className="flex items-center gap-3">
-                            <Swords className="h-[18px] w-[18px]" />
-                            <span>Party</span>
-                          </div>
-                          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Soon</span>
-                        </div>
-                      </div>
-
-                      {/* Utilities & Audio */}
-                      <div className="mt-3 border-t border-white/[0.08] pt-2.5">
-                        <div className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">Controls</div>
-                        <button
-                          type="button"
-                          onClick={toggleMute}
-                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold transition-colors ${
-                            isMuted ? 'border border-rose-400/20 bg-rose-500/10 text-rose-200' : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            {isMuted ? <VolumeX className="h-[18px] w-[18px] text-rose-400" /> : <Volume2 className="h-[18px] w-[18px] text-cyan-300" />}
-                            <span>{isMuted ? 'Audio Muted' : 'Audio Active'}</span>
-                          </div>
-                          <span className="text-xs font-medium text-slate-400">{isMuted ? 'Tap to unmute' : 'Tap to mute'}</span>
-                        </button>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </>
-          );
-        }
-
-        return null;
-      })()}
-
+      {/* 1. LAZER TOP BAR (all skins) */}
+      {/* Hidden on menu idle cookie and during live play. */}
+      <LazerToolbar
+        visible={showLazerToolbar}
+        onOpenSettings={openSettings}
+        onGoHome={() => {
+          setMenuPhase('idle');
+          leaveProfilePath('menu');
+        }}
+        onOpenListing={() => setShowFindBeatmapOverlay((prev) => !prev)}
+        onToggleNowPlaying={() => setIsNowPlayingOpen((prev) => !prev)}
+        isListingOpen={showFindBeatmapOverlay}
+        isNowPlayingOpen={isNowPlayingOpen}
+        localDisplayName={settings.localDisplayName}
+      />
 
       {/* 2. CORE VIEWPORTS */}
       <main

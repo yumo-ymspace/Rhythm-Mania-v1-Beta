@@ -152,9 +152,6 @@ export default function ResultsScreen({
     return list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   }, [mapRecords, scoreListSort]);
 
-  // Mobile tab state: 'result' or 'scores'
-  const [mobileTab, setMobileTab] = useState<'result' | 'scores'>('result');
-
   // 2. Local selection state for inspecting runs
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -386,41 +383,14 @@ export default function ResultsScreen({
         </div>
       </header>
 
-      {/* Mobile Tab Switcher (< lg screens) */}
-      <div className="lg:hidden flex items-center justify-center gap-2 px-4 py-2 bg-zinc-900/80 border-b border-white/5 z-10">
-        <button
-          onClick={() => setMobileTab('result')}
-          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
-            mobileTab === 'result'
-              ? 'bg-skin-accent text-slate-950 shadow-md'
-              : 'bg-white/5 text-slate-400 hover:text-white'
-          }`}
-        >
-          Result
-        </button>
-        <button
-          onClick={() => setMobileTab('scores')}
-          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-            mobileTab === 'scores'
-              ? 'bg-skin-accent text-slate-950 shadow-md'
-              : 'bg-white/5 text-slate-400 hover:text-white'
-          }`}
-        >
-          <Trophy className="w-3.5 h-3.5" />
-          <span>Local Scores ({mapRecords.length})</span>
-        </button>
-      </div>
-
-      {/* 3. MAIN BODY: TWO-COLUMN LAYOUT (lg:) */}
+      {/* 3. MAIN BODY: TWO-COLUMN LAYOUT */}
       <div className="flex-1 w-full overflow-hidden flex z-10">
         
         {/* ============================================================== */}
         {/* COLUMN 1: LOCAL SCORES PANEL (This Device Only) */}
         {/* ============================================================== */}
         <aside 
-          className={`w-full lg:w-80 xl:w-96 shrink-0 h-full bg-zinc-950/70 border-r border-white/10 flex-col ${
-            mobileTab === 'scores' ? 'flex' : 'hidden lg:flex'
-          }`}
+          className="w-full lg:w-80 xl:w-96 shrink-0 h-full bg-zinc-950/70 border-r border-white/10 flex-col flex"
         >
           {/* Panel Header */}
           <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-zinc-900/40">
@@ -482,7 +452,6 @@ export default function ResultsScreen({
                     type="button"
                     onClick={() => {
                       setSelectedRecordId(run.id);
-                      setMobileTab('result');
                     }}
                     className={`w-full text-left p-3 rounded-xl border transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col gap-1.5 ${
                       isSelected
@@ -558,9 +527,7 @@ export default function ResultsScreen({
         {/* COLUMN 2: ARGON RESULTS HERO & DETAILS */}
         {/* ============================================================== */}
         <main 
-          className={`flex-1 h-full overflow-y-auto p-4 md:p-8 flex flex-col items-center justify-start ${
-            mobileTab === 'result' ? 'flex' : 'hidden lg:flex'
-          }`}
+          className="flex-1 h-full overflow-y-auto p-4 md:p-8 flex flex-col items-center justify-start flex"
         >
           <div className="w-full max-w-4xl flex flex-col items-center gap-6 pb-20">
             

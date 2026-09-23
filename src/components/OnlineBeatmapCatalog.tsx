@@ -85,7 +85,6 @@ export default function OnlineBeatmapCatalog({
   const [filterSearchTerm, setFilterSearchTerm] = useState('');
   const [searchCategory, setSearchCategory] = useState<(typeof SEARCH_CATEGORIES)[number]>('Ranked');
   const [sortBy, setSortBy] = useState<'Title' | 'Artist' | 'Difficulty'>('Title');
-  const [showFilters, setShowFilters] = useState(false);
   const [downloadingMapId, setDownloadingMapId] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{ loaded: number; total: number; percentage: number } | null>(null);
   const [downloadQueue, setDownloadQueue] = useState<CatalogSet[]>([]);
@@ -687,24 +686,8 @@ export default function OnlineBeatmapCatalog({
                     </button>
                   </div>
 
-                  <div className="hidden md:block mt-3">
+                  <div className="mt-3">
                     <FilterMatrix />
-                  </div>
-                  <div className="md:hidden mt-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowFilters((v) => !v)}
-                      aria-expanded={showFilters}
-                      className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-200 cursor-pointer"
-                    >
-                      Filters
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-                    </button>
-                    {showFilters && (
-                      <div className="mt-2 rounded-md border border-white/10 bg-black/25 p-3">
-                        <FilterMatrix />
-                      </div>
-                    )}
                   </div>
 
                   {/* lazer wave divider */}

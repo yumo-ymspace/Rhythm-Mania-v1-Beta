@@ -71,7 +71,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     const { ctx } = this;
     if (!ctx) return;
 
-    const { width, height, columns, notes, particles, hitErrorTicks, hitErrorAvgMs, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode, isMobile } = frame;
+    const { width, height, columns, notes, particles, hitErrorTicks, hitErrorAvgMs, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
     const receptorY = frame.receptorY;
 
     ctx.clearRect(0, 0, width, height);
@@ -718,37 +718,6 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       }
 
     });
-
-    // 4. Draw mobile zone overlay if active
-    if (isMobile && !isFocusMode) {
-      const hitZoneTop = height * 0.60;
-      ctx.save();
-
-      const fillGrad = ctx.createLinearGradient(0, hitZoneTop, 0, height);
-      fillGrad.addColorStop(0, 'rgba(8, 8, 12, 0.12)');
-      fillGrad.addColorStop(1, 'rgba(5, 5, 8, 0.35)');
-      ctx.fillStyle = fillGrad;
-      ctx.fillRect(0, hitZoneTop, width, height - hitZoneTop);
-
-      ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(0, hitZoneTop);
-      ctx.lineTo(width, hitZoneTop);
-      ctx.stroke();
-
-      for (let i = 1; i < this.keyCount; i++) {
-        const xPos = columns[i].x;
-        ctx.strokeStyle = 'rgba(71, 85, 105, 0.1)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(xPos, hitZoneTop);
-        ctx.lineTo(xPos, height);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
 
     // 5. Draw Receptors
     for (let i = 0; i < this.keyCount; i++) {

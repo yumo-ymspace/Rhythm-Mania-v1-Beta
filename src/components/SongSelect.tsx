@@ -129,16 +129,6 @@ export default function SongSelect({
     }
     return '';
   });
-  const [isMobile, setIsMobile] = useState<boolean>(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
   const [lastSelectedDifficultyBySong, setLastSelectedDifficultyBySong] = useState<Record<string, string>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -155,7 +145,6 @@ export default function SongSelect({
   const [unpackTrigger, setUnpackTrigger] = useState<number>(0);
   const [manualExpandedSongKey, setManualExpandedSongKey] = useState<string | null>(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState<boolean>(false);
-  const [mobileTab, setMobileTab] = useState<'carousel' | 'ranking'>('carousel');
   const carouselContainerRef = useRef<HTMLDivElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
 
@@ -889,27 +878,6 @@ export default function SongSelect({
       isStartingPlayRef.current = true;
       previewPlayer.stopImmediately();
 
-      const isMobileDevice = typeof window !== 'undefined' && (
-        window.innerWidth <= 1024 && (
-          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-          window.innerWidth <= 768 ||
-          window.innerHeight < 500
-        )
-      );
-
-      if (isMobileDevice) {
-        const elem = document.documentElement;
-        try {
-          if (elem.requestFullscreen) {
-            elem.requestFullscreen().catch(err => console.log('Fullscreen rejected:', err));
-          } else if ((elem as any).webkitRequestFullscreen) {
-            (elem as any).webkitRequestFullscreen();
-          }
-        } catch (fullscreenErr) {
-          console.warn('Browser standard fullscreen is unsupported inside frames:', fullscreenErr);
-        }
-      }
-
       try {
         await handleSelectCustomMap(activeMap, true);
       } catch (e) {
@@ -1185,7 +1153,7 @@ export default function SongSelect({
         </AnimatePresence>
       </div>
       {/* Version Tag */}
-      <div className="absolute bottom-20 left-6 text-[10px] text-white/30 font-mono z-30 select-none pointer-events-none hidden lg:block">
+      <div className="absolute bottom-20 left-6 text-[10px] text-white/30 font-mono z-30 select-none pointer-events-none block">
         {metadata.version}
       </div>
 
@@ -1211,43 +1179,13 @@ export default function SongSelect({
         className="hidden" 
       />
 
-      {/* Mobile Tab Switcher */}
-      {isMobile && (
-        <div className="flex items-center justify-center p-1.5 bg-black/60 backdrop-blur-md border-b border-white/10 z-20 shrink-0 gap-1.5 px-4">
-          <button
-            type="button"
-            onClick={() => setMobileTab('carousel')}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition ${
-              mobileTab === 'carousel'
-                ? 'bg-skin-accent/25 text-skin-accent border border-skin-accent/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Beatmaps ({songGroups.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileTab('ranking')}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition ${
-              mobileTab === 'ranking'
-                ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Local Scores {chartLocalScores.length > 0 && `(${chartLocalScores.length})`}
-          </button>
-        </div>
-      )}
-
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-[80px] min-h-0">
         
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className={`w-full lg:w-[540px] xl:w-[600px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 ${
-          isMobile && mobileTab !== 'ranking' ? 'hidden' : 'flex'
-        }`}>
+        <div className="w-full lg:w-[540px] xl:w-[600px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 flex">
           <SongSelectLeftPanel
             selectedMap={selectedCustomMap}
             currentStarRating={currentStarRating}
@@ -1271,9 +1209,7 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className={`flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-6 lg:pr-3 py-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[42%] lg:min-w-[380px] lg:max-w-[560px] xl:max-w-[600px] ${
-          isMobile && mobileTab !== 'carousel' ? 'hidden' : 'flex'
-        }`}>
+        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-6 lg:pr-3 py-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[42%] lg:min-w-[380px] lg:max-w-[560px] xl:max-w-[600px] flex">
 
           {/* SEARCH BOX — dark rounded, italic placeholder, yellow matches, magnifier */}
           <div className="relative flex-shrink-0 lazer-song-search">

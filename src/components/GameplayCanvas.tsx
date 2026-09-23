@@ -651,14 +651,6 @@ export default function GameplayCanvas({
       await FullscreenManager.exitFocusMode();
     }
   };
-  const [showKeycountWarning, setShowKeycountWarning] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768 && beatmap.keyCount > 5) {
-      setShowKeycountWarning(true);
-    }
-  }, [beatmap.keyCount]);
-
   const [showOffsetNotification, setShowOffsetNotification] = useState<boolean>(false);
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showLockedScrollNotification, setShowLockedScrollNotification] = useState<boolean>(false);
@@ -2739,15 +2731,6 @@ export default function GameplayCanvas({
           return !hasPressed ? key : '';
         });
 
-        // Check if on a mobile touchscreen device
-        const isMobileDevice = typeof window !== 'undefined' && (
-          window.innerWidth <= 1024 && (
-            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-            window.innerWidth <= 768 ||
-            window.innerHeight < 500
-          )
-        );
-
         // Execute drawing call
         activeRendererRef.current.render({
           width,
@@ -2764,7 +2747,7 @@ export default function GameplayCanvas({
           showKeyLabels: true,
           keyLabels: keyLabelsMapped,
           isFocusMode: isFocusModeRef.current,
-          isMobile: isMobileDevice,
+          isMobile: false,
           combo: scoreStateRef.current.combo,
           breaks: beatmap.breaks || []
         });
@@ -3996,29 +3979,6 @@ export default function GameplayCanvas({
             <span className="text-white bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
               {lockedScrollSpeedRef.current}x (~{computeScrollTravelTimeMs(lockedScrollSpeedRef.current)}ms)
             </span>
-          </div>
-        )}
-
-        {showKeycountWarning && (
-          <div className="absolute top-24 left-4 right-4 z-40 bg-amber-950/95 border border-amber-500/50 p-4 rounded-xl flex flex-col gap-2 shadow-2xl animate-fade-in text-xs font-sans max-w-sm backdrop-blur-md">
-            <div className="flex justify-between items-center text-amber-400 font-bold uppercase tracking-wider">
-              <span>⚠️ CROWDED SCREEN ADVISORY</span>
-              <button 
-                onClick={() => setShowKeycountWarning(false)}
-                className="text-amber-500 hover:text-amber-350 font-mono text-base px-2 leading-none font-bold cursor-pointer"
-              >
-                ×
-              </button>
-            </div>
-            <p className="text-slate-350 leading-relaxed">
-              Placing <strong>{beatmap.keyCount} columns</strong> on a mobile screen makes touch columns very thin. We highly recommend playing in <strong>4K or 5K mode</strong> for a tactile mobile layout!
-            </p>
-            <button 
-              onClick={() => setShowKeycountWarning(false)}
-              className="mt-1 self-end py-1 px-3 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-black uppercase tracking-wider rounded transition cursor-pointer"
-            >
-              Dismiss Notice
-            </button>
           </div>
         )}
 

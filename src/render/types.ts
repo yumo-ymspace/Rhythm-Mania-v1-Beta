@@ -111,7 +111,9 @@ export interface PlayfieldFrame {
   showKeyLabels: boolean;
   keyLabels: string[];
   isFocusMode: boolean;
-  isMobile: boolean;
+  // Legacy mobile flag. Desktop UI is served as-is to all viewports;
+  // the renderer ignores this and always uses the desktop playfield.
+  isMobile?: boolean;
   combo?: number;
   breaks?: Array<{ startTime: number; endTime: number }>;
 }

@@ -316,7 +316,6 @@ export default function PersonalHistoryScreen({
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<{ text: string; isError?: boolean } | null>(null);
-  const [mobileTab, setMobileTab] = useState<'details' | 'list'>('list');
   const [openFilterMenu, setOpenFilterMenu] = useState<'sort' | 'retention' | null>(null);
   const [isLaunchingReplay, setIsLaunchingReplay] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -357,7 +356,6 @@ export default function PersonalHistoryScreen({
       const added = onImportRecords(records);
       if (records.length > 0 && records[0]?.id) {
         setSelectedRecordId(records[0].id);
-        setMobileTab('details');
       }
       const skipped = records.length - added;
       setImportNotice({
@@ -713,44 +711,14 @@ export default function PersonalHistoryScreen({
         </div>
       )}
 
-      {/* Mobile Tab Switcher (< lg screens) */}
-      <div className="lg:hidden flex items-center justify-center gap-2 px-4 py-2 bg-zinc-950/80 border-b border-white/10 z-20 shrink-0">
-        <button
-          type="button"
-          onClick={() => setMobileTab('list')}
-          className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-            mobileTab === 'list'
-              ? 'bg-skin-accent text-slate-950 shadow-md'
-              : 'bg-white/5 text-slate-400 hover:text-white'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>Plays ({filteredHistory.length})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileTab('details')}
-          className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-            mobileTab === 'details'
-              ? 'bg-skin-accent text-slate-950 shadow-md'
-              : 'bg-white/5 text-slate-400 hover:text-white'
-          }`}
-        >
-          <Award className="w-3.5 h-3.5" />
-          <span>Selected Replay</span>
-        </button>
-      </div>
-
-      {/* 2. MAIN WORKSPACE: 2-COLUMN SPLIT (DESKTOP) */}
+      {/* 2. MAIN WORKSPACE: 2-COLUMN SPLIT */}
       <div className="flex-1 w-full min-h-0 overflow-hidden flex z-10 p-3 sm:p-4 lg:p-6 gap-4 lg:gap-6">
         
         {/* ============================================================== */}
         {/* COLUMN 1: SELECTED REPLAY HERO & DETAILS (LEFT) */}
         {/* ============================================================== */}
         <aside
-          className={`w-full lg:w-[420px] xl:w-[480px] shrink-0 h-full overflow-y-auto flex-col gap-4 pr-1 ${
-            mobileTab === 'details' ? 'flex' : 'hidden lg:flex'
-          }`}
+          className="w-full lg:w-[420px] xl:w-[480px] shrink-0 h-full overflow-y-auto flex-col gap-4 pr-1 flex"
         >
           {selectedRecord ? (
             <div className="flex flex-col gap-4">
@@ -1053,9 +1021,7 @@ export default function PersonalHistoryScreen({
         {/* COLUMN 2: SEARCH, FILTERS & REPLAYS LIST (RIGHT) */}
         {/* ============================================================== */}
         <main
-          className={`flex-1 min-w-0 h-full flex-col gap-3 overflow-hidden ${
-            mobileTab === 'list' ? 'flex' : 'hidden lg:flex'
-          }`}
+          className="flex-1 min-w-0 h-full flex-col gap-3 overflow-hidden flex"
         >
           {/* TOP SEARCH & FILTER BAR */}
           <div className="w-full bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-2xl p-3 flex flex-col gap-2.5 shrink-0 shadow-lg relative z-30">
@@ -1249,7 +1215,6 @@ export default function PersonalHistoryScreen({
                     type="button"
                     onClick={() => {
                       setSelectedRecordId(rec.id);
-                      setMobileTab('details');
                     }}
                     className={`w-full text-left rounded-2xl border transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col p-3.5 gap-2 ${
                       isSelected

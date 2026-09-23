@@ -131,25 +131,21 @@ export function beatPeriodSeconds(bpm: number): number {
 
 export type LazerChromeAttrs = {
   skin: 'argon' | 'legacy';
-  ui: 'lazer' | null;
+  ui: 'lazer';
 };
 
 export function resolveLazerChrome(settings: PlayfieldVisualSettings): LazerChromeAttrs {
   const argon = isArgonSkin(settings);
   return {
     skin: argon ? 'argon' : 'legacy',
-    ui: argon ? 'lazer' : null,
+    ui: 'lazer',
   };
 }
 
 export function applyLazerChrome(settings: PlayfieldVisualSettings, root: HTMLElement = document.documentElement): void {
   const chrome = resolveLazerChrome(settings);
   root.dataset.skin = chrome.skin;
-  if (chrome.ui) {
-    root.dataset.ui = chrome.ui;
-  } else {
-    delete root.dataset.ui;
-  }
+  root.dataset.ui = chrome.ui;
 }
 
 export function useLazerReducedMotion(): boolean {

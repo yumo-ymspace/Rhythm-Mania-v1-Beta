@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-/* Lazer chrome tokens. Scoped so legacy skins are not restyled. */
+/* Lazer chrome tokens. All skins (Argon + legacy) use the lazer top bar. */
 html[data-ui="lazer"] {
   --lazer-ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   --lazer-ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -1245,36 +1245,6 @@ html[data-ui="lazer"] {
 
 .lazer-notification-dismiss:hover {
   color: #ff6b81;
-}
-
-/* Mobile responsive collapse: 390x844 */
-@media (max-width: 768px) {
-  .lazer-toolbar-aux-tools {
-    display: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .lazer-toolbar {
-    height: 38px;
-    padding: 0 6px;
-  }
-  .lazer-toolbar-rulesets {
-    display: none;
-  }
-  .lazer-toolbar-profile {
-    display: none;
-  }
-  .lazer-toolbar-clock-running {
-    display: none;
-  }
-  .lazer-toolbar-clock-container {
-    padding: 0 4px;
-  }
-  .lazer-toolbar-btn {
-    width: 32px;
-    height: 32px;
-  }
 }
 
 /* ==========================================================================
