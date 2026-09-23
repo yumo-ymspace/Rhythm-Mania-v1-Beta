@@ -48,16 +48,15 @@ describe('settings, history, and URL boundaries', () => {
     expect(hasCatalogIdentity({} as any)).toBe(false);
   });
 
-  it('clamps hostile settings and locks Babylon to downward scroll', () => {
+  it('clamps hostile settings while preserving scroll direction', () => {
     const clean = sanitizeSettings({
       scrollSpeed: 999,
-      renderEngine: 'babylon',
       upsurfaceNoteMode: true,
       bindings: { 4: ['d', 'f', 'j', 'k'] },
       customSkinColors: ['javascript:alert(1)'],
     }, DEFAULT_SETTINGS);
     expect(clean.scrollSpeed).toBe(80);
-    expect(clean.upsurfaceNoteMode).toBe(false);
+    expect(clean.upsurfaceNoteMode).toBe(true);
     expect(clean.customSkinColors?.[0]).toBe('#ffffff');
     expect(clean.bindings[4]).toEqual(['d', 'f', 'j', 'k']);
   });

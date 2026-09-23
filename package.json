@@ -13,7 +13,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@babylonjs/core": "^9.18.2",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^6.0.5",
     "dotenv": "^17.2.3",

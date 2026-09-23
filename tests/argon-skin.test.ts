@@ -138,20 +138,19 @@ describe('Argon column colours', () => {
 });
 
 describe('TASK-082: Skin screen Argon default and legacy catalog', () => {
-  it('identifies Argon as the default skin and lists 5 legacy skins', () => {
+  it('identifies Argon as the default skin and lists 4 legacy skins', () => {
     expect(DEFAULT_SKIN.id).toBe('argon');
     expect(DEFAULT_SKIN.category).toBe('default');
     expect(DEFAULT_SKIN.badge).toBe('DEFAULT');
 
     expect(LEGACY_SKINS.map((s) => s.id)).toEqual([
       'rhythmmania',
-      'rhythmmania-3d',
       'rhythmplus',
       'rhythmplus-dynamic',
       'circle',
     ]);
     expect(LEGACY_SKINS.every((s) => s.category === 'legacy')).toBe(true);
-    expect(ALL_SKINS).toHaveLength(6);
+    expect(ALL_SKINS).toHaveLength(5);
     expect(ALL_SKINS[0].id).toBe('argon');
   });
 
@@ -162,12 +161,7 @@ describe('TASK-082: Skin screen Argon default and legacy catalog', () => {
   it('configures proper settings when switching to Argon and legacy styles', () => {
     const argonConfig = styleSettings('argon');
     expect(argonConfig.skinId).toBe('argon');
-    expect(argonConfig.renderEngine).toBe('canvas');
     expect(argonConfig.playfieldStyle).toBe('square');
-
-    const babylonConfig = styleSettings('rhythmmania-3d');
-    expect(babylonConfig.skinId).toBe('rhythmmania-3d');
-    expect(babylonConfig.renderEngine).toBe('babylon');
 
     const circleConfig = styleSettings('circle');
     expect(circleConfig.playfieldStyle).toBe('circle');

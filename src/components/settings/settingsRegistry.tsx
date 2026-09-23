@@ -178,22 +178,6 @@ export const ROWS: RowDef[] = [
     defaultValue: DEFAULT_SETTINGS.showFpsCounter,
     keywords: ['fps', 'frames', 'performance', 'counter'],
   },
-  {
-    id: 'babylonFloor', section: 'graphics', label: 'Runway floor',
-    description: 'Show the dark matte runway floor beneath the lanes.',
-    control: { kind: 'toggle' },
-    defaultValue: DEFAULT_SETTINGS.babylonFloor,
-    showWhen: (s) => s.renderEngine === 'babylon',
-    keywords: ['babylon', 'floor', 'runway', 'matte', '3d'],
-  },
-  {
-    id: 'babylonHighPerformance', section: 'graphics', label: 'High-performance 3D',
-    description: 'Disable bloom and antialiasing in the Babylon renderer for lower frame latency.',
-    control: { kind: 'toggle' },
-    defaultValue: DEFAULT_SETTINGS.babylonHighPerformance,
-    showWhen: (s) => s.renderEngine === 'babylon',
-    keywords: ['babylon', 'bloom', 'performance', 'latency', 'fps', '3d', 'antialias'],
-  },
   // ── GAMEPLAY ──────────────────────────────────────────────────────────
   {
     id: 'scrollSpeed', section: 'gameplay', label: 'Scroll speed',
@@ -224,13 +208,12 @@ export const ROWS: RowDef[] = [
   },
   {
     id: 'upsurfaceNoteMode', section: 'gameplay', label: 'Scroll direction',
-    description: 'If on, notes move up from below instead of falling from above. Disabled when Babylon.js 3D is the active renderer.',
+    description: 'If on, notes move up from below instead of falling from above.',
     control: { kind: 'select', options: [
       { value: 'false', label: 'Down (default)' },
       { value: 'true',  label: 'Up' },
     ]},
     defaultValue: DEFAULT_SETTINGS.upsurfaceNoteMode,
-    showWhen: (s) => s.renderEngine !== 'babylon',
   },
   {
     id: 'visualOffset', section: 'gameplay', label: 'Visual offset',

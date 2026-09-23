@@ -18,12 +18,10 @@ export class TouchInputAdapter {
   private activeTouches: Map<number, number> = new Map();
   private onKeyDown: (lane: number) => void;
   private onKeyUp: (lane: number) => void;
-  private fullScreenTouch: boolean;
 
-  constructor(onKeyDown: (lane: number) => void, onKeyUp: (lane: number) => void, fullScreenTouch = false) {
+  constructor(onKeyDown: (lane: number) => void, onKeyUp: (lane: number) => void) {
     this.onKeyDown = onKeyDown;
     this.onKeyUp = onKeyUp;
-    this.fullScreenTouch = fullScreenTouch;
   }
 
   /**
@@ -52,15 +50,13 @@ export class TouchInputAdapter {
       const relativeY = touch.clientY - containerRect.top;
       const verticalRatio = relativeY / containerRect.height;
 
-      if (!this.fullScreenTouch) {
-        if (upsurfaceNoteMode) {
-          if (verticalRatio > (1 - VERTICAL_TOUCH_ZONE_THRESHOLD)) {
-            continue;
-          }
-        } else {
-          if (verticalRatio < VERTICAL_TOUCH_ZONE_THRESHOLD) {
-            continue;
-          }
+      if (upsurfaceNoteMode) {
+        if (verticalRatio > (1 - VERTICAL_TOUCH_ZONE_THRESHOLD)) {
+          continue;
+        }
+      } else {
+        if (verticalRatio < VERTICAL_TOUCH_ZONE_THRESHOLD) {
+          continue;
         }
       }
 
@@ -90,24 +86,6 @@ export class TouchInputAdapter {
       if (previousLane !== undefined) {
         const relativeY = touch.clientY - containerRect.top;
         const verticalRatio = relativeY / containerRect.height;
-
-        if (this.fullScreenTouch) {
-          const relativeX = touch.clientX - containerRect.left;
-          const currentLane = this.getLaneIndex(relativeX, containerRect.width, keyCount);
-          if (currentLane >= 0 && currentLane < keyCount && currentLane !== previousLane) {
-            this.activeTouches.delete(touch.identifier);
-            const previousStillHasTouch = Array.from(this.activeTouches.values()).includes(previousLane);
-            if (!previousStillHasTouch) {
-              this.onKeyUp(previousLane);
-            }
-            const currentHasTouch = Array.from(this.activeTouches.values()).includes(currentLane);
-            this.activeTouches.set(touch.identifier, currentLane);
-            if (!currentHasTouch) {
-              this.onKeyDown(currentLane);
-            }
-          }
-          continue;
-        }
 
         if (upsurfaceNoteMode) {
           // Sticky holds: only release on large downward drift, not the tighter start zone

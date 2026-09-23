@@ -47,7 +47,12 @@ import { LAZER_HOLD_RULES_VERSION } from './ruleset/mania/holdNote';
 import { applyBeatmapMods } from './ruleset/mania/beatmapMods';
 import { extractZipEntry } from './utils/zipResolver';
 import { AssetLifecycleManager } from './utils/assetLifecycle';
-import { computeChecksum } from './utils/checksum';
+import { computeChecksum, inferChecksumAlgorithm } from './utils/checksum';
+import {
+  fetchOfficialChartsForSet,
+  findOfficialChartByChecksum,
+  officialChartRevisionId,
+} from './utils/mirrorStarRatings';
 import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
 import { MENU_FALLBACK_TRACK, menuMusic, pickMenuMusicIndex } from './utils/menuMusic';
@@ -94,8 +99,6 @@ const LOCAL_STORAGE_SETTINGS_KEY = 'rhythm_mania_v1_settings';
 const LOCAL_STORAGE_CUSTOM_MAPS_KEY = 'rhythm_mania_v1_custom_maps';
 
 import {
-  BABYLON_PLAYFIELD_WIDTH_MAX,
-  BABYLON_PLAYFIELD_WIDTH_MIN,
   DEFAULT_SETTINGS,
   PLAYFIELD_WIDTH_MAX,
   PLAYFIELD_WIDTH_MIN,
@@ -680,6 +683,7 @@ export default function App() {
           if (osuFiles.length === 0) continue;
           const importedMaps: Beatmap[] = [];
           const pkgId = `osuapi_${setId}`;
+          const staged: Array<{ parsed: Beatmap; rawContent: ArrayBuffer; md5: string; sha256: string }> = [];
           for (const fileKey of osuFiles) {
             const rawContent = await extractZipEntry(zip.files[fileKey], fileKey, extractionBudget);
             const content = decodeBoundedUtf8(rawContent, `Beatmap file ${fileKey}`);
@@ -687,15 +691,37 @@ export default function App() {
             if (!parsed) continue;
             const md5 = await computeChecksum(rawContent, 'md5');
             const sha256 = await computeChecksum(rawContent, 'sha256');
-            const chartRevisionId = `osuapi_${setId}_b0_${md5}`;
+            staged.push({ parsed, rawContent, md5: md5.toLowerCase(), sha256: sha256.toLowerCase() });
+          }
+          if (staged.length === 0) continue;
+          const officialCharts = await fetchOfficialChartsForSet(
+            setId,
+            staged[0]?.parsed.title,
+            staged[0]?.parsed.artist,
+          );
+          for (const item of staged) {
+            const { parsed, md5, sha256 } = item;
+            const matched = findOfficialChartByChecksum(officialCharts, md5, sha256);
+            const chartRevisionId = matched
+              ? officialChartRevisionId(setId, matched)
+              : `osuapi_${setId}_b0_${md5}`;
             (parsed as unknown as Record<string, unknown>).id = chartRevisionId;
             (parsed as unknown as Record<string, unknown>).catalogSetId = pkgId;
             (parsed as unknown as Record<string, unknown>).catalogMapId = chartRevisionId;
             (parsed as unknown as Record<string, unknown>).chartRevisionId = chartRevisionId;
-            (parsed as unknown as Record<string, unknown>).checksum = md5;
+            (parsed as unknown as Record<string, unknown>).checksum = matched
+              ? matched.checksum.toLowerCase()
+              : md5;
             (parsed as unknown as Record<string, unknown>).checksumMd5 = md5;
             (parsed as unknown as Record<string, unknown>).checksumSha256 = sha256;
-            (parsed as unknown as Record<string, unknown>).checksumAlgorithm = 'md5';
+            (parsed as unknown as Record<string, unknown>).checksumAlgorithm = matched
+              ? inferChecksumAlgorithm(matched.checksum)
+              : 'md5';
+            if (matched && Number.isFinite(matched.starRating) && matched.starRating >= 0) {
+              (parsed as unknown as Record<string, unknown>).starRating = Number(matched.starRating);
+              (parsed as unknown as Record<string, unknown>).starRatingSource = 'osu-api-download';
+              (parsed as unknown as Record<string, unknown>).starRatingVersion = undefined;
+            }
             (parsed as unknown as Record<string, unknown>).isServerMap = true;
             (parsed as unknown as Record<string, unknown>).packageId = pkgId;
             (parsed as unknown as Record<string, unknown>).parentPackageId = pkgId;
@@ -841,6 +867,7 @@ export default function App() {
       if (!pkgId) throw new Error('Replay has no verified cloud set identity');
       const targetChecksum = typeof record.checksum === 'string' ? record.checksum.toLowerCase() : null;
 
+      const stagedReplay: Array<{ fileKey: string; parsed: Beatmap; md5: string; sha256: string }> = [];
       for (const fileKey of osuFiles) {
         const rawContent = await extractZipEntry(zip.files[fileKey], fileKey, extractionBudget);
         const content = decodeBoundedUtf8(rawContent, `Beatmap file ${fileKey}`);
@@ -851,16 +878,31 @@ export default function App() {
           computeChecksum(rawContent, 'md5'),
           computeChecksum(rawContent, 'sha256'),
         ]);
+        stagedReplay.push({ fileKey, parsed, md5: md5.toLowerCase(), sha256: sha256.toLowerCase() });
+      }
+      const replayOfficialCharts = sourceSetId
+        ? await fetchOfficialChartsForSet(
+            sourceSetId,
+            stagedReplay[0]?.parsed.title,
+            stagedReplay[0]?.parsed.artist,
+          )
+        : [];
+
+      for (const item of stagedReplay) {
+        const { parsed, md5, sha256 } = item;
+        const official = findOfficialChartByChecksum(replayOfficialCharts, md5, sha256);
 
         const isTarget = Boolean(
           (targetChecksum && (md5.toLowerCase() === targetChecksum || sha256.toLowerCase() === targetChecksum)) ||
           (chartRevisionId && (chartRevisionId.includes(md5) || chartRevisionId.includes(sha256))) ||
+          (official && chartRevisionId === officialChartRevisionId(sourceSetId!, official)) ||
           (record.beatmapDifficulty && parsed.difficulty?.toLowerCase() === record.beatmapDifficulty.toLowerCase() && parsed.keyCount === record.keyCount)
         );
 
+        const officialRevisionId = official && sourceSetId ? officialChartRevisionId(sourceSetId, official) : null;
         const mapChartRevisionId = isTarget && chartRevisionId
           ? chartRevisionId
-          : `osuapi_${sourceSetId}_b0_${md5}`;
+          : (officialRevisionId || `osuapi_${sourceSetId}_b0_${md5}`);
 
         const mapId = isTarget && chartRevisionId ? chartRevisionId : mapChartRevisionId;
 
@@ -870,8 +912,8 @@ export default function App() {
           catalogSetId: pkgId,
           catalogMapId: mapChartRevisionId,
           chartRevisionId: isTarget ? (chartRevisionId || mapChartRevisionId) : mapChartRevisionId,
-          checksum: md5,
-          checksumAlgorithm: 'md5',
+          checksum: official ? official.checksum.toLowerCase() : md5,
+          checksumAlgorithm: official ? inferChecksumAlgorithm(official.checksum) : 'md5',
           isServerMap: Boolean(isTarget),
           packageId: pkgId,
           parentPackageId: pkgId,
@@ -882,6 +924,11 @@ export default function App() {
           isCached: true,
           beatmapHash: computeBeatmapHash(parsed),
         };
+        if (official && Number.isFinite(official.starRating) && official.starRating >= 0) {
+          fullMap.starRating = Number(official.starRating);
+          fullMap.starRatingSource = 'osu-api-download';
+          fullMap.starRatingVersion = undefined;
+        }
         importedMaps.push(fullMap as Beatmap);
       }
 
@@ -1038,13 +1085,59 @@ export default function App() {
     const downloadBundledStartupMap = async () => {
       try {
         const stored = await storageManager.getAllBeatmaps();
-        const alreadyInstalled = stored.some((m) =>
+        const installed = stored.filter((m) =>
           (m as Beatmap & { sourceSetId?: number }).sourceSetId === BUNDLED_STARTUP_SET_ID ||
           String((m as Beatmap & { catalogSetId?: string }).catalogSetId || '').replace(/^osuapi_/, '') === String(BUNDLED_STARTUP_SET_ID) ||
           (m as Beatmap & { packageId?: string }).packageId === `osuapi_${BUNDLED_STARTUP_SET_ID}` ||
           (m as Beatmap & { parentPackageId?: string }).parentPackageId === `osuapi_${BUNDLED_STARTUP_SET_ID}`
         );
-        if (alreadyInstalled) return;
+        if (installed.length > 0) {
+          // Backfill official star ratings for installs predating the
+          // mirror-rating lookup (they fell back to the local heuristic).
+          const missing = installed.filter((m) =>
+            typeof (m as Beatmap).starRating !== 'number' ||
+            (m as Beatmap).starRatingSource !== 'osu-api-download',
+          );
+          if (missing.length > 0) {
+            try {
+              const charts = await fetchOfficialChartsForSet(
+                BUNDLED_STARTUP_SET_ID,
+                installed[0]?.title,
+                installed[0]?.artist,
+              );
+              if (charts.length > 0) {
+                let patched = 0;
+                for (const m of missing) {
+                  const checksum = String((m as Beatmap).checksum || '').toLowerCase();
+                  if (!checksum) continue;
+                  const matched = charts.find((c) => c.checksum.toLowerCase() === checksum);
+                  if (!matched || !Number.isFinite(matched.starRating) || matched.starRating < 0) continue;
+                  const next = {
+                    ...m,
+                    id: officialChartRevisionId(BUNDLED_STARTUP_SET_ID, matched),
+                    catalogMapId: officialChartRevisionId(BUNDLED_STARTUP_SET_ID, matched),
+                    chartRevisionId: officialChartRevisionId(BUNDLED_STARTUP_SET_ID, matched),
+                    checksum: matched.checksum.toLowerCase(),
+                    checksumAlgorithm: inferChecksumAlgorithm(matched.checksum),
+                    starRating: Number(matched.starRating),
+                    starRatingSource: 'osu-api-download' as const,
+                    starRatingVersion: undefined,
+                  } as Beatmap;
+                  await storageManager.saveBeatmap(next);
+                  patched++;
+                }
+                if (patched > 0) {
+                  const refreshed = await storageManager.getAllBeatmaps();
+                  const { maps: migratedMaps } = await migrateAndNormalizeBeatmaps(refreshed);
+                  setCustomMaps(migratedMaps);
+                }
+              }
+            } catch (err) {
+              console.warn('Bundled startup map rating backfill failed:', err instanceof Error ? err.message : String(err));
+            }
+          }
+          return;
+        }
         setDownloadingSetIds((prev) => prev.includes(BUNDLED_STARTUP_SET_ID) ? prev : [...prev, BUNDLED_STARTUP_SET_ID]);
         const blob = await downloadBeatmapsetArchive(BUNDLED_STARTUP_SET_ID, () => {}, () => {}, MAX_COMPRESSED_SIZE_BYTES);
         if (!blob || blob.size === 0 || blob.size > MAX_COMPRESSED_SIZE_BYTES) return;
@@ -1054,23 +1147,38 @@ export default function App() {
         const extractionBudget = createZipExtractionBudget();
         const osuFiles = Object.keys(zip.files).filter((f) => f.toLowerCase().endsWith('.osu') && !zip.files[f].dir);
         if (osuFiles.length === 0) return;
-        const importedMaps: Beatmap[] = [];
         const pkgId = `osuapi_${BUNDLED_STARTUP_SET_ID}`;
+        const stagedBundled: Array<{ parsed: Beatmap; md5: string; sha256: string }> = [];
         for (const fileKey of osuFiles) {
           const rawContent = await extractZipEntry(zip.files[fileKey], fileKey, extractionBudget);
           const content = decodeBoundedUtf8(rawContent, `Beatmap file ${fileKey}`);
           const parsed = parseBeatmap(content, fileKey);
           if (!parsed || parsed.notes.length === 0) continue;
           const md5 = await computeChecksum(rawContent, 'md5');
-          const chartRevisionId = `osuapi_${BUNDLED_STARTUP_SET_ID}_b0_${md5}`;
+          const sha256 = await computeChecksum(rawContent, 'sha256').catch(() => '');
+          stagedBundled.push({ parsed, md5: md5.toLowerCase(), sha256: String(sha256 || '').toLowerCase() });
+        }
+        if (stagedBundled.length === 0) return;
+        const bundledCharts = await fetchOfficialChartsForSet(
+          BUNDLED_STARTUP_SET_ID,
+          stagedBundled[0]?.parsed.title,
+          stagedBundled[0]?.parsed.artist,
+        );
+        const importedMaps: Beatmap[] = [];
+        for (const item of stagedBundled) {
+          const { parsed, md5, sha256 } = item;
+          const matched = findOfficialChartByChecksum(bundledCharts, md5, sha256);
+          const chartRevisionId = matched
+            ? officialChartRevisionId(BUNDLED_STARTUP_SET_ID, matched)
+            : `osuapi_${BUNDLED_STARTUP_SET_ID}_b0_${md5}`;
           const fullMap = {
             ...parsed,
             id: chartRevisionId,
             catalogSetId: pkgId,
             catalogMapId: chartRevisionId,
             chartRevisionId,
-            checksum: md5,
-            checksumAlgorithm: 'md5',
+            checksum: matched ? matched.checksum.toLowerCase() : md5,
+            checksumAlgorithm: matched ? inferChecksumAlgorithm(matched.checksum) : 'md5',
             isServerMap: true,
             packageId: pkgId,
             parentPackageId: pkgId,
@@ -1078,8 +1186,13 @@ export default function App() {
             coverUrl: `https://assets.ppy.sh/beatmaps/${BUNDLED_STARTUP_SET_ID}/covers/slimcover@2x.jpg`,
             isCached: true,
             beatmapHash: computeBeatmapHash(parsed),
-          } as Beatmap;
-          importedMaps.push(fullMap);
+          } as Beatmap & Record<string, unknown>;
+          if (matched && Number.isFinite(matched.starRating) && matched.starRating >= 0) {
+            fullMap.starRating = Number(matched.starRating);
+            fullMap.starRatingSource = 'osu-api-download';
+            fullMap.starRatingVersion = undefined;
+          }
+          importedMaps.push(fullMap as Beatmap);
         }
         if (importedMaps.length === 0) return;
         await storageManager.savePackageWithBeatmaps(pkgId, importedMaps[0]?.title || 'Ranked Triangles', new Blob([arrayBuffer]), importedMaps);
@@ -1101,18 +1214,12 @@ export default function App() {
   const updateSettings = useCallback((newSettings: Partial<GameSettings>) => {
     setSettings(prev => {
       const updated = { ...prev, ...newSettings };
-      const renderEngine = updated.skinId === 'rhythmmania-3d' || updated.renderEngine === 'babylon' ? 'babylon' : 'canvas';
-      const widthMin = renderEngine === 'babylon' ? BABYLON_PLAYFIELD_WIDTH_MIN : PLAYFIELD_WIDTH_MIN;
-      const widthMax = renderEngine === 'babylon' ? BABYLON_PLAYFIELD_WIDTH_MAX : PLAYFIELD_WIDTH_MAX;
+      const widthMin = PLAYFIELD_WIDTH_MIN;
+      const widthMax = PLAYFIELD_WIDTH_MAX;
       const requestedWidth = Number(updated.playfieldWidthPercent !== undefined ? updated.playfieldWidthPercent : 40);
        const playfieldWidthPercent = Number.isFinite(requestedWidth)
         ? Math.max(widthMin, Math.min(widthMax, requestedWidth))
          : Math.max(widthMin, Math.min(widthMax, 40));
-       const sizeMax = renderEngine === 'babylon'
-          ? 1.2
-          : updated.playfieldStyle === 'circle'
-            ? 1.5
-            : (updated.squareRenderStyle === 'rhythmplus' || updated.squareRenderStyle === 'rhythmplus-dynamic') ? 1.1 : 1.05;
       const safePayload: GameSettings = {
         scrollSpeed: Number(updated.scrollSpeed !== undefined ? updated.scrollSpeed : 21),
         lockScrollSpeedDuringPlay: updated.lockScrollSpeedDuringPlay !== false,
@@ -1125,9 +1232,7 @@ export default function App() {
         masterVolume: Number(updated.masterVolume !== undefined ? updated.masterVolume : 1.0),
         keyMode: Number(updated.keyMode !== undefined ? updated.keyMode : 4),
         bindings: {},
-        upsurfaceNoteMode: renderEngine === 'babylon'
-          ? false
-          : (updated.upsurfaceNoteMode === true || String(updated.upsurfaceNoteMode) === 'true'),
+        upsurfaceNoteMode: (updated.upsurfaceNoteMode === true || String(updated.upsurfaceNoteMode) === 'true'),
         videoOpacity: 1.0,
         backgroundDim: Number(updated.backgroundDim !== undefined ? updated.backgroundDim : 0.60),
         menuBackgroundDim: Number(updated.menuBackgroundDim !== undefined ? updated.menuBackgroundDim : 0),
@@ -1136,7 +1241,7 @@ export default function App() {
         videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
         disableParticles: Boolean(updated.disableParticles),
         limitDprToOne: false,
-        skinId: updated.skinId || 'argon',
+        skinId: updated.skinId === 'rhythmmania-3d' ? 'argon' : (updated.skinId || 'argon'),
         customSkinColors: updated.customSkinColors,
         customSkinName: updated.customSkinName,
         squareRenderStyle: updated.squareRenderStyle || 'rhythmmania',
@@ -1157,8 +1262,6 @@ export default function App() {
         bindPause: updated.bindPause !== undefined ? String(updated.bindPause) : 'escape',
         bindRetry: updated.bindRetry !== undefined ? String(updated.bindRetry) : 'r',
         bindSkipIntro: updated.bindSkipIntro !== undefined ? String(updated.bindSkipIntro) : 'enter',
-         renderEngine,
-        babylonFloor: updated.babylonFloor !== undefined ? Boolean(updated.babylonFloor) : true,
         enableMapSV: updated.enableMapSV !== false,
         disableLaneShake: Boolean(updated.disableLaneShake),
         enableSongPreview: updated.enableSongPreview !== false,

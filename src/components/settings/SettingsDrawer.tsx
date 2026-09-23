@@ -19,8 +19,6 @@ import OffsetWizardModal from './OffsetWizardModal';
 import ConfirmModal from './controls/ConfirmModal';
 import { SectionId, SECTIONS, ROWS } from './settingsRegistry';
 import {
-  BABYLON_PLAYFIELD_WIDTH_MAX,
-  BABYLON_PLAYFIELD_WIDTH_MIN,
   isAtDefault,
   DEFAULT_SETTINGS,
 } from './defaultSettings';
@@ -280,14 +278,10 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
                       );
                     } else if (row.control.kind === 'slider') {
                       const isPercent = row.control.percent === true;
-                      const baseMin = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
-                        ? BABYLON_PLAYFIELD_WIDTH_MIN
-                        : (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
+                      const baseMin = (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
                           ? 0.60
                         : row.control.min;
-                      const baseMax = row.id === 'playfieldWidthPercent' && settings.renderEngine === 'babylon'
-                        ? BABYLON_PLAYFIELD_WIDTH_MAX
-                        : (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
+                      const baseMax = (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
                           ? 1.00
                         : row.control.max;
                       // Percent sliders show whole 0-100 integers and parse back to 0-1.

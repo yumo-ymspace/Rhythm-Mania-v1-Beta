@@ -298,7 +298,7 @@ export interface GameSettings {
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
   disableParticles?: boolean; // completely disable particle visual burst generator
   limitDprToOne?: boolean; // cap canvas device pixel ratio to 1x to save GPU rendering cost
-  skinId?: string; // 'argon' (default Canvas2D reference) | 'custom' | 'rhythmmania-3d' | legacy ids
+  skinId?: string; // 'argon' (default Canvas2D reference) | 'custom' | legacy ids
   customSkinColors?: string[]; // user parsed custom colors: [blueKeyColor, whiteKeyColor, accentKeyColor, cyanKeyColor, holdNoteColor]
   customSkinName?: string;
   squareRenderStyle?: 'rhythmmania' | 'rhythmplus' | 'rhythmplus-dynamic';
@@ -319,9 +319,6 @@ export interface GameSettings {
   bindPause?: string; // gameplay pause/resume keybind
   bindRetry?: string; // gameplay quick retry keybind
   bindSkipIntro?: string; // gameplay skip-intro keybind
-  renderEngine?: 'canvas' | 'babylon';
-  babylonFloor?: boolean;
-  babylonHighPerformance?: boolean; // disable bloom/AA in the Babylon renderer for lower latency
   compensateOutputLatency?: boolean; // subtract measured baseLatency+outputLatency from the judgement clock
   enableMapSV?: boolean;
   disableLaneShake?: boolean;

@@ -23,7 +23,7 @@ import {
   ARGON_COLOUR_PURPLE,
 } from '../render/argonSkin';
 
-export type SkinStyleId = 'argon' | 'rhythmmania' | 'rhythmmania-3d' | 'rhythmplus' | 'rhythmplus-dynamic' | 'circle';
+export type SkinStyleId = 'argon' | 'rhythmmania' | 'rhythmplus' | 'rhythmplus-dynamic' | 'circle';
 
 export interface SkinStyle {
   id: SkinStyleId;
@@ -53,15 +53,6 @@ export const LEGACY_SKINS: SkinStyle[] = [
     subtitle: 'Rectangular style',
     description: 'Glowing rectangular notes with a full-height lane treatment.',
     previewImage: '/skin/rhythmmania-style-rectangular.webp',
-  },
-  {
-    id: 'rhythmmania-3d',
-    label: 'RhythmMania 3D',
-    category: 'legacy',
-    badge: 'LEGACY',
-    subtitle: 'Babylon.js 3D runway',
-    description: 'A converging Babylon.js runway with perspective rectangular notes.',
-    previewImage: '/skin/rhythmmania-3d-style-rectangular.webp',
   },
   {
     id: 'rhythmplus',
@@ -95,7 +86,6 @@ export const LEGACY_SKINS: SkinStyle[] = [
 export const ALL_SKINS: SkinStyle[] = [DEFAULT_SKIN, ...LEGACY_SKINS];
 
 export const getSelectedStyle = (settings: GameSettings): SkinStyleId => {
-  if (settings.renderEngine === 'babylon' || settings.skinId === 'rhythmmania-3d') return 'rhythmmania-3d';
   if (!settings.skinId || settings.skinId === 'argon') return 'argon';
   if (settings.playfieldStyle === 'circle') return 'circle';
   return settings.squareRenderStyle === 'rhythmplus-dynamic'
@@ -104,8 +94,7 @@ export const getSelectedStyle = (settings: GameSettings): SkinStyleId => {
 };
 
 export const styleSettings = (style: SkinStyleId): Partial<GameSettings> => ({
-  skinId: style === 'rhythmmania-3d' ? 'rhythmmania-3d' : style === 'argon' ? 'argon' : 'custom',
-  renderEngine: style === 'rhythmmania-3d' ? 'babylon' : 'canvas',
+  skinId: style === 'argon' ? 'argon' : 'custom',
   playfieldStyle: style === 'circle' ? 'circle' : 'square',
   squareRenderStyle: style === 'rhythmplus-dynamic'
     ? 'rhythmplus-dynamic'
@@ -397,7 +386,7 @@ export default function SkinScreen({
               </div>
             </div>
             <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
-              Argon Default · 5 Legacy
+              Argon Default · 4 Legacy
             </span>
           </div>
 

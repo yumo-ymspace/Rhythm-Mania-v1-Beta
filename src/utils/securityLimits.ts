@@ -27,8 +27,6 @@ import { migrateHistoryRecord } from './replayManager';
 import { sanitizeGameplayMods } from './modifiers';
 import { SUPPORTED_KEY_COUNTS, isSupportedKeyCount, MAX_KEY_COUNT, MIN_KEY_COUNT } from './keyCounts';
 import {
-  BABYLON_PLAYFIELD_WIDTH_MAX,
-  BABYLON_PLAYFIELD_WIDTH_MIN,
   PLAYFIELD_WIDTH_MAX,
   PLAYFIELD_WIDTH_MIN,
   SCROLL_SPEED_MAX,
@@ -292,11 +290,10 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     return result;
   };
 
-  const renderEngine = settings.skinId === 'rhythmmania-3d' || settings.renderEngine === 'babylon' ? 'babylon' : 'canvas';
   const sizeMin = 0.60;
   const sizeMax = 1.00;
-  const widthMin = renderEngine === 'babylon' ? BABYLON_PLAYFIELD_WIDTH_MIN : PLAYFIELD_WIDTH_MIN;
-  const widthMax = renderEngine === 'babylon' ? BABYLON_PLAYFIELD_WIDTH_MAX : PLAYFIELD_WIDTH_MAX;
+  const widthMin = PLAYFIELD_WIDTH_MIN;
+  const widthMax = PLAYFIELD_WIDTH_MAX;
 
   return {
     scrollSpeed: clamp(settings.scrollSpeed, SCROLL_SPEED_MIN, SCROLL_SPEED_MAX, defaultSettings.scrollSpeed),
@@ -310,9 +307,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     masterVolume: clamp(settings.masterVolume, 0, 1, defaultSettings.masterVolume),
     keyMode: clamp(settings.keyMode, MIN_KEY_COUNT, MAX_KEY_COUNT, defaultSettings.keyMode),
     bindings: bindings,
-    upsurfaceNoteMode: renderEngine === 'babylon'
-      ? false
-      : Boolean(settings.upsurfaceNoteMode),
+    upsurfaceNoteMode: Boolean(settings.upsurfaceNoteMode),
     videoOpacity: 1.0,
     backgroundDim: clamp(settings.backgroundDim, 0, 1, defaultSettings.backgroundDim),
     menuBackgroundDim: clamp(settings.menuBackgroundDim, 0, 1, defaultSettings.menuBackgroundDim ?? 0),
@@ -322,7 +317,10 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     disableParticles: Boolean(settings.disableParticles),
     disableLaneShake: Boolean(settings.disableLaneShake),
     limitDprToOne: false,
-    skinId: renderEngine === 'babylon' ? 'rhythmmania-3d' : sanitizeString(settings.skinId, defaultSettings.skinId || 'argon'),
+    skinId: (() => {
+      const cleaned = sanitizeString(settings.skinId, defaultSettings.skinId || 'argon');
+      return cleaned === 'rhythmmania-3d' ? (defaultSettings.skinId || 'argon') : cleaned;
+    })(),
     customSkinColors: customSkinColors,
     customSkinName: settings.customSkinName ? sanitizeString(settings.customSkinName, 'custom', 30) : undefined,
     squareRenderStyle: settings.squareRenderStyle === 'rhythmplus-dynamic'
@@ -345,9 +343,6 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     bindPause: sanitizeString(settings.bindPause, defaultSettings.bindPause || 'escape', 15),
     bindRetry: sanitizeString(settings.bindRetry, defaultSettings.bindRetry || 'r', 15),
     bindSkipIntro: sanitizeString(settings.bindSkipIntro, (defaultSettings as unknown as Record<string, unknown>).bindSkipIntro as string || 'enter', 15),
-     renderEngine,
-      babylonFloor: settings.babylonFloor !== undefined ? Boolean(settings.babylonFloor) : (defaultSettings.babylonFloor ?? true),
-      babylonHighPerformance: settings.babylonHighPerformance !== undefined ? Boolean(settings.babylonHighPerformance) : (defaultSettings.babylonHighPerformance ?? false),
       compensateOutputLatency: settings.compensateOutputLatency !== undefined ? Boolean(settings.compensateOutputLatency) : (defaultSettings.compensateOutputLatency ?? false),
       enableMapSV: settings.enableMapSV !== undefined ? Boolean(settings.enableMapSV) : true,
     enableSongPreview: settings.enableSongPreview !== undefined ? Boolean(settings.enableSongPreview) : true,
