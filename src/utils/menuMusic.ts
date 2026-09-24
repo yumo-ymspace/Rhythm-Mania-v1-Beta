@@ -13,9 +13,9 @@
 /**
  * Launch/menu background music.
  *
- * - With no beatmaps installed, the menu loops `triangles.mp3`.
- * - With beatmaps installed, launch picks uniformly at random between
- *   `triangles.mp3` (pool index 0) and every installed song.
+ * - When beatmapset 2153231 is installed, the start-button song is that set's
+ *   audio file.
+ * - Otherwise the menu loops the bundled `triangles.mp3` fallback track.
  *
  * Uses plain HTMLAudio so menu music never disturbs the Web Audio gameplay
  * clock or the Song Select preview player. Autoplay rejections (browser
@@ -26,8 +26,9 @@
 export const MENU_FALLBACK_TRACK = '/sounds/triangles.mp3';
 
 /**
- * Pick a uniform random pool index for launch menu music.
+ * Legacy uniform random pool picker, retained for compatibility.
  * Index 0 is the bundled fallback track; indices 1..poolSize-1 are songs.
+ * The start-button track no longer rolls randomly; see `launchMenuTrack.ts`.
  */
 export function pickMenuMusicIndex(poolSize: number, rand: () => number = Math.random): number {
   if (!Number.isFinite(poolSize) || poolSize <= 1) return 0;

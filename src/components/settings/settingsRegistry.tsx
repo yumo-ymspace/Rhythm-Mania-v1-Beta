@@ -173,10 +173,17 @@ export const ROWS: RowDef[] = [
   },
   {
     id: 'showFpsCounter', section: 'graphics', label: 'Show FPS counter',
-    description: 'Display a small frames-per-second readout in the corner during gameplay.',
+    description: 'Display a small performance readout (FPS, frame time, input latency) in the corner on every screen.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.showFpsCounter,
-    keywords: ['fps', 'frames', 'performance', 'counter'],
+    keywords: ['fps', 'frames', 'frame', 'time', 'latency', 'input', 'performance', 'counter'],
+  },
+  {
+    id: 'uncappedMenuMotion', section: 'graphics', label: 'Uncapped menu motion',
+    description: 'Render the animated menu background at the full display rate instead of the ~30fps eco throttle. Uses more GPU.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.uncappedMenuMotion,
+    keywords: ['menu', 'background', 'fps', 'frames', 'uncapped', 'throttle', 'motion', 'triangles', 'performance', 'gpu'],
   },
   // ── GAMEPLAY ──────────────────────────────────────────────────────────
   {

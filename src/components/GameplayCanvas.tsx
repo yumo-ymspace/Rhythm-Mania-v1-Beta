@@ -4081,13 +4081,10 @@ export default function GameplayCanvas({
           </div>
         )}
 
-        {/* FPS counter overlay (direct DOM updates from the render loop) */}
-        {(propSettings.showFpsCounter ?? settings.showFpsCounter) && (
-          <span
-            ref={fpsLabelRef}
-            className="absolute top-2 right-3 z-40 font-mono text-[11px] font-bold text-emerald-300/90 bg-black/50 px-2 py-0.5 rounded pointer-events-none select-none"
-          />
-        )}
+        {/* FPS readout moved to the global overlay (GlobalFpsOverlay), which
+            renders on every screen including gameplay when enabled. The
+            per-frame fpsLabelRef accounting above stays as a harmless no-op
+            when no label is mounted. */}
 
         {/* REPLAY SCRUBBER (Only in Replay/Autoplay mode; live play uses ArgonSongProgress in ManiaHud) */}
         {!isPrePlay && (isReplayMode || isAutoplay) && (

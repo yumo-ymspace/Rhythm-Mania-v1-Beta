@@ -40,8 +40,9 @@ import {
 } from './utils/mirrorStarRatings';
 import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
-import { MENU_FALLBACK_TRACK, menuMusic, pickMenuMusicIndex } from './utils/menuMusic';
+import { MENU_FALLBACK_TRACK, menuMusic } from './utils/menuMusic';
 import type { PreparedLaunchTrack } from './utils/launchMenuTrack';
+import { findLaunchMenuTrackMap } from './utils/launchMenuTrack';
 import LoadingScreen from './components/LoadingScreen';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
 import { resolveSkinTheme } from './render/skinTheme';
@@ -49,6 +50,7 @@ import { cssColorToHex, parseCssColor } from './render/color';
 import { applyLazerChrome, LazerDebugSmoke, LazerToolbar } from './ui/lazer';
 import type { LazerMenuPhase } from './components/MainMenu';
 import LazerCursor from './components/LazerCursor';
+import GlobalFpsOverlay from './components/GlobalFpsOverlay';
 
 
 const DEFAULT_MENU_BACKGROUNDS = [
@@ -252,12 +254,12 @@ export default function App() {
   // post-gameplay returns auto-select; fresh app loads do not.
   const [hasPlayedThisSession, setHasPlayedThisSession] = useState(false);
   // True once the IndexedDB/legacy map load settles, so launch menu music can
-  // roll its random pick against the real installed-song pool.
+  // resolve the beatmapset-2153231 track against the real installed-song pool.
   const [mapsReady, setMapsReady] = useState(false);
-  // Launch menu music: the loading screen's start button rolls once per
-  // session between the bundled fallback track and every installed song
-  // (fallback loops when nothing is installed) and starts it audibly.
-  // Returning to the menu resumes the rolled track.
+  // Launch menu music: the loading screen's start button plays the audio file
+  // from beatmapset 2153231 when it is installed, otherwise the bundled
+  // `triangles.mp3` fallback track, and starts it audibly.
+  // Returning to the menu resumes the resolved track.
   const menuChoiceRef = useRef<{ rolled: boolean; mapId: string | null }>({ rolled: false, mapId: null });
   const menuMusicGenRef = useRef(0);
   // Boot gate: the loading screen owns the launch until its start button
@@ -355,13 +357,7 @@ export default function App() {
 
     if (!menuChoiceRef.current.rolled) {
       menuChoiceRef.current.rolled = true;
-      const index = pickMenuMusicIndex(customMaps.length + 1);
-      if (index === 0) {
-        menuChoiceRef.current.mapId = null;
-        menuMusic.play(MENU_FALLBACK_TRACK, volume);
-        return;
-      }
-      const picked = customMaps[index - 1];
+      const picked = findLaunchMenuTrackMap(customMaps);
       if (!picked) {
         menuChoiceRef.current.mapId = null;
         menuMusic.play(MENU_FALLBACK_TRACK, volume);
@@ -1176,6 +1172,7 @@ export default function App() {
         disableLaneShake: Boolean(updated.disableLaneShake),
         enableSongPreview: updated.enableSongPreview !== false,
         showFpsCounter: Boolean(updated.showFpsCounter),
+        uncappedMenuMotion: Boolean(updated.uncappedMenuMotion),
         menuCursorEnabled: updated.menuCursorEnabled !== false,
         showPenarDuringPlay: updated.showPenarDuringPlay !== undefined ? Boolean(updated.showPenarDuringPlay) : true,
         localDisplayName: updated.localDisplayName !== undefined ? String(updated.localDisplayName).slice(0, 32) : '',
@@ -1424,6 +1421,7 @@ export default function App() {
                 phase={menuPhase}
                 onPhaseChange={setMenuPhase}
                 inputDisabled={showSettings || showFindBeatmapOverlay}
+                menuMotionUncapped={settings.uncappedMenuMotion === true}
               />
             </motion.div>
           )}
@@ -1621,6 +1619,10 @@ export default function App() {
           onStartPressed={handleBootStartPressed}
           onEntered={handleBootEntered}
         />
+      )}
+
+      {settings.showFpsCounter === true && (
+        <GlobalFpsOverlay belowToolbar={showLazerToolbar} />
       )}
 
       <LazerCursor enabled={settings.menuCursorEnabled !== false} />

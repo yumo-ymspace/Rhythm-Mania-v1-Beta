@@ -449,7 +449,6 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
         className={`lazer-carousel-card ${isActive ? 'is-active' : ''}`}
       >
         <SongBannerArt group={group} />
-        <div className="absolute inset-0 pointer-events-none lazer-carousel-card-shade" />
 
         {/* Set Card Content */}
         <div className="relative flex items-center justify-between px-3.5 py-2 gap-3 min-h-[56px]">

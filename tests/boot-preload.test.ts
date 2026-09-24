@@ -1,6 +1,6 @@
 /*
  * Tests for the boot loading screen: static asset manifest coverage and
- * launch-track preparation (fallback vs. installed song).
+ * launch-track preparation (beatmapset 2153231 vs. fallback).
  */
 
 import React from 'react';
@@ -16,7 +16,12 @@ import {
   BOOT_MENU_BACKGROUNDS,
   BOOT_STATIC_ASSETS,
 } from '../src/utils/assetPreloader';
-import { prepareLaunchMenuTrack } from '../src/utils/launchMenuTrack';
+import {
+  LAUNCH_MENU_BEATMAPSET_ID,
+  findLaunchMenuTrackMap,
+  isLaunchMenuSetMap,
+  prepareLaunchMenuTrack,
+} from '../src/utils/launchMenuTrack';
 import LoadingScreen from '../src/components/LoadingScreen';
 import type { Beatmap } from '../src/types';
 
@@ -34,6 +39,16 @@ function fakeMap(overrides: Partial<Beatmap> = {}): Beatmap {
     audioUrl: '',
     ...overrides,
   } as Beatmap;
+}
+
+function fakeSetMap(overrides: Partial<Beatmap> = {}): Beatmap {
+  return fakeMap({
+    id: `osuapi_${LAUNCH_MENU_BEATMAPSET_ID}_b1_checksum`,
+    catalogSetId: `osuapi_${LAUNCH_MENU_BEATMAPSET_ID}`,
+    sourceSetId: LAUNCH_MENU_BEATMAPSET_ID,
+    packageId: `osuapi_${LAUNCH_MENU_BEATMAPSET_ID}`,
+    ...overrides,
+  } as Partial<Beatmap>);
 }
 
 describe('boot static asset manifest', () => {
@@ -61,21 +76,39 @@ describe('prepareLaunchMenuTrack', () => {
     expect(mockedUnpack).not.toHaveBeenCalled();
   });
 
-  it('falls back when the rolled song has no unpackable audio', async () => {
+  it('falls back to triangles.mp3 when beatmapset 2153231 is not downloaded', async () => {
     mockedUnpack.mockClear();
-    // Pool of [fallback, song]: rand in [0.5, 1) rolls the song.
-    const track = await prepareLaunchMenuTrack([fakeMap()], () => 0.75);
+    const track = await prepareLaunchMenuTrack([
+      fakeMap({ id: 'other_map', audioUrl: 'blob:other-audio' }),
+    ]);
+    expect(track).toEqual({ mapId: null, src: null });
+    expect(mockedUnpack).not.toHaveBeenCalled();
+  });
+
+  it('falls back when the 2153231 song has no unpackable audio', async () => {
+    mockedUnpack.mockClear();
+    const track = await prepareLaunchMenuTrack([fakeSetMap()]);
     expect(track).toEqual({ mapId: null, src: null });
     expect(mockedUnpack).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the installed song without unpacking when audio is ready', async () => {
+  it('returns the 2153231 audio without unpacking when audio is ready', async () => {
     mockedUnpack.mockClear();
-    const track = await prepareLaunchMenuTrack(
-      [fakeMap({ id: 'map_9', audioUrl: 'blob:fake-audio' })],
-      () => 0.75,
-    );
-    expect(track).toEqual({ mapId: 'map_9', src: 'blob:fake-audio' });
+    const map = fakeSetMap({ id: 'osuapi_2153231_map_9', audioUrl: 'blob:fake-audio' });
+    const track = await prepareLaunchMenuTrack([map]);
+    expect(track).toEqual({ mapId: 'osuapi_2153231_map_9', src: 'blob:fake-audio' });
+    expect(mockedUnpack).not.toHaveBeenCalled();
+  });
+
+  it('prefers the 2153231 set over other installed songs', async () => {
+    mockedUnpack.mockClear();
+    const other = fakeMap({ id: 'other_map', audioUrl: 'blob:other-audio' });
+    const setMap = fakeSetMap({ id: 'osuapi_2153231_preferred', audioUrl: 'blob:set-audio' });
+    expect(isLaunchMenuSetMap(setMap)).toBe(true);
+    expect(isLaunchMenuSetMap(other)).toBe(false);
+    expect(findLaunchMenuTrackMap([other, setMap])?.id).toBe('osuapi_2153231_preferred');
+    const track = await prepareLaunchMenuTrack([other, setMap]);
+    expect(track).toEqual({ mapId: 'osuapi_2153231_preferred', src: 'blob:set-audio' });
     expect(mockedUnpack).not.toHaveBeenCalled();
   });
 });

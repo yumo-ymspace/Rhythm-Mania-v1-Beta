@@ -323,7 +323,8 @@ export interface GameSettings {
   enableMapSV?: boolean;
   disableLaneShake?: boolean;
   enableSongPreview?: boolean; // play an audio preview of the selected map on Song Select
-  showFpsCounter?: boolean; // render a small FPS readout during gameplay
+  showFpsCounter?: boolean; // render a small performance readout (FPS, frame time, input latency) on every screen
+  uncappedMenuMotion?: boolean; // render the menu background at full display rate instead of the ~30fps eco throttle
   showPenarDuringPlay?: boolean; // display PENAR slot below accuracy during gameplay
   localDisplayName?: string; // optional device-local player name; not an account
   menuCursorEnabled?: boolean; // lazer-style menu arrow cursor overlay

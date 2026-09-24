@@ -87,6 +87,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   disableLaneShake: false,
   enableSongPreview: true,
   showFpsCounter: false,
+  uncappedMenuMotion: false,
   showPenarDuringPlay: true,
   localDisplayName: '',
   menuCursorEnabled: true,

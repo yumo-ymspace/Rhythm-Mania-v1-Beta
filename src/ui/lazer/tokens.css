@@ -1609,13 +1609,11 @@ html[data-ui="lazer"] {
   border-radius: 6px 0 0 6px;
   overflow: hidden;
   background: rgba(22, 25, 32, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-right: none;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border: none;
+  box-shadow: none;
   cursor: pointer;
   user-select: none;
   transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 200ms ease,
               background 200ms ease,
               box-shadow 260ms ease;
 }
@@ -1624,7 +1622,8 @@ html[data-ui="lazer"] {
   /* Small slide only: the scroll container reserves pl-8/pr-5 of gutter so
      the hovered (non-selected) card never clips at the overflow-x edge. */
   transform: translateX(-4px);
-  border-color: rgba(255, 255, 255, 0.22);
+  border: none;
+  box-shadow: none;
   background: rgba(30, 35, 45, 0.96);
 }
 
@@ -1633,8 +1632,8 @@ html[data-ui="lazer"] {
      no sideways shift, so the banner and its glow stay fully inside the
      container padding instead of clipping at the overflow edge. */
   transform: none;
-  border-color: rgba(0, 229, 255, 0.6);
-  box-shadow: 0 0 14px rgba(0, 229, 255, 0.25), 0 6px 18px rgba(0, 0, 0, 0.5);
+  border: none;
+  box-shadow: none;
 }
 
 /* Real-carousel taper: indents are written directly to the DOM every
@@ -2173,13 +2172,23 @@ html[data-ui="lazer"] {
   min-width: 34px;
 }
 
-/* Carousel set-card shade: art right, dark left */
+/* Carousel set-card shade: removed — banner art shows without dark left dimming. */
 .lazer-carousel-card {
   min-height: 56px;
 }
 
 .lazer-carousel-card-shade {
-  background: linear-gradient(90deg, rgba(13,16,23,0.95) 0%, rgba(13,16,23,0.82) 45%, rgba(13,16,23,0.25) 75%, rgba(13,16,23,0.05) 100%);
+  display: none;
+  background: transparent;
+}
+
+/* Song banners, status tags, and top-left song info box all use Nunito. */
+.lazer-carousel-card,
+.lazer-carousel-card *,
+.lazer-status-pill,
+.lazer-song-wedge,
+.lazer-song-wedge * {
+  font-family: "Nunito", "Baloo 2", Inter, sans-serif;
 }
 
 /* Footer: larger parked cookie overlapping corner like the reference HUD,

@@ -167,9 +167,12 @@ export function filledTriangleAimCount(width: number, height: number): number {
   return Math.max(24, Math.min(LAZER_FILLED_MAX, Math.round(raw)));
 }
 
-export function TriangleField({ className }: { className?: string }) {
+export function TriangleField({ className, uncapped = false }: { className?: string; uncapped?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const reduced = useLazerReducedMotion();
+  // Read once per effect run so the hot loop never touches props.
+  const uncappedRef = useRef(uncapped);
+  uncappedRef.current = uncapped;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -307,7 +310,11 @@ export function TriangleField({ className }: { className?: string }) {
       }
       const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0.016;
       lastTs = ts;
-      if (ts - lastPaintTs >= TRIANGLE_FRAME_INTERVAL_MS) {
+      // Eco throttle (~30fps) unless the uncapped-menu-motion setting is on,
+      // in which case every vsync paints. dt spans real elapsed time either
+      // way, so drift speed is unchanged. Read via ref so toggling the
+      // setting never re-seeds the field.
+      if (uncappedRef.current || ts - lastPaintTs >= TRIANGLE_FRAME_INTERVAL_MS) {
         lastPaintTs = ts;
         paint(ts, dt, true);
       }

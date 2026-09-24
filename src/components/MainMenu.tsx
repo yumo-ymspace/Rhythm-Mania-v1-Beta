@@ -131,6 +131,8 @@ export type MainMenuProps = {
   onPhaseChange?: (phase: LazerMenuPhase) => void;
   /** When true, ignore all menu hotkeys (settings overlay owns Space/Enter/Escape). */
   inputDisabled?: boolean;
+  /** When true, the triangle background paints every vsync instead of the ~30fps eco throttle. */
+  menuMotionUncapped?: boolean;
 };
 
 export const MainMenu = ({
@@ -140,6 +142,7 @@ export const MainMenu = ({
   phase: controlledPhase,
   onPhaseChange,
   inputDisabled = false,
+  menuMotionUncapped = false,
 }: MainMenuProps) => {
   const [internalPhase, setInternalPhase] = useState<LazerMenuPhase>('idle');
   const phase = controlledPhase !== undefined ? controlledPhase : internalPhase;
@@ -368,7 +371,7 @@ export const MainMenu = ({
       role="main"
       aria-label="RhythmMania main menu"
     >
-      <TriangleField />
+      <TriangleField uncapped={menuMotionUncapped} />
 
       <motion.div
         className="lazer-cookie-rays"
