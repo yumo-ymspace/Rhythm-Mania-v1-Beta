@@ -1180,7 +1180,7 @@ export default function SongSelect({
       />
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-[80px] min-h-0">
+      <div className="flex-1 w-full z-10 relative overflow-hidden flex flex-col lg:flex-row pb-[36px] md:pb-[48px] min-h-0">
         
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
@@ -1209,7 +1209,7 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
+        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-0 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
 
           {/* TOP-RIGHT FILTER BOX — single shell, slanted left, flush right (hud refs) */}
           <div className="lazer-song-filter-stack">

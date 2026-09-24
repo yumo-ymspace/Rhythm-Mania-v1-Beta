@@ -1256,11 +1256,11 @@ html[data-ui="lazer"] {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 72px;
-  background: rgba(14, 17, 23, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  height: 48px;
+  background: rgba(32, 34, 38, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
   display: flex;
   align-items: stretch;
   justify-content: space-between;
@@ -1289,19 +1289,21 @@ html[data-ui="lazer"] {
   min-width: 220px;
   height: 48px;
   flex-shrink: 0;
-  align-self: center;
+  align-self: flex-end;
+  margin-bottom: 14px;
 }
 
 /* Tall tool slabs (hud/songselect refs): Mods / Random / Options stand
    taller than the bar and protrude above its top edge, bottom-aligned.
-   Back stays a short centred pill. */
+   Back is bottom-aligned with a smaller lift so its top sits just
+   above the bar (bar top sits a few px below the Back top). */
 .lazer-footer-cluster {
   align-items: flex-end;
 }
 
 .lazer-footer-cluster .lazer-footer-action-btn {
   min-width: 118px;
-  height: 100px;
+  height: 80px;
   align-self: flex-end;
   /* Visible breathing room between the Mods / Random / Options slabs. */
   margin-left: 6px;
@@ -1540,7 +1542,7 @@ html[data-ui="lazer"] {
 /* 390x844 mobile adaptation */
 @media (max-width: 768px) {
   .lazer-song-select-footer {
-    height: 52px;
+    height: 36px;
     padding: 0 8px 0 0;
   }
   .lazer-footer-cluster {
@@ -1549,13 +1551,14 @@ html[data-ui="lazer"] {
   .lazer-footer-cluster .lazer-footer-back {
     min-width: 104px;
     height: 36px;
+    margin-bottom: 8px;
   }
   .lazer-footer-cluster .lazer-footer-back + .lazer-footer-action-btn {
     margin-left: 16px;
   }
   .lazer-footer-cluster .lazer-footer-action-btn {
     min-width: 62px;
-    height: 64px;
+    height: 50px;
     margin-left: 4px;
   }
   .lazer-footer-cluster .lazer-footer-options-anchor {
@@ -1563,7 +1566,7 @@ html[data-ui="lazer"] {
   }
   .lazer-footer-action-btn {
     min-width: 62px;
-    height: 64px;
+    height: 50px;
   }
   .lazer-footer-action-inner {
     padding: 6px 8px;
@@ -1648,9 +1651,10 @@ html[data-ui="lazer"] {
 
 .lazer-carousel-taper {
   padding-top: 0;
-  padding-bottom: 12px;
+  padding-bottom: 0;
   /* No reserved gutter: the thin scrollbar floats over the banner art so
-     every card stays flush with the screen edge. */
+     every card stays flush with the screen edge. No bottom pad either —
+     the carousel runs flush into the bottom bar. */
   scrollbar-gutter: auto;
 }
 
@@ -1927,20 +1931,36 @@ html[data-ui="lazer"] {
 }
 
 /* Map info wedge is flush with the top toolbar and the left screen edge
-   (hud/songselect refs): no top/left gap, square top-left, angled right. */
+   (hud/songselect refs): no top/left gap, square top-left, angled right.
+   The slanted background lives on ::before so the straight bottom-left
+   corner can keep a real rounded radius (clip-path on the same element
+   would cut the radius off). */
 .lazer-song-wedge {
+  position: relative;
+  background: transparent;
+  border: none;
+  /* Square flush into the left screen edge; the rounded corner now lives
+     on the slanted bottom-right joint (drawn into the ::before polygon). */
+  border-radius: 0;
+  margin: 0 20px 0 0;
+  padding: 16px 62px 16px 16px;
+  overflow: hidden;
+  filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
+}
+
+.lazer-song-wedge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background: rgba(22, 24, 30, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: none;
   border-left: none;
-  /* Slant angle matched to the right filter box (same ~7.6deg angle needs a
-     larger px offset on this taller panel); rounding lives on the straight
-     bottom-left corner (the slanted right edge stays sharp by geometry). */
-  border-radius: 0 0 0 18px;
-  margin: 0;
-  padding: 16px 56px 16px 16px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 34px) 100%, 0 100%);
+  /* Slanted right edge with a rounded bottom-right joint (extra polygon
+     points approximate the curve); bottom-left stays square and flush. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 46px + 11px) calc(100% - 52px), calc(100% - 46px + 8px) calc(100% - 40px), calc(100% - 46px + 5px) calc(100% - 29px), calc(100% - 46px + 2px) calc(100% - 19px), calc(100% - 46px - 2px) calc(100% - 11px), calc(100% - 46px - 7px) calc(100% - 5px), calc(100% - 46px - 15px) 100%, 0 100%);
 }
 
 /* Tabs + ranking/details body sit below the flush wedge with left gutter. */
@@ -2171,8 +2191,12 @@ html[data-ui="lazer"] {
 
 @media (max-width: 768px) {
   .lazer-song-wedge {
-    clip-path: none;
     border-radius: 8px;
+    margin-right: 0;
+    padding-right: 16px;
+  }
+  .lazer-song-wedge::before {
+    clip-path: none;
   }
   .lazer-parked-cookie-wrapper {
     margin-bottom: 6px;
@@ -2195,7 +2219,10 @@ html[data-ui="lazer"] {
   flex-shrink: 0;
   /* Bleed to the right screen edge (cancels the column pr-2 / lg:pr-3). */
   margin-right: -8px;
-  padding: 4px 20px 6px 30px;
+  /* Slightly longer shell: extends left past the column edge; the extra
+     left padding keeps the rows exactly where they were. */
+  margin-left: -20px;
+  padding: 4px 20px 6px 50px;
 }
 
 @media (min-width: 1024px) {
@@ -2204,8 +2231,12 @@ html[data-ui="lazer"] {
   }
 }
 
-/* Single shell: slanted left edge, flush right edge with rounded
-   top-right/bottom-right corners (the slanted left edge stays sharp). */
+/* Single shell: slanted left edge only, mirrored against the song info
+   wedge. The inset is scaled to the shell height (~21px here vs 46px on
+   the taller wedge) so both faces share the same slant ANGLE; rectangular
+   on the right and bled flush to the right screen edge. The bottom-left
+   slant joint carries a small rounded curve in the same style as the info
+   wedge's bottom-right joint, sized to this shorter shell. */
 .lazer-song-filter-stack::before {
   content: "";
   position: absolute;
@@ -2214,8 +2245,8 @@ html[data-ui="lazer"] {
   background: rgba(22, 24, 30, 0.92);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0 18px 18px 0;
-  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
+  border-radius: 0;
+  clip-path: polygon(21px 0, 100% 0, 100% 100%, 20px 100%, 9px calc(100% - 2px), 4px calc(100% - 8.5px), 4px calc(100% - 19px));
 }
 
 /* --- Search row: flat segment with a divider, thinner than before. --- */
@@ -2311,6 +2342,7 @@ html[data-ui="lazer"] {
 
 @media (max-width: 768px) {
   .lazer-song-filter-stack {
+    margin-left: 0;
     padding-left: 16px;
   }
   .lazer-song-filter-stack::before {

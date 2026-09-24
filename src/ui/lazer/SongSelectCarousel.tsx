@@ -395,9 +395,9 @@ export function SongSelectCarousel({
   // No top spacer: the list starts flush at the top and selection snaps to
   // the top edge (not the viewport centre), so there is never an empty gap
   // above the first card. A small bottom pad keeps the last card off the
-  // footer edge.
+  // footer edge. The carousel bottom sits flush at the bottom bar.
   const TOP_SPACER_PX = 0;
-  const BOTTOM_SPACER_PX = 12;
+  const BOTTOM_SPACER_PX = 0;
   // Gated until the first synchronous measure+taper pass completes, so the
   // list's first painted frame already has the measured top spacer and
   // correct indents instead of flashing fallback positions at the top.
