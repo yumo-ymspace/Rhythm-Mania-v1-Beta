@@ -18,6 +18,7 @@ import {
   getJudgementWindows,
   getSpeedMultiplier,
   MANIA_DIFFICULTY_RANGES,
+  roundHalfToEven,
 } from '../src/ruleset/mania/hitWindows';
 import type { JudgementType } from '../src/types';
 
@@ -267,6 +268,29 @@ describe('osu!(lazer) mania hit window fixtures (TASK-011)', () => {
       expect(getSpeedMultiplier([])).toBe(1.0);
       expect(getSpeedMultiplier(null)).toBe(1.0);
       expect(getSpeedMultiplier(undefined)).toBe(1.0);
+    });
+  });
+
+  describe("Convert OD gate uses banker's rounding (C# Math.Round)", () => {
+    it('rounds halves to even', () => {
+      expect(roundHalfToEven(4.5)).toBe(4);
+      expect(roundHalfToEven(5.5)).toBe(6);
+      expect(roundHalfToEven(4.4)).toBe(4);
+      expect(roundHalfToEven(4.6)).toBe(5);
+    });
+
+    it('applies low-OD convert windows at OD 4.5 (rounds to 4)', () => {
+      const windows = getJudgementWindows(4.5, 1, 1, true, true);
+      const byType = Object.fromEntries(windows.map((w) => [w.type, w.windowMs])) as Record<JudgementType, number>;
+      expect(byType.perfect).toBe(47.5); // low-OD branch: 47
+      expect(byType.great).toBe(77.5); // low-OD branch: 77
+    });
+
+    it('applies high-OD convert windows at OD 5.5 (rounds to 6)', () => {
+      const windows = getJudgementWindows(5.5, 1, 1, true, true);
+      const byType = Object.fromEntries(windows.map((w) => [w.type, w.windowMs])) as Record<JudgementType, number>;
+      expect(byType.perfect).toBe(34.5); // high-OD branch: 34
+      expect(byType.great).toBe(67.5); // high-OD branch: 67
     });
   });
 

@@ -30,6 +30,7 @@ import {
   computeTotalScore,
   countMapJudgements,
   countTotalHits,
+  extendMaxComboPortion,
   getComboScoreChange,
 } from './scoreProcessor';
 import {
@@ -93,7 +94,8 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
   const hpDrainRate = activeBeatmap.hpDrainRate ?? 5;
   const isClassic = isClassicMod(selectedMods);
   const difficultyMultiplier = getDifficultyMultiplier(selectedMods);
-  const speedMultiplier = isClassic ? 1.0 : getSpeedMultiplier(selectedMods);
+  // Lazer Classic branch still uses totalMultiplier = speed / difficulty.
+  const speedMultiplier = getSpeedMultiplier(selectedMods);
   const judgementWindows = getJudgementWindows(od, difficultyMultiplier, speedMultiplier, isClassic);
 
   const marvelousJudg = judgementWindows.find((w) => w.type === 'marvelous') || judgementWindows[0];
@@ -159,7 +161,9 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
   };
 
   let totalJudgements = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
-  let maxComboPortion = computeMaxComboPortion(totalJudgements);
+  // The v2 tick path grows its total as judgements arrive (extended O(1) per
+  // hit below), so it starts from the empty sum 0.
+  let maxComboPortion = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : computeMaxComboPortion(totalJudgements);
   let currentComboPortion = 0;
   const hitErrorSamples: number[] = [];
   const healthState = createHealthState(hpDrainRate, selectedMods, activeBeatmap.notes);
@@ -205,8 +209,8 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
     }
 
     if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
+      maxComboPortion = extendMaxComboPortion(maxComboPortion, totalJudgements, judgedCount);
       totalJudgements = judgedCount;
-      maxComboPortion = computeMaxComboPortion(judgedCount);
     }
 
     currentComboPortion += getComboScoreChange(judg.type, scoreState.combo);

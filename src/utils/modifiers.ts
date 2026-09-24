@@ -11,7 +11,7 @@
  */
 
 const BASE_MODIFIERS = new Set([
-  'NF', 'EZ', 'HR', 'HT', 'DT', 'NC', 'SD', 'PF', 'HD', 'FI', 'COVER', 'CO', 'FL', 'AT',
+  'NF', 'EZ', 'HR', 'HT', 'DT', 'NC', 'DC', 'DAYCORE', 'SD', 'PF', 'HD', 'FI', 'COVER', 'CO', 'FL', 'AT',
   'MR', 'MIRROR',
   'CS', 'CONSTANTSPEED',
   'IN', 'INVERT',
@@ -28,10 +28,15 @@ const BASE_MODIFIERS = new Set([
   'AC', 'ACCURACYCHALLENGE',
 ]);
  
+// Score multipliers mirror ppy/osu ManiaScoreMultiplierCalculator:
+// EZ/NF 0.5, HT/DC rate-adjusted (0.75x -> 0.3), NR/HO/CS 0.9, DA 0.5,
+// WU/WD/AS 0.5, key mods 0.9. DT/NC/HR/SD/PF/HD/FI/CO/FL/MR/RD/IN/CL/MU/AC 1.0.
 export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   NF: 0.5,
   EZ: 0.5,
-  HT: 0.5,
+  HT: 0.3,
+  DC: 0.3,
+  Daycore: 0.3,
   HR: 1.0,
   SD: 1.0,
   PF: 1.0,
@@ -44,26 +49,26 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
   NC: 1.0,
   MR: 1.0,
   Mirror: 1.0,
-  CS: 0.8,
-  ConstantSpeed: 0.8,
+  CS: 0.9,
+  ConstantSpeed: 0.9,
   IN: 1.0,
   Invert: 1.0,
   HO: 0.9,
   HoldOff: 0.9,
   NR: 0.9,
   NoRelease: 0.9,
-  DA: 1.0,
-  DifficultyAdjust: 1.0,
+  DA: 0.5,
+  DifficultyAdjust: 0.5,
   CL: 1.0,
   Classic: 1.0,
   RD: 1.0,
   Random: 1.0,
-  WU: 1.0,
-  WindUp: 1.0,
-  WD: 1.0,
-  WindDown: 1.0,
-  AS: 1.0,
-  AdaptiveSpeed: 1.0,
+  WU: 0.5,
+  WindUp: 0.5,
+  WD: 0.5,
+  WindDown: 0.5,
+  AS: 0.5,
+  AdaptiveSpeed: 0.5,
   MU: 1.0,
   Muted: 1.0,
   CN: 0.0,
@@ -83,7 +88,7 @@ export const MOD_SCORE_MULTIPLIERS: Record<string, number> = {
 };
 
 const VISUAL_COVER_MODS = new Set(['HD', 'FI', 'COVER', 'CO', 'FL']);
-const RATE_ADJUST_MODS = new Set(['HT', 'DT', 'NC', 'WU', 'WD', 'AS']);
+const RATE_ADJUST_MODS = new Set(['HT', 'DT', 'NC', 'DC', 'WU', 'WD', 'AS']);
 const SUDDEN_FAIL_MODS = new Set(['SD', 'PF', 'AC']);
 const AUTOMATION_MODS = new Set(['AT', 'CN']);
 
@@ -96,6 +101,7 @@ function isAccuracyChallengePattern(upper: string): boolean {
 }
 
 function normalizeModName(upper: string): string {
+  if (upper === 'DAYCORE') return 'DC';
   if (upper === 'COVER' || upper === 'CO') return 'Cover';
   if (upper === 'MIRROR') return 'MR';
   if (upper === 'CONSTANTSPEED') return 'CS';

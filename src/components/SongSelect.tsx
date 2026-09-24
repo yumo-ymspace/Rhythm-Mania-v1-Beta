@@ -1185,7 +1185,7 @@ export default function SongSelect({
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className="w-full lg:w-[540px] xl:w-[600px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 flex">
+        <div className="w-full lg:w-[620px] xl:w-[700px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 flex">
           <SongSelectLeftPanel
             selectedMap={selectedCustomMap}
             currentStarRating={currentStarRating}
@@ -1211,10 +1211,10 @@ export default function SongSelect({
             ======================================================= */}
         <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
 
-          {/* TOP-RIGHT FILTER STACK — thin slant boxes (visual-refs/hud songselect refs) */}
+          {/* TOP-RIGHT FILTER BOX — single shell, slanted left, flush right (hud refs) */}
           <div className="lazer-song-filter-stack">
-          {/* SEARCH BOX — slanted wedge, italic placeholder, yellow matches, magnifier */}
-          <div className="relative flex-shrink-0 lazer-song-search lazer-song-filter-wedge is-search">
+          {/* SEARCH BOX — italic placeholder, yellow matches, magnifier */}
+          <div className="relative flex-shrink-0 lazer-song-search">
             <input
               id="song-search-input"
               type="text"
@@ -1230,7 +1230,7 @@ export default function SongSelect({
           </div>
 
           {/* STAR RATING RAINBOW BAR + Show converts — drag/scroll directly on the bar */}
-          <div className="flex-shrink-0 flex items-center gap-2 lazer-song-filter-wedge is-star">
+          <div className="flex-shrink-0 flex items-center gap-2 lazer-song-filter-star">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="lazer-filter-tab">Star Rating</span>
               <div

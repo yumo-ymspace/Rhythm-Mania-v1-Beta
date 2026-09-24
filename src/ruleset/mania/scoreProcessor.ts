@@ -80,6 +80,26 @@ export function computeMaxComboPortion(totalJudgements: number): number {
   return sum > 0 ? sum : 1;
 }
 
+/**
+ * Incrementally extends a max-combo-portion total from prevCount to newCount
+ * with all-Marvelous terms. Bit-identical to recomputing
+ * computeMaxComboPortion(newCount) when counts grow monotonically, but O(delta)
+ * instead of O(newCount) — the per-judgement hold-tick path grows by exactly
+ * one judgement per call, so this is O(1) per hit.
+ */
+export function extendMaxComboPortion(currentMax: number, prevCount: number, newCount: number): number {
+  const from = Math.max(0, prevCount | 0);
+  const to = Math.max(0, newCount | 0);
+  if (to <= from) return currentMax;
+  // computeMaxComboPortion(0) returns the 1.0 division guard, but the true
+  // empty sum is 0 — normalize so incremental growth matches recomputation.
+  let max = from === 0 ? 0 : currentMax;
+  for (let i = from + 1; i <= to; i++) {
+    max += COMBO_BASE_SCORE.marvelous * getComboMultiplier(i);
+  }
+  return max;
+}
+
 export function countTotalHits(counts: JudgementCounts): number {
   return (
     counts.marvelousCount +

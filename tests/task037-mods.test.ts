@@ -222,9 +222,9 @@ describe('TASK-037: Mod Sanitization, Normalization, and Multipliers', () => {
 
   it('reports correct score multipliers', () => {
     expect(MOD_SCORE_MULTIPLIERS['RD']).toBe(1.0);
-    expect(MOD_SCORE_MULTIPLIERS['WU']).toBe(1.0);
-    expect(MOD_SCORE_MULTIPLIERS['WD']).toBe(1.0);
-    expect(MOD_SCORE_MULTIPLIERS['AS']).toBe(1.0);
+    expect(MOD_SCORE_MULTIPLIERS['WU']).toBe(0.5);
+    expect(MOD_SCORE_MULTIPLIERS['WD']).toBe(0.5);
+    expect(MOD_SCORE_MULTIPLIERS['AS']).toBe(0.5);
     expect(MOD_SCORE_MULTIPLIERS['MU']).toBe(1.0);
     expect(MOD_SCORE_MULTIPLIERS['CN']).toBe(0.0);
     expect(MOD_SCORE_MULTIPLIERS['AC']).toBe(1.0);

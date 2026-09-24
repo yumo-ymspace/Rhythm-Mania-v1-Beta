@@ -246,18 +246,18 @@ describe('TASK-036: Classic (CL) & Difficulty Adjust (DA) mods', () => {
   });
 
   describe('Score multipliers for CL and DA', () => {
-    it('has 1.00x multiplier for CL and DA', () => {
+    it('has 1.00x multiplier for CL and 0.50x for DA (lazer ManiaScoreMultiplierCalculator)', () => {
       expect(MOD_SCORE_MULTIPLIERS.CL).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.Classic).toBe(1.0);
-      expect(MOD_SCORE_MULTIPLIERS.DA).toBe(1.0);
-      expect(MOD_SCORE_MULTIPLIERS.DifficultyAdjust).toBe(1.0);
+      expect(MOD_SCORE_MULTIPLIERS.DA).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.DifficultyAdjust).toBe(0.5);
     });
 
-    it('computes 1.00x multiplier in computeModMultiplier', () => {
+    it('computes multipliers in computeModMultiplier', () => {
       expect(computeModMultiplier(['CL'])).toBe(1.0);
-      expect(computeModMultiplier(['DA'])).toBe(1.0);
-      expect(computeModMultiplier(['DA:OD=9,HP=7'])).toBe(1.0);
-      expect(computeModMultiplier(['CL', 'DA'])).toBe(1.0);
+      expect(computeModMultiplier(['DA'])).toBe(0.5);
+      expect(computeModMultiplier(['DA:OD=9,HP=7'])).toBe(0.5);
+      expect(computeModMultiplier(['CL', 'DA'])).toBe(0.5);
       expect(computeModMultiplier(['CL', 'DT', 'HD'])).toBe(1.0);
     });
   });

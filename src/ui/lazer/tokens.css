@@ -1933,11 +1933,14 @@ html[data-ui="lazer"] {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: none;
   border-left: none;
-  border-radius: 0 0 18px 0;
+  /* Slant angle matched to the right filter box (same ~7.6deg angle needs a
+     larger px offset on this taller panel); rounding lives on the straight
+     bottom-left corner (the slanted right edge stays sharp by geometry). */
+  border-radius: 0 0 0 18px;
   margin: 0;
-  padding: 16px 52px 16px 16px;
+  padding: 16px 56px 16px 16px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 26px) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 34px) 100%, 0 100%);
 }
 
 /* Tabs + ranking/details body sit below the flush wedge with left gutter. */
@@ -2178,36 +2181,50 @@ html[data-ui="lazer"] {
 }
 
 /* ==========================================================================
-   Top-right filter stack — thin slant boxes (visual-refs/hud songselect refs)
-   Search + star rows are single wedges with a slanted left edge (mirrors the
-   left info wedge). The sort/group/collection row stays unclipped so its
-   dropdown popups are never cut — its tab/select pills are slanted instead.
-   All rows are thinner than the old rectangular controls.
+   Top-right filter box — ONE shell around search + star + sort/filter rows
+   (visual-refs/hud songselect refs). Parallelogram slanted on the LEFT edge
+   only; square on the right and bled to the right screen edge. The shell is
+   painted on ::before so the sort dropdown popups (which overflow below the
+   box) are never clipped. Rows stay thin.
    ========================================================================== */
 
 .lazer-song-filter-stack {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
   flex-shrink: 0;
+  /* Bleed to the right screen edge (cancels the column pr-2 / lg:pr-3). */
+  margin-right: -8px;
+  padding: 4px 20px 6px 30px;
 }
 
-/* Shared wedge shell for rows without popups (search + star). */
-.lazer-song-filter-wedge {
+@media (min-width: 1024px) {
+  .lazer-song-filter-stack {
+    margin-right: -12px;
+  }
+}
+
+/* Single shell: slanted left edge, flush right edge with rounded
+   top-right/bottom-right corners (the slanted left edge stays sharp). */
+.lazer-song-filter-stack::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(22, 24, 30, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0 6px 6px 0;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 18px 18px 0;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
 }
 
-/* --- Search wedge: input goes transparent so the wedge is the single box. --- */
-.lazer-song-filter-wedge.is-search {
-  padding: 0;
+/* --- Search row: flat segment with a divider, thinner than before. --- */
+.lazer-song-filter-stack .lazer-song-search {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.lazer-song-filter-wedge.is-search .lazer-song-search-input {
-  padding: 7px 38px 7px 24px;
+.lazer-song-filter-stack .lazer-song-search-input {
+  padding: 6px 34px 6px 2px;
   font-size: 13px;
   background: transparent;
   border: none;
@@ -2215,79 +2232,88 @@ html[data-ui="lazer"] {
   box-shadow: none;
 }
 
-.lazer-song-filter-wedge.is-search .lazer-song-search-input:focus {
+.lazer-song-filter-stack .lazer-song-search-input:focus {
   border: none;
-  box-shadow: inset 0 0 0 1px rgba(233, 103, 161, 0.55);
+  box-shadow: none;
 }
 
-.lazer-song-filter-wedge.is-search .lazer-song-search-matches {
-  left: 24px;
-  bottom: 2px;
+.lazer-song-filter-stack .lazer-song-search-matches {
+  left: 2px;
+  bottom: 1px;
   font-size: 9px;
 }
 
-.lazer-song-filter-wedge.is-search .lazer-song-search-icon {
-  right: 10px;
+.lazer-song-filter-stack .lazer-song-search-icon {
+  right: 2px;
   width: 15px;
   height: 15px;
 }
 
-/* --- Star wedge: inner segments flatten so the row reads as one thin box. --- */
-.lazer-song-filter-wedge.is-star {
+/* --- Star row: flat segment with a divider; label/bar/tabs read as one. --- */
+.lazer-song-filter-star {
   gap: 6px;
-  padding: 3px 10px 3px 20px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.lazer-song-filter-wedge.is-star .lazer-filter-tab {
-  padding: 2px 6px;
+.lazer-song-filter-star .lazer-filter-tab {
+  padding: 2px 6px 2px 0;
   font-size: 11px;
   background: transparent;
-  border-color: transparent;
+  border: none;
   box-shadow: none;
 }
 
-.lazer-song-filter-wedge.is-star .lazer-starbar {
+.lazer-song-filter-star .lazer-starbar {
   padding: 2px 4px;
   background: transparent;
-  border-color: transparent;
+  border: none;
   box-shadow: none;
 }
 
-.lazer-song-filter-wedge.is-star .lazer-starbar-value {
+.lazer-song-filter-star .lazer-starbar-value {
   font-size: 10px;
   padding: 0 5px;
   min-width: 30px;
 }
 
-.lazer-song-filter-wedge.is-star .lazer-starbar-track {
+.lazer-song-filter-star .lazer-starbar-track {
   height: 10px;
 }
 
-.lazer-song-filter-wedge.is-star .lazer-starbar-thumb {
+.lazer-song-filter-star .lazer-starbar-thumb {
   width: 12px;
   height: 12px;
 }
 
-/* --- Sort/group/collection row: slanted parallelogram pills. --- */
+/* --- Sort/group/collection row: flat label + subtle segment dropdowns. --- */
 .lazer-song-filter-row {
   background: transparent;
+  padding-top: 4px;
 }
 
-.lazer-song-filter-row .lazer-filter-tab,
-.lazer-song-filter-row .lazer-filter-select {
-  padding: 3px 12px;
+.lazer-song-filter-row .lazer-filter-tab {
+  padding: 3px 4px 3px 0;
   font-size: 11px;
-  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .lazer-song-filter-row .lazer-filter-select {
+  padding: 3px 8px;
+  font-size: 11px;
   min-width: 84px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
 }
 
 @media (max-width: 768px) {
-  .lazer-song-filter-wedge,
-  .lazer-song-filter-row .lazer-filter-tab,
-  .lazer-song-filter-row .lazer-filter-select {
+  .lazer-song-filter-stack {
+    padding-left: 16px;
+  }
+  .lazer-song-filter-stack::before {
     clip-path: none;
   }
 }

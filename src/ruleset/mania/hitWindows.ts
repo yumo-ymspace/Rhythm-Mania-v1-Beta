@@ -94,8 +94,8 @@ export const MANIA_STABLE_DIFFICULTY_RANGES: Record<JudgementType, (od: number) 
 /**
  * Computes hit window half-width in ms matching osu! stable (Classic mod):
  * floor(range * totalMultiplier) + 0.5
- * Note: Under Classic, speedMultiplier is NOT applied (no speed compensation for DT/HT),
- * so totalMultiplier = 1 / difficultyMultiplier.
+ * Note: lazer Classic still applies speed compensation, so totalMultiplier
+ * = speedMultiplier / difficultyMultiplier (same as non-Classic).
  */
 export function computeStableHitWindow(
   type: JudgementType,
@@ -105,6 +105,17 @@ export function computeStableHitWindow(
   const base = MANIA_STABLE_DIFFICULTY_RANGES[type](od);
   const totalMultiplier = 1 / difficultyMultiplier;
   return Math.floor(base * totalMultiplier) + 0.5;
+}
+
+/**
+ * Banker's (half-to-even) rounding matching C# Math.Round for the convert
+ * OD gate in ManiaHitWindows (Math.Round(od) > 4).
+ */
+export function roundHalfToEven(value: number): number {
+  const floor = Math.floor(value);
+  const diff = value - floor;
+  if (diff < 0.5 || diff > 0.5) return Math.round(value);
+  return floor % 2 === 0 ? floor : floor + 1;
 }
 
 /**
@@ -125,7 +136,8 @@ export function getJudgementWindows(
 
   const classicBase = (type: JudgementType): number => {
     if (isConvert) {
-      const highOd = Math.round(od) > 4;
+      // ppy/osu uses Math.Round (banker's rounding) for the convert OD gate.
+      const highOd = roundHalfToEven(od) > 4;
       switch (type) {
         case 'marvelous': return 16;
         case 'perfect': return highOd ? 34 : 47;

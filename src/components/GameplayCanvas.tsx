@@ -69,6 +69,7 @@ import {
   ACCURACY_BASE_SCORE,
   computeAccuracyPercent,
   computeMaxComboPortion,
+  extendMaxComboPortion,
   computeModMultiplier,
   computeTotalScore,
   countMapJudgements,
@@ -974,10 +975,10 @@ export default function GameplayCanvas({
   }, [settings.limitDprToOne, beatmap.keyCount, isAudioLoaded]);
 
   // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD; DT/HT/NC/DC scale song-time hit-windows with clock rate.
-  // Classic mod restores stable-style hit windows without speed compensation.
+  // Classic mod restores stable-style hit windows but keeps lazer speed compensation (totalMultiplier = speed / difficulty).
   const isClassic = isClassicMod(settings.selectedMods);
   const windowDifficultyMultiplier = getDifficultyMultiplier(settings.selectedMods);
-  const windowSpeedMultiplier = isClassic ? 1.0 : getSpeedMultiplier(settings.selectedMods);
+  const windowSpeedMultiplier = getSpeedMultiplier(settings.selectedMods);
   const judgementWindows = getJudgementWindows(
     beatmap.overallDifficulty,
     windowDifficultyMultiplier,
@@ -1055,10 +1056,13 @@ export default function GameplayCanvas({
     };
     healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods, beatmap.notes);
 
-    // osu!lazer mania standardised score: max combo portion for all-Marvelous FC
+    // osu!lazer mania standardised score: max combo portion for all-Marvelous FC.
+    // The v2 tick path grows its total as judgements arrive (extended O(1) per
+    // hit in applyJudgement), so it starts from the empty sum 0.
     const totalJudgements = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
     totalJudgementsRef.current = totalJudgements;
-    maxComboPortionRef.current = computeMaxComboPortion(totalJudgements);
+    maxComboPortionRef.current =
+      holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : computeMaxComboPortion(totalJudgements);
     currentComboPortionRef.current = 0;
 
     // Lazer-accurate PENAR difficulty: strain passes run once per chart+rate;
@@ -2174,8 +2178,12 @@ export default function GameplayCanvas({
     }
 
     if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
+      maxComboPortionRef.current = extendMaxComboPortion(
+        maxComboPortionRef.current,
+        totalJudgementsRef.current,
+        judgedCount,
+      );
       totalJudgementsRef.current = judgedCount;
-      maxComboPortionRef.current = computeMaxComboPortion(judgedCount);
     }
     currentComboPortionRef.current += getComboScoreChange(judg.type, state.combo);
     const modMultiplier = computeModMultiplier(settings.selectedMods);
@@ -2957,7 +2965,8 @@ export default function GameplayCanvas({
     healthStateRef.current = createHealthState(beatmap.hpDrainRate, settings.selectedMods, beatmap.notes);
 
     totalJudgementsRef.current = holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : countMapJudgements(beatmap.notes);
-    maxComboPortionRef.current = computeMaxComboPortion(totalJudgementsRef.current);
+    maxComboPortionRef.current =
+      holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : computeMaxComboPortion(totalJudgementsRef.current);
 
     // Keep live PENAR consistent after scrub resets; the 4Hz flush loop
     // recomputes it from these counts on its next tick.
@@ -3026,8 +3035,12 @@ export default function GameplayCanvas({
       state.accuracy = computeAccuracyPercent(counts);
       const judgedCount = countTotalHits(counts);
       if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
+        maxComboPortionRef.current = extendMaxComboPortion(
+          maxComboPortionRef.current,
+          totalJudgementsRef.current,
+          judgedCount,
+        );
         totalJudgementsRef.current = judgedCount;
-        maxComboPortionRef.current = computeMaxComboPortion(judgedCount);
       }
 
       simCurrentComboPortion += getComboScoreChange(judg.type, state.combo);

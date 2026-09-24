@@ -18,6 +18,7 @@ import {
   computeMaxComboPortion,
   computeModMultiplier,
   computeTotalScore,
+  extendMaxComboPortion,
   getHpDrainMultiplier,
 } from '../src/ruleset/mania/scoreProcessor';
 import {
@@ -80,7 +81,7 @@ describe('score and judgement math', () => {
     expect(computeModMultiplier(undefined)).toBe(1);
     expect(computeModMultiplier(['NF'])).toBeCloseTo(0.5);
     expect(computeModMultiplier(['EZ'])).toBeCloseTo(0.5);
-    expect(computeModMultiplier(['HT'])).toBeCloseTo(0.5);
+    expect(computeModMultiplier(['HT'])).toBeCloseTo(0.3);
     expect(computeModMultiplier(['HR'])).toBeCloseTo(1.0);
     expect(computeModMultiplier(['HD'])).toBeCloseTo(1.0);
     expect(computeModMultiplier(['DT'])).toBeCloseTo(1.0);
@@ -96,6 +97,21 @@ describe('score and judgement math', () => {
     expect(computeModMultiplier(['EZ', 'DT'])).toBeCloseTo(0.5);
     expect(computeModMultiplier(['HD', 'DT', 'K4'])).toBeCloseTo(0.9);
     expect(computeModMultiplier(['NF', 'HD', 'K7'])).toBeCloseTo(0.45);
+  });
+
+  it('extends max combo portion incrementally bit-identical to recomputation', () => {
+    // Simulates the v2 hold-tick live path: one judgement at a time from empty.
+    let running = 0;
+    let prev = 0;
+    for (let n = 1; n <= 50; n++) {
+      running = extendMaxComboPortion(running, prev, n);
+      expect(running).toBe(computeMaxComboPortion(n));
+      prev = n;
+    }
+    // Multi-step jumps match recomputation too.
+    expect(extendMaxComboPortion(computeMaxComboPortion(10), 10, 25)).toBe(computeMaxComboPortion(25));
+    // No growth returns the stored value.
+    expect(extendMaxComboPortion(123.5, 5, 5)).toBe(123.5);
   });
 
   it('applies EZ and HR HP drain modifiers on top of map drain', () => {

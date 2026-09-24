@@ -8,13 +8,18 @@ import { computeModMultiplier } from '../src/ruleset/mania/scoreProcessor';
 
 describe('Gameplay Modifiers (TASK-034)', () => {
   describe('MOD_SCORE_MULTIPLIERS', () => {
-    it('has 0.50x multipliers for EZ, NF, HT', () => {
+    it('has 0.50x multipliers for EZ and NF (lazer ManiaScoreMultiplierCalculator)', () => {
       expect(MOD_SCORE_MULTIPLIERS.EZ).toBe(0.5);
       expect(MOD_SCORE_MULTIPLIERS.NF).toBe(0.5);
-      expect(MOD_SCORE_MULTIPLIERS.HT).toBe(0.5);
     });
 
-    it('has 1.00x multipliers for HR, SD, PF, DT, NC, HD, FI, Cover, FL, MR, IN, CL, DA', () => {
+    it('has rate-adjusted 0.30x multipliers for HT and DC (0.75x speed)', () => {
+      expect(MOD_SCORE_MULTIPLIERS.HT).toBe(0.3);
+      expect(MOD_SCORE_MULTIPLIERS.DC).toBe(0.3);
+      expect(MOD_SCORE_MULTIPLIERS.Daycore).toBe(0.3);
+    });
+
+    it('has 1.00x multipliers for HR, SD, PF, DT, NC, HD, FI, Cover, FL, MR, IN, CL', () => {
       expect(MOD_SCORE_MULTIPLIERS.HR).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.SD).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.PF).toBe(1.0);
@@ -28,13 +33,25 @@ describe('Gameplay Modifiers (TASK-034)', () => {
       expect(MOD_SCORE_MULTIPLIERS.IN).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.CL).toBe(1.0);
       expect(MOD_SCORE_MULTIPLIERS.Classic).toBe(1.0);
-      expect(MOD_SCORE_MULTIPLIERS.DA).toBe(1.0);
-      expect(MOD_SCORE_MULTIPLIERS.DifficultyAdjust).toBe(1.0);
     });
 
-    it('has 0.80x multiplier for Constant Speed (CS)', () => {
-      expect(MOD_SCORE_MULTIPLIERS.CS).toBe(0.8);
-      expect(MOD_SCORE_MULTIPLIERS.ConstantSpeed).toBe(0.8);
+    it('has 0.50x multiplier for Difficulty Adjust (DA)', () => {
+      expect(MOD_SCORE_MULTIPLIERS.DA).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.DifficultyAdjust).toBe(0.5);
+    });
+
+    it('has 0.50x multipliers for Wind Up/Down and Adaptive Speed (WU/WD/AS)', () => {
+      expect(MOD_SCORE_MULTIPLIERS.WU).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.WindUp).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.WD).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.WindDown).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.AS).toBe(0.5);
+      expect(MOD_SCORE_MULTIPLIERS.AdaptiveSpeed).toBe(0.5);
+    });
+
+    it('has 0.90x multiplier for Constant Speed (CS)', () => {
+      expect(MOD_SCORE_MULTIPLIERS.CS).toBe(0.9);
+      expect(MOD_SCORE_MULTIPLIERS.ConstantSpeed).toBe(0.9);
     });
 
     it('has 0.90x multipliers for Hold Off (HO) and No Release (NR)', () => {
@@ -70,12 +87,20 @@ describe('Gameplay Modifiers (TASK-034)', () => {
     it('multiplies factors correctly', () => {
       expect(computeModMultiplier(['NF'])).toBe(0.5);
       expect(computeModMultiplier(['EZ'])).toBe(0.5);
-      expect(computeModMultiplier(['CS'])).toBe(0.8);
+      expect(computeModMultiplier(['HT'])).toBeCloseTo(0.3);
+      expect(computeModMultiplier(['DC'])).toBeCloseTo(0.3);
+      expect(computeModMultiplier(['DA'])).toBe(0.5);
+      expect(computeModMultiplier(['DA:OD=9,HP=7'])).toBe(0.5);
+      expect(computeModMultiplier(['WU'])).toBe(0.5);
+      expect(computeModMultiplier(['WD'])).toBe(0.5);
+      expect(computeModMultiplier(['AS'])).toBe(0.5);
+      expect(computeModMultiplier(['CS'])).toBe(0.9);
       expect(computeModMultiplier(['HO'])).toBe(0.9);
       expect(computeModMultiplier(['NR'])).toBe(0.9);
       expect(computeModMultiplier(['NF', 'EZ'])).toBe(0.25);
       expect(computeModMultiplier(['NF', 'K7'])).toBeCloseTo(0.45);
-      expect(computeModMultiplier(['CS', 'NR'])).toBeCloseTo(0.72);
+      expect(computeModMultiplier(['CS', 'NR'])).toBeCloseTo(0.81);
+      expect(computeModMultiplier(['HT', 'DA'])).toBeCloseTo(0.15);
     });
   });
 
@@ -141,6 +166,14 @@ describe('Gameplay Modifiers (TASK-034)', () => {
     it('enforces single key mod exclusivity', () => {
       expect(sanitizeGameplayMods(['K4', 'K7'])).toEqual(['K4']);
       expect(sanitizeGameplayMods(['K10', 'K1'])).toEqual(['K10']);
+    });
+
+    it('keeps Daycore (DC) and enforces rate-mod exclusivity with HT', () => {
+      expect(sanitizeGameplayMods(['daycore'])).toEqual(['DC']);
+      expect(sanitizeGameplayMods(['DC'])).toEqual(['DC']);
+      expect(sanitizeGameplayMods(['HT', 'DC'])).toEqual(['HT']);
+      expect(sanitizeGameplayMods(['DC', 'HT'])).toEqual(['DC']);
+      expect(sanitizeGameplayMods(['DC', 'DT'])).toEqual(['DC']);
     });
   });
 });
