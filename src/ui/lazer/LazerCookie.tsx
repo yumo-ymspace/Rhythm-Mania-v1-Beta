@@ -11,6 +11,7 @@
  */
 
 import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
+import { useMemo } from 'react';
 import metadata from '../../../metadata.json';
 import { beatPeriodSeconds, LAZER_PINK_LIGHT, useLazerReducedMotion } from './motion';
 
@@ -98,13 +99,19 @@ export function LazerCookie({
   const mark = label.trim() || LAZER_COOKIE_MARK;
   const { title, version } = splitCookieLabel(mark);
 
-  const bars = Array.from({ length: LAZER_COOKIE_BAR_COUNT }, (_, i) => {
-    if (liveSpectrum) {
-      const sample = spectrum[i % spectrum.length];
-      return Math.max(0, Math.min(1, Number.isFinite(sample) ? sample : 0));
-    }
-    return idleSpectrum(i);
-  });
+  // Memoized: the 72-bar array was rebuilt on every parent render (hover
+  // peaks, phase springs) even though it only depends on the spectrum.
+  const bars = useMemo(
+    () => Array.from({ length: LAZER_COOKIE_BAR_COUNT }, (_, i) => {
+      if (liveSpectrum) {
+        const sample = spectrum[i % spectrum.length];
+        return Math.max(0, Math.min(1, Number.isFinite(sample) ? sample : 0));
+      }
+      return idleSpectrum(i);
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [liveSpectrum, spectrum],
+  );
 
   const cx = 50;
   const cy = 50;

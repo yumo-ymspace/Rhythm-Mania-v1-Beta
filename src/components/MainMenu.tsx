@@ -186,10 +186,22 @@ export const MainMenu = ({
   }, [phase, onPhaseChange]);
 
   useEffect(() => {
-    const update = () => setCookieSize(menuCookieSize(window.innerWidth, window.innerHeight));
+    // rAF-throttled: a raw resize listener re-renders (and rebuilds the
+    // 72-bar cookie SVG) on every native event during a drag-resize.
+    let raf = 0;
+    const update = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setCookieSize(menuCookieSize(window.innerWidth, window.innerHeight));
+      });
+    };
     update();
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   const openTopLevel = useCallback(() => {

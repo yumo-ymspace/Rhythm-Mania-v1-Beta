@@ -92,7 +92,14 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
 
   // --- Idle timer ---
 
+  // Throttled: mousemove fires per pixel — rebuilding the 15s timeout on
+  // every event is pure timer churn. Resets at most once per second, which
+  // is plenty for an idle detector.
+  const lastIdleResetRef = useRef(0);
   const resetIdleTimer = useCallback(() => {
+    const now = Date.now();
+    if (now - lastIdleResetRef.current < 1000) return;
+    lastIdleResetRef.current = now;
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (onIdleTimeout) {
       idleTimerRef.current = setTimeout(() => onIdleTimeout(), 15000);

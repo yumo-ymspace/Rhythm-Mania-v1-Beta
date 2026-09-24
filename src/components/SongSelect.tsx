@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useDeferredValue } from 'react';
 import JSZip from 'jszip';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -31,7 +31,7 @@ import { preloadBeatmapBackgrounds, unpackBeatmap } from '../utils/unpackHelper'
 import { computeBeatmapHash } from '../utils/replayManager';
 import { extractZipEntry } from '../utils/zipResolver';
 import { previewPlayer } from '../utils/previewPlayer';
-import { resolveStarRating } from '../utils/starRating';
+import { getCachedStarRating, getCachedNoteCounts, buildSongMapsIndex } from '../utils/songSelectCache';
 import { calculateChartStarRating, CHART_STAR_RATING_VERSION } from '../utils/chartStarRating';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { computeScrollTravelTimeMs } from '../render/playfieldLayout';
@@ -154,11 +154,11 @@ export default function SongSelect({
   // owns the animation and skips it when already centred.
   const [carouselCenterSignal, setCarouselCenterSignal] = useState<{ key: string; nonce: number } | undefined>(undefined);
   const carouselCenterNonceRef = useRef(0);
-  const requestCarouselCenter = (songKey: string) => {
+  const requestCarouselCenter = useCallback((songKey: string) => {
     if (!songKey) return;
     carouselCenterNonceRef.current += 1;
     setCarouselCenterSignal({ key: songKey, nonce: carouselCenterNonceRef.current });
-  };
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -316,11 +316,11 @@ export default function SongSelect({
     }
   }, [favoriteSongs]);
 
-  const toggleFavorite = (songKey: string) => {
+  const toggleFavorite = useCallback((songKey: string) => {
     setFavoriteSongs(prev =>
       prev.includes(songKey) ? prev.filter(k => k !== songKey) : [...prev, songKey]
     );
-  };
+  }, []);
 
 
 
@@ -334,17 +334,19 @@ export default function SongSelect({
     };
   }, []);
 
-  // Determine actual star rating dynamically
-  const getStarRating = (map: any) => resolveStarRating(map);
+  // Determine actual star rating dynamically (memoized per chart so
+  // filtering/sorting/grouping never re-walks note arrays per render).
+  // Stable reference so the carousel does not re-render on every parent render.
+  const getStarRating = useCallback((map: any) => getCachedStarRating(map as Beatmap), []);
 
-  const getDifficultyColor = (rating: number) => {
+  const getDifficultyColor = useCallback((rating: number) => {
     if (rating < 2.0) return 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
     if (rating < 3.0) return 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20';
     if (rating < 4.0) return 'text-amber-400 bg-amber-500/10 border border-amber-500/20';
     if (rating < 5.0) return 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
     if (rating < 6.5) return 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
     return 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
-  };
+  }, []);
 
   // Resolve locally stored uploads and previously downloaded mirror maps.
   const mergedCustomMaps = React.useMemo((): Beatmap[] => {
@@ -375,19 +377,26 @@ export default function SongSelect({
     }
   }, [selectedCustomMapId]);
 
-  const getArtistTitleKey = (map: any) => {
+  // Stable song-key helpers: referenced by the cached diff index and all
+  // grouping memos. useCallback keeps their identity stable so downstream
+  // useMemo caches are not invalidated on every render.
+  const getArtistTitleKey = useCallback((map: any) => {
     const mapArtist = map.artist || 'Unknown';
     const mapTitle = map.title || 'Untitled';
     return `${mapArtist.toLowerCase().trim()} - ${mapTitle.toLowerCase().trim()}`;
-  };
+  }, []);
 
-  const getMapSongKey = (map: any) => {
+  const getMapSongKey = useCallback((map: any) => {
     const mapPkgId = map.parentPackageId || (map.packageId ? map.packageId.replace(/^pkg_/, '') : undefined);
     if (mapPkgId) return `package_${mapPkgId}`;
     // Standalone imports have no package identity. Keep same-name imports
     // separate instead of collapsing them into one song group.
     return map.id ? `local_map_${map.id}` : getArtistTitleKey(map);
-  };
+  }, [getArtistTitleKey]);
+
+  // Deferred search keeps typing responsive: the input updates immediately
+  // while the expensive filter/sort/group pass runs at lower priority.
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const getSlimCoverUrl = (map: any): string | undefined => {
     const mapCoverUrl = typeof map?.coverUrl === 'string' ? map.coverUrl : undefined;
@@ -422,17 +431,33 @@ export default function SongSelect({
       || `https://assets.ppy.sh/beatmaps/${sourceSetId}/covers/slimcover@2x.jpg`;
   };
 
-  // Filter and prepare display beatmaps
+  // Cached diff index: songKey -> sibling diffs. Built once per map-array
+  // change so expanding a song banner, resolving the remembered difficulty,
+  // and reading the current song's diffs are O(1) lookups instead of O(n)
+  // scans — no .osz unpack is needed to list diff names/info.
+  const songMapsByKey = React.useMemo(
+    () => buildSongMapsIndex(mergedCustomMaps, getMapSongKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mergedCustomMaps],
+  );
+
+  // Filter and prepare display beatmaps. Star ratings come from the
+  // memoized cache (no per-render note walks); search uses the deferred
+  // value so typing never blocks on the filter/sort pass.
   const filteredCustomMaps = React.useMemo(() => {
+    const q = deferredSearchTerm.trim().toLowerCase();
+    const hasQuery = q.length > 0;
     return mergedCustomMaps.filter(map => {
        // Song Select exposes osu!mania charts only.
        if (map.mode !== undefined && map.mode !== 3) return false;
 
       // Filter by search text query
-      const matchesSearch = map.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            map.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            (map.creator && map.creator.toLowerCase().includes(searchTerm.toLowerCase()));
-      if (!matchesSearch) return false;
+      if (hasQuery) {
+        const title = (map.title || '').toLowerCase();
+        const artist = (map.artist || '').toLowerCase();
+        const creator = (map.creator || '').toLowerCase();
+        if (!title.includes(q) && !artist.includes(q) && !(creator && creator.includes(q))) return false;
+      }
 
       // Filter by dynamic star limits
       const rating = getStarRating(map);
@@ -463,9 +488,9 @@ export default function SongSelect({
       }
       return 0;
     });
-  }, [mergedCustomMaps, searchTerm, minStar, maxStar, collectionFilter, sortBy, groupBy, favoriteSongs]);
+  }, [mergedCustomMaps, deferredSearchTerm, minStar, maxStar, collectionFilter, sortBy, groupBy, favoriteSongs, getStarRating, getMapSongKey]);
 
-  const persistLastDifficultyForMap = (map: any) => {
+  const persistLastDifficultyForMap = useCallback((map: any) => {
     if (!map?.id) return;
     const keys = new Set<string>([getMapSongKey(map), getArtistTitleKey(map)]);
     if (map.parentPackageId) keys.add(`package_${map.parentPackageId}`);
@@ -485,9 +510,10 @@ export default function SongSelect({
       }
       return updated;
     });
-  };
+  }, [getMapSongKey, getArtistTitleKey]);
 
-  // Save selected difficulty for the song
+  // Save selected difficulty for the song (selection changes are rare;
+  // a single linear find here is negligible vs the per-frame filter path).
   useEffect(() => {
     if (selectedCustomMapId) {
       const selectedMap = mergedCustomMaps.find(m => m.id === selectedCustomMapId);
@@ -495,7 +521,7 @@ export default function SongSelect({
         persistLastDifficultyForMap(selectedMap);
       }
     }
-  }, [selectedCustomMapId, mergedCustomMaps]);
+  }, [selectedCustomMapId, mergedCustomMaps, persistLastDifficultyForMap]);
 
   // Load last selected map ID on mount/update if none is currently selected.
   // Suppressed on fresh app loads (shouldAutoSelectOnMount === false) so the
@@ -583,7 +609,17 @@ export default function SongSelect({
 
   const expandedSongKey = manualExpandedSongKey !== null ? manualExpandedSongKey : activeSongKey;
 
-  const resolveGroupTargetMap = (group: any) => {
+  // O(1) id lookup so selection/expand never scans the library.
+  const mapById = React.useMemo(() => {
+    const index = new Map<string, Beatmap>();
+    for (const m of mergedCustomMaps) index.set(m.id, m);
+    return index;
+  }, [mergedCustomMaps]);
+
+  const selectedCustomMapIdRef = useRef(selectedCustomMapId);
+  selectedCustomMapIdRef.current = selectedCustomMapId;
+
+  const resolveGroupTargetMap = useCallback((group: any) => {
     const pool: any[] = [];
     const seen = new Set<string>();
     const pushAll = (maps: any[] | undefined) => {
@@ -595,13 +631,20 @@ export default function SongSelect({
       });
     };
     pushAll(group.maps);
-    // Include unfiltered sibling diffs (star/search filters can hide the last-picked difficulty from group.maps)
+    // Include unfiltered sibling diffs (star/search filters can hide the last-picked difficulty from group.maps).
+    // Served from the cached songKey -> diffs index: no scan, no .osz unpack.
     const artistTitleKey = getArtistTitleKey(group);
-    mergedCustomMaps.forEach((m) => {
-      if (getMapSongKey(m) === group.songKey || (group.songKey === artistTitleKey && getArtistTitleKey(m) === artistTitleKey)) {
-        pushAll([m]);
+    pushAll(songMapsByKey.get(group.songKey));
+    if (group.songKey === artistTitleKey) {
+      // Legacy artist-title groups: siblings share the key already.
+    } else {
+      for (const m of mergedCustomMaps) {
+        if (getArtistTitleKey(m) === artistTitleKey && !seen.has(m.id)) {
+          pushAll([m]);
+          break;
+        }
       }
-    });
+    }
 
     if (pool.length === 0) return null;
 
@@ -624,28 +667,17 @@ export default function SongSelect({
     }
 
     // Prefer keeping the currently selected difficulty when re-clicking the active group
-    const current = pool.find((m) => m.id === selectedCustomMapId);
+    const current = pool.find((m) => m.id === selectedCustomMapIdRef.current);
     if (current) return current;
 
     return pool[0];
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songMapsByKey, getArtistTitleKey, getMapSongKey, mergedCustomMaps]);
 
-  const handleSelectGroup = (group: any) => {
-    const targetMap = resolveGroupTargetMap(group);
-
-    if (expandedSongKey === group.songKey) {
-      setManualExpandedSongKey('');
-    } else {
-      setManualExpandedSongKey(group.songKey);
-      if (targetMap) {
-        handleSelectCustomMap(targetMap);
-      }
-      // One-time centre of the newly selected song (not sticky).
-      requestCarouselCenter(group.songKey);
-    }
-  };
-
-  const selectedCustomMap = mergedCustomMaps.find(m => m.id === selectedCustomMapId) || null;
+  const selectedCustomMap = React.useMemo(
+    () => (selectedCustomMapId ? mapById.get(selectedCustomMapId) || null : null),
+    [mapById, selectedCustomMapId],
+  );
 
   const chartLocalScores = React.useMemo(() => {
     if (!selectedCustomMap) return [];
@@ -779,12 +811,13 @@ export default function SongSelect({
     return songGroups.find(g => g.songKey === songKey) || null;
   }, [selectedCustomMap, songGroups]);
 
-  // Extract all compiled difficulties for the currently selected track regardless of star thresholds/filter bounds
+  // Extract all compiled difficulties for the currently selected track regardless of star thresholds/filter bounds.
+  // Served from the cached index — no scan, no unpack.
   const currentSongMaps = React.useMemo(() => {
     if (!selectedCustomMap) return [];
     const songKey = getMapSongKey(selectedCustomMap);
-    return mergedCustomMaps.filter(m => getMapSongKey(m) === songKey);
-  }, [selectedCustomMap, mergedCustomMaps]);
+    return songMapsByKey.get(songKey) || [];
+  }, [selectedCustomMap, songMapsByKey, getMapSongKey]);
 
   const availableKeyCounts = React.useMemo(() => {
     return Array.from(new Set(currentSongMaps.map(m => m.keyCount).filter(Boolean)));
@@ -807,43 +840,121 @@ export default function SongSelect({
   }, [availableKeyCounts, settings.selectedMods, updateSettings]);
 
 
-  // Core map asset extraction and mounting
-  const handleSelectCustomMap = async (map: Beatmap, forceUnpack = false) => {
+  // Two-tier selection: the diff list/banner expands instantly from cached
+  // metadata (no I/O). Media unpack runs in the background:
+  //  - background-only unpack fires immediately (persisted IndexedDB art or
+  //    a cheap unzip) so the backdrop appears fast;
+  //  - the full audio/video unpack is debounced, so fast keyboard scrolling
+  //    or rapid banner clicks never queue a full .osz decompress per step.
+  const unpackGenerationRef = useRef(0);
+  const fullUnpackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (fullUnpackTimerRef.current) clearTimeout(fullUnpackTimerRef.current);
+  }, []);
+
+  const applyCachedMediaToMap = (map: Beatmap) => {
+    const cached = storageManager.lruMediaCache.get(map.id);
+    if (cached) {
+      if (cached.audioUrl) map.audioUrl = cached.audioUrl;
+      if (cached.bgUrl) map.bgUrl = cached.bgUrl;
+      if (cached.videoUrl) map.videoUrl = cached.videoUrl;
+    }
+    return cached;
+  };
+
+  const handleSelectCustomMap = useCallback(async (map: Beatmap, forceUnpack = false) => {
     const wantsVideo = isBrowserPlayableVideoFilename((map as any).videoFilename || '');
     const cacheReady = (c: { audioUrl: string; videoUrl: string; bgUrl: string } | null) =>
       !!(c?.audioUrl && c?.bgUrl && (!wantsVideo || c.videoUrl));
 
-    if (map.id === selectedCustomMapId) {
-      const cached = storageManager.lruMediaCache.get(map.id);
-      if (cacheReady(cached)) {
-        map.audioUrl = cached!.audioUrl;
-        map.bgUrl = cached!.bgUrl;
-        map.videoUrl = cached!.videoUrl || '';
-      }
-      if (!forceUnpack && cacheReady(cached)) {
-        return;
-      }
+    if (map.id === selectedCustomMapIdRef.current) {
+      const cached = applyCachedMediaToMap(map);
+      if (!forceUnpack && cacheReady(cached)) return;
     }
-    
+
+    // Instant: selection state + persisted difficulty. The UI (diff list,
+    // left panel, carousel highlight) renders from cached data immediately.
     setSelectedCustomMapId(map.id);
     persistLastDifficultyForMap(map);
-    
-    try {
-      await unpackBeatmap(map, forceUnpack);
-      const cached = storageManager.lruMediaCache.get(map.id);
-      if (cached) {
-        map.audioUrl = cached.audioUrl || map.audioUrl;
-        map.bgUrl = cached.bgUrl || map.bgUrl;
-        map.videoUrl = cached.videoUrl || map.videoUrl;
+
+    const generation = ++unpackGenerationRef.current;
+    const isStale = () => unpackGenerationRef.current !== generation;
+
+    if (forceUnpack) {
+      if (fullUnpackTimerRef.current) {
+        clearTimeout(fullUnpackTimerRef.current);
+        fullUnpackTimerRef.current = null;
       }
-      setUnpackTrigger(prev => prev + 1);
-    } catch (err) {
-      console.warn('Unpacker encountered an issue resolving map media channels:', err);
+      try {
+        await unpackBeatmap(map, true);
+        if (isStale()) return;
+        applyCachedMediaToMap(map);
+        setUnpackTrigger(prev => prev + 1);
+      } catch (err) {
+        if (!isStale()) console.warn('Unpacker encountered an issue resolving map media channels:', err);
+      }
+      return;
     }
-  };
+
+    // Tier 1: background art only — cheap, never blocks the diff list.
+    try {
+      await unpackBeatmap(map, false, { backgroundOnly: true });
+      if (isStale()) return;
+      applyCachedMediaToMap(map);
+      setUnpackTrigger(prev => prev + 1);
+    } catch {
+      // Best-effort; the full unpack below retries.
+    }
+    if (isStale()) return;
+
+    const cachedAfterBg = storageManager.lruMediaCache.get(map.id);
+    if (cacheReady(cachedAfterBg)) return;
+
+    // Tier 2: full audio/video unpack, debounced so rapid navigation
+    // coalesces into a single decompress for the settled selection.
+    if (fullUnpackTimerRef.current) clearTimeout(fullUnpackTimerRef.current);
+    fullUnpackTimerRef.current = setTimeout(() => {
+      fullUnpackTimerRef.current = null;
+      void (async () => {
+        try {
+          await unpackBeatmap(map, false);
+          if (isStale()) return;
+          applyCachedMediaToMap(map);
+          setUnpackTrigger(prev => prev + 1);
+        } catch (err) {
+          if (!isStale()) console.warn('Unpacker encountered an issue resolving map media channels:', err);
+        }
+      })();
+    }, 350);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refs keep carousel callbacks stable so memoized cards don't re-render
+  // on every selection — only the groups whose active/expanded state
+  // changed re-render.
+  const expandedSongKeyRef = useRef(expandedSongKey);
+  expandedSongKeyRef.current = expandedSongKey;
+  const selectedCustomMapRef = useRef(selectedCustomMap);
+  selectedCustomMapRef.current = selectedCustomMap;
+
+  const handleSelectGroup = useCallback((group: any) => {
+    // Expand instantly from cached diff info; media unpack follows in the
+    // background and never blocks the banner/diff list.
+    if (expandedSongKeyRef.current === group.songKey) {
+      setManualExpandedSongKey('');
+    } else {
+      setManualExpandedSongKey(group.songKey);
+      const targetMap = resolveGroupTargetMap(group);
+      if (targetMap) {
+        void handleSelectCustomMap(targetMap);
+      }
+      // One-time centre of the newly selected song (not sticky).
+      requestCarouselCenter(group.songKey);
+    }
+  }, [resolveGroupTargetMap, handleSelectCustomMap, requestCarouselCenter]);
 
   // Song preview: play audio for the currently selected map once its media has
-  // been unpacked (blob URL available).
+  // been unpacked (blob URL available). O(1) lookup via the id index.
   const isStartingPlayRef = useRef(false);
 
   useEffect(() => {
@@ -852,7 +963,7 @@ export default function SongSelect({
       previewPlayer.stop();
       return;
     }
-    const map = mergedCustomMaps.find(m => m.id === selectedCustomMapId);
+    const map = mapById.get(selectedCustomMapId);
     if (!map?.audioUrl || !map.audioUrl.startsWith('blob:')) {
       previewPlayer.stop();
       return;
@@ -862,7 +973,7 @@ export default function SongSelect({
       : (map.duration || 180) * 1000 * 0.4;
     previewPlayer.play(map.audioUrl, previewMs, settings.musicVolume * settings.previewVolume * settings.masterVolume);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCustomMapId, unpackTrigger, mergedCustomMaps, settings.enableSongPreview, settings.previewVolume, settings.masterVolume]);
+  }, [selectedCustomMapId, unpackTrigger, mapById, settings.enableSongPreview, settings.previewVolume, settings.masterVolume]);
 
   // Keep preview volume in sync with the music volume setting
   useEffect(() => {
@@ -872,8 +983,8 @@ export default function SongSelect({
   // Stop preview when leaving Song Select
   useEffect(() => () => previewPlayer.stop(), []);
 
-  const handleStartPlay = async (mapOverride?: Beatmap) => {
-    const activeMap = mapOverride || selectedCustomMap;
+  const handleStartPlay = useCallback(async (mapOverride?: Beatmap) => {
+    const activeMap = mapOverride || selectedCustomMapRef.current;
     if (activeMap) {
       isStartingPlayRef.current = true;
       previewPlayer.stopImmediately();
@@ -888,7 +999,12 @@ export default function SongSelect({
       previewPlayer.stopImmediately();
       onSelectMap(activeMap);
     }
-  };
+  }, [handleSelectCustomMap, onSelectMap]);
+
+  // Latest random-select callback for the global keyboard handler without
+  // pulling a later-declared const into the deps array (TDZ).
+  const handleSelectRandomRef = useRef<() => void>(() => {});
+  const handleStartPlayRef = useRef<(m?: Beatmap) => Promise<void>>(async () => {});
 
   // Global keyboard shortcuts on song select
   useEffect(() => {
@@ -909,7 +1025,7 @@ export default function SongSelect({
       } else if (e.key === 'Enter') {
         if (!showModsModal && !showOptionsMenu && !openFilterMenu && selectedCustomMap) {
           e.preventDefault();
-          handleStartPlay();
+          void handleStartPlayRef.current();
         }
       } else if (e.key === 'F1') {
         // While a beatmap-listing dropdown is open, keys stay confined to it.
@@ -920,7 +1036,7 @@ export default function SongSelect({
         // Random select is a Song Select action, not a dropdown action.
         if (showModsModal || showOptionsMenu || openFilterMenu) return;
         e.preventDefault();
-        handleSelectRandom();
+        handleSelectRandomRef.current();
       } else if (e.key === 'ArrowDown') {
         if (!showModsModal && !showOptionsMenu && !openFilterMenu && filteredCustomMaps.length > 0) {
           e.preventDefault();
@@ -951,7 +1067,11 @@ export default function SongSelect({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [showModsModal, showOptionsMenu, openFilterMenu, onBack, selectedCustomMap, selectedCustomMapId, filteredCustomMaps]);
+    // handleSelectRandom/handleStartPlay are defined below; they are stable
+    // useCallbacks and are read via refs to avoid a use-before-declaration
+    // TDZ in the deps array. See randomRef/startPlayRef below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModsModal, showOptionsMenu, openFilterMenu, onBack, selectedCustomMap, selectedCustomMapId, filteredCustomMaps, expandedSongKey, getMapSongKey, handleSelectCustomMap, requestCarouselCenter]);
 
   // Uploader drag and drop events
   const handleDrag = (e: React.DragEvent) => {
@@ -1088,28 +1208,29 @@ export default function SongSelect({
     }
   };
 
-  const handleSelectRandom = () => {
+  const handleSelectRandom = useCallback(() => {
     if (songGroups.length === 0) return;
     // Pick a random song group, then a random difficulty inside it so the
     // carousel centres and expands the random pick like a manual selection.
+    // Sibling diffs come from the cached index — no scan, no unpack.
     const randomGroup = songGroups[Math.floor(Math.random() * songGroups.length)];
     if (!randomGroup) return;
-    const pool = randomGroup.maps.length > 0 ? randomGroup.maps : filteredCustomMaps.filter((m) => getMapSongKey(m) === randomGroup.songKey);
+    const pool = randomGroup.maps.length > 0
+      ? randomGroup.maps
+      : (songMapsByKey.get(randomGroup.songKey) || []);
     const target = pool.length > 0
       ? pool[Math.floor(Math.random() * pool.length)]
       : filteredCustomMaps[Math.floor(Math.random() * filteredCustomMaps.length)];
     if (!target) return;
     setManualExpandedSongKey(randomGroup.songKey);
-    handleSelectCustomMap(target);
+    void handleSelectCustomMap(target);
     requestCarouselCenter(randomGroup.songKey);
-  };
+  }, [songGroups, songMapsByKey, filteredCustomMaps, handleSelectCustomMap, requestCarouselCenter]);
 
-  const handleDeleteSelectedSet = () => {
+  const handleDeleteSelectedSet = useCallback(() => {
     if (!selectedCustomMap || !onDeleteSongGroup) return;
     const songKey = getMapSongKey(selectedCustomMap);
-    const mapIds = mergedCustomMaps
-      .filter((map) => getMapSongKey(map) === songKey)
-      .map((map) => map.id);
+    const mapIds = (songMapsByKey.get(songKey) || []).map((map) => map.id);
     if (songDeleteConfirmKey === songKey) {
       void onDeleteSongGroup(mapIds);
       setSelectedCustomMapId('');
@@ -1117,13 +1238,29 @@ export default function SongSelect({
     } else {
       setSongDeleteConfirmKey(songKey);
     }
-  };
+  }, [selectedCustomMap, onDeleteSongGroup, getMapSongKey, songMapsByKey, songDeleteConfirmKey]);
+
+  // Stable carousel callbacks so diff rows don't re-render on every parent render.
+  const handleSelectDifficulty = useCallback((diff: Beatmap) => {
+    void handleSelectCustomMap(diff);
+    requestCarouselCenter(getMapSongKey(diff));
+  }, [handleSelectCustomMap, requestCarouselCenter, getMapSongKey]);
+
+  // Keep the global keyboard handler on the latest callbacks without
+  // pulling later-declared consts into its deps array (TDZ).
+  useEffect(() => {
+    handleSelectRandomRef.current = handleSelectRandom;
+  }, [handleSelectRandom]);
+  useEffect(() => {
+    handleStartPlayRef.current = handleStartPlay;
+  }, [handleStartPlay]);
 
   // Extract selected beatmap statistics (lazer V2 mania wedge: Notes / Hold Notes / Key Count / AR / Accuracy / HP)
+  // Note counts are memoized per chart — no per-render note-array walk.
   const currentStarRating = selectedCustomMap ? getStarRating(selectedCustomMap) : 0.0;
-  const selectedNoteCount = selectedCustomMap?.notes?.length ?? 0;
-  const selectedHoldNoteCount = selectedCustomMap?.notes?.filter((n) => n.endTime != null).length ?? 0;
-  const selectedRiceNoteCount = Math.max(0, selectedNoteCount - selectedHoldNoteCount);
+  const selectedRiceNoteCount = selectedCustomMap
+    ? getCachedNoteCounts(selectedCustomMap).rice
+    : 0;
   const selectedApproachRate = selectedCustomMap?.approachRate ?? selectedCustomMap?.overallDifficulty ?? 5;
   const selectedAccuracyOd = selectedCustomMap?.overallDifficulty ?? 8;
   const selectedHpDrain = selectedCustomMap?.hpDrainRate ?? 5;
@@ -1346,11 +1483,8 @@ export default function SongSelect({
             favoriteSongs={favoriteSongs}
             playHistory={playHistory}
             onSelectGroup={handleSelectGroup}
-            onSelectDifficulty={(diff) => {
-              handleSelectCustomMap(diff);
-              requestCarouselCenter(getMapSongKey(diff));
-            }}
-            onStartPlay={(diff) => handleStartPlay(diff)}
+            onSelectDifficulty={handleSelectDifficulty}
+            onStartPlay={handleStartPlay}
             onToggleFavorite={toggleFavorite}
             getStarRating={getStarRating}
             getDifficultyColor={getDifficultyColor}

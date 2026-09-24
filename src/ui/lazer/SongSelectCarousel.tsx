@@ -10,7 +10,7 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Info, Loader2 } from 'lucide-react';
 import { Beatmap, PlayHistoryRecord } from '../../types';
@@ -108,7 +108,7 @@ function getPersistedBannerUrl(packageId: string, bgFilename: string): Promise<s
  * IndexedDB backgrounds store (written at download time), so the fallback
  * shows quickly without re-decompressing the .osz.
  */
-function SongBannerArt({ group }: { group: CarouselSongGroup }) {
+const SongBannerArt = memo(function SongBannerArt({ group }: { group: CarouselSongGroup }) {
   const coverUrl = typeof group.coverUrl === 'string' && group.coverUrl.length > 0 ? group.coverUrl : undefined;
   const [coverFailed, setCoverFailed] = useState(false);
   const [localBg, setLocalBg] = useState<string>(() => (
@@ -210,7 +210,7 @@ function SongBannerArt({ group }: { group: CarouselSongGroup }) {
       style={{ backgroundImage: `url("${sanitizeCssUrl(DEFAULT_BANNER)}")` }}
     />
   );
-}
+});
 
 /**
  * Maps difficulty star rating to a 10-dot filled count
@@ -317,6 +317,307 @@ function getRankStatusBadge(group: CarouselSongGroup): { label: string; bgClass:
   return { label: 'LOCAL', bgClass: 'lazer-status-pill is-graveyard' };
 }
 
+// First-paint diff-row margins. Mirrors the DIFF_* taper constants inside
+// SongSelectCarousel so memoized cards paint the same base geometry.
+const CARD_DIFF_SELECTED_ML_PX = -12;
+const CARD_DIFF_SELECTED_MR_PX = -4;
+const CARD_DIFF_BASE_ML_PX = 8;
+const CARD_DIFF_BASE_MR_PX = -4;
+
+function isBetterRecord(a: PlayHistoryRecord, b: PlayHistoryRecord): boolean {
+  if (a.score !== b.score) return a.score > b.score;
+  if (a.accuracy !== b.accuracy) return a.accuracy > b.accuracy;
+  return (a.timestamp || 0) > (b.timestamp || 0);
+}
+
+export interface BestRecordIndex {
+  byId: Map<string, PlayHistoryRecord>;
+  byHash: Map<string, PlayHistoryRecord>;
+}
+
+/**
+ * One pass over local history -> best record per chart id/hash. Replaces
+ * the per-diff `filter(fullHistory).sort()[0]` scan that used to run for
+ * every difficulty row on every render (O(diffs × history)).
+ */
+export function buildBestRecordIndex(playHistory: PlayHistoryRecord[]): BestRecordIndex {
+  const byId = new Map<string, PlayHistoryRecord>();
+  const byHash = new Map<string, PlayHistoryRecord>();
+  for (const record of playHistory) {
+    if (!record) continue;
+    if (typeof record.beatmapId === 'string' && record.beatmapId) {
+      const prev = byId.get(record.beatmapId);
+      if (!prev || isBetterRecord(record, prev)) byId.set(record.beatmapId, record);
+    }
+    if (typeof record.beatmapHash === 'string' && record.beatmapHash) {
+      const prev = byHash.get(record.beatmapHash);
+      if (!prev || isBetterRecord(record, prev)) byHash.set(record.beatmapHash, record);
+    }
+  }
+  return { byId, byHash };
+}
+
+function lookupBestRecord(
+  diff: Beatmap,
+  best: BestRecordIndex,
+): PlayHistoryRecord | undefined {
+  const byId = best.byId.get(diff.id);
+  if (byId) return byId;
+  const hash = (diff as { beatmapHash?: unknown }).beatmapHash;
+  if (typeof hash === 'string' && hash) return best.byHash.get(hash);
+  return undefined;
+}
+
+interface CarouselGroupCardProps {
+  group: CarouselSongGroup;
+  isActive: boolean;
+  isExpanded: boolean;
+  isFavorite: boolean;
+  selectedMapId?: string;
+  best: BestRecordIndex;
+  fallbackIndentPx: number;
+  fallbackExtendRightPx: number;
+  fallbackMarginTopPx: number;
+  onSelectGroup: (group: CarouselSongGroup) => void;
+  onSelectDifficulty: (map: Beatmap) => void;
+  onStartPlay: (map: Beatmap) => void;
+  onToggleFavorite: (songKey: string) => void;
+  getStarRating: (map: Beatmap) => number;
+  getGradeBadgeClass: (grade: string) => string;
+  registerItem: (songKey: string, el: HTMLDivElement | null, isActive: boolean) => void;
+}
+
+/**
+ * Memoized song-group card. The parent list re-renders on every keystroke /
+ * selection / unpack tick; without memo every group would re-sort its diffs
+ * (star-rating note walks) and re-scan history per diff row each time.
+ * With memo + stable parent callbacks, only groups whose props actually
+ * changed (active/expanded/favorite/selection/content) re-render, and the
+ * expensive derivations below recompute only when `group.maps` changes.
+ */
+const CarouselGroupCard = memo(function CarouselGroupCard({
+  group,
+  isActive,
+  isExpanded,
+  isFavorite,
+  selectedMapId,
+  best,
+  fallbackIndentPx,
+  fallbackExtendRightPx,
+  fallbackMarginTopPx,
+  onSelectGroup,
+  onSelectDifficulty,
+  onStartPlay,
+  onToggleFavorite,
+  getStarRating,
+  getGradeBadgeClass,
+  registerItem,
+}: CarouselGroupCardProps) {
+  const sortedDiffs = useMemo(
+    () => [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b)),
+    [group.maps, getStarRating],
+  );
+  const rankBadge = useMemo(() => getRankStatusBadge(group), [group]);
+  const uniqueKeys = useMemo(
+    () => Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
+      .sort((a, b) => Number(a) - Number(b)),
+    [group.maps],
+  );
+  const diffDots = useMemo(
+    () => sortedDiffs.slice(0, 12).map((m) => getDiffDotColor(getStarRating(m))),
+    [sortedDiffs, getStarRating],
+  );
+
+  return (
+    <div
+      className="flex flex-col gap-1 lazer-carousel-taper-item"
+      style={{ marginLeft: fallbackIndentPx, marginRight: fallbackExtendRightPx, marginTop: fallbackMarginTopPx, zIndex: isActive ? 2 : 1 }}
+      ref={(el) => registerItem(group.songKey, el, isActive)}
+    >
+      {/* SET CARD — hud/songselect.jpg: tall art card, status pill, title/artist, mode icon + diff dots */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={isActive}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelectGroup(group);
+          }
+        }}
+        onClick={() => onSelectGroup(group)}
+        className={`lazer-carousel-card ${isActive ? 'is-active' : ''}`}
+      >
+        <SongBannerArt group={group} />
+        <div className="absolute inset-0 pointer-events-none lazer-carousel-card-shade" />
+
+        {/* Set Card Content */}
+        <div className="relative flex items-center justify-between px-3.5 py-2 gap-3 min-h-[56px]">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
+              <h4 className="font-extrabold font-sans text-[15px] sm:text-base text-white tracking-tight truncate leading-tight order-first">
+                {group.title}
+              </h4>
+              <span className="text-[11px] font-sans text-slate-200/90 truncate">
+                {group.artist || 'Unknown Artist'}
+              </span>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`px-1.5 py-px rounded text-[9px] font-mono font-black uppercase tracking-wider ${rankBadge.bgClass}`}>
+                  {rankBadge.label}
+                </span>
+                {/* mania mode icon */}
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/50 text-[8px] font-black text-white/90" title="mania mode">
+                  M
+                </span>
+                <span className="flex items-center gap-[3px]" aria-hidden="true">
+                  {diffDots.map((c, i) => (
+                    <span key={i} className="inline-block w-[5px] h-[10px] rounded-[2.5px]" style={{ background: c }} />
+                  ))}
+                </span>
+                {uniqueKeys.length > 0 && (
+                  <span className="flex items-center gap-1" aria-hidden="true">
+                    {uniqueKeys.map((k) => (
+                      <span key={k} title={`${k}K`} className={`w-2 h-2 rounded-full inline-block ${getKeyDotColor(k)}`} />
+                    ))}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right side: diff count + favorite */}
+          <div className="flex items-center gap-2 shrink-0 select-none">
+            <span className="px-2 py-0.5 bg-white/10 border border-white/15 rounded text-[10px] font-mono font-bold text-slate-200">
+              {group.maps.length} {group.maps.length === 1 ? 'diff' : 'diffs'}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(group.songKey);
+              }}
+              title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <Heart
+                className={`h-4 w-4 transition-colors ${
+                  isFavorite
+                    ? 'fill-rose-500 text-rose-500'
+                    : 'text-slate-300/70 hover:text-slate-100'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* EXPANDED DIFFICULTY ROWS */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden pl-5 pr-1 flex flex-col gap-1"
+          >
+            {sortedDiffs.map((diff) => {
+              const isDiffSelected = selectedMapId === diff.id;
+              const rating = getStarRating(diff);
+              const dotCount = getStarDotCount(rating);
+              const tint = getDiffTint(rating);
+              const bestRecord = lookupBestRecord(diff, best);
+
+              return (
+                <div
+                  key={diff.id}
+                  data-diff-id={diff.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (isDiffSelected) {
+                      onStartPlay(diff);
+                    } else {
+                      onSelectDifficulty(diff);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (isDiffSelected) {
+                        onStartPlay(diff);
+                      } else {
+                        onSelectDifficulty(diff);
+                      }
+                    }
+                  }}
+                  className={`lazer-carousel-diff-row ${isDiffSelected ? 'is-selected' : ''}`}
+                  style={{
+                    background: tint.bg,
+                    borderColor: isDiffSelected ? tint.edge : undefined,
+                    // First-paint base; the taper refines non-selected
+                    // rows by viewport position right after. Selected
+                    // diff cancels the wrapper gutter to sit flush
+                    // with the banner edge; unselected rows keep a
+                    // right inset so they read slightly shorter.
+                    marginLeft: isDiffSelected ? CARD_DIFF_SELECTED_ML_PX : CARD_DIFF_BASE_ML_PX,
+                    marginRight: isDiffSelected ? CARD_DIFF_SELECTED_MR_PX : CARD_DIFF_BASE_MR_PX,
+                  }}
+                >
+                  {/* Selected edge indicator */}
+                  {isDiffSelected && <div className="lazer-carousel-diff-bar" style={{ background: tint.edge, boxShadow: `0 0 8px ${tint.edge}` }} />}
+
+                  <div className="flex items-center justify-between px-3 py-2 gap-2 relative z-10">
+                    {/* Left: grade circle, [4K] name, mapper */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {bestRecord ? (
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${getGradeCircleClass(bestRecord.grade)}`}>
+                          {bestRecord.grade}
+                        </span>
+                      ) : (
+                        <span className="w-6 h-6 rounded-full border border-white/40 flex items-center justify-center text-[9px] font-black text-white/70 shrink-0">
+                          {diff.keyCount || 4}K
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1.5 truncate text-xs sm:text-[13px]">
+                        <span className="font-sans font-bold text-white/95 truncate">
+                          [{diff.keyCount || 4}K] {diff.difficulty}
+                        </span>
+                        {diff.creator && (
+                          <span className="text-[10px] font-sans text-white/70 truncate hidden md:inline">
+                            mapped by {diff.creator}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: star pill + dots */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${tint.pill}`}>
+                        ★ {rating.toFixed(2)}
+                      </span>
+                      <span className="lazer-star-meter hidden sm:flex items-center gap-[2px]" aria-hidden="true">
+                        {Array.from({ length: 10 }, (_, i) => (
+                          <span
+                            key={i}
+                            className={`lazer-star-meter-dot ${i < dotCount ? 'is-filled' : ''}`}
+                            style={i < dotCount ? undefined : { background: 'rgba(255,255,255,0.25)', boxShadow: 'none' }}
+                          />
+                        ))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
+
 export function SongSelectCarousel({
   songGroups,
   selectedGroupKey,
@@ -393,6 +694,26 @@ export function SongSelectCarousel({
   const groupsRef = useRef(songGroups);
   groupsRef.current = songGroups;
   const itemEls = useRef(new Map<string, HTMLDivElement>());
+  // Stable item registration for memoized cards: one identity for the life
+  // of the list (refs are stable), so cards never re-render just because a
+  // ref callback was recreated. The taper still reads itemEls directly.
+  const registerItem = useMemo(() => {
+    return (songKey: string, el: HTMLDivElement | null, isActive: boolean) => {
+      if (el) {
+        itemEls.current.set(songKey, el);
+      } else {
+        itemEls.current.delete(songKey);
+      }
+      if (isActive && activeItemRef) {
+        activeItemRef.current = el;
+      }
+    };
+  }, [activeItemRef]);
+  // Best local record per chart, computed once per history change instead
+  // of a full history filter+sort per difficulty row per render.
+  const best = useMemo(() => buildBestRecordIndex(playHistory), [playHistory]);
+  // O(1) favorite lookup for memoized cards (avoids Array.includes per card).
+  const favoriteSet = useMemo(() => new Set(favoriteSongs), [favoriteSongs]);
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
@@ -798,6 +1119,8 @@ export function SongSelectCarousel({
         // First-paint indent before the rAF taper measures the viewport:
         // selected pins full-width; the rest fall back to the discrete
         // focus index. The scroll handler takes over immediately after.
+        // Cheap arithmetic only — sorting, star ratings, and history scans
+        // live inside the memoized card below.
         const fallbackIndentPx = isGroupActive
           ? 0
           : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 4;
@@ -805,211 +1128,27 @@ export function SongSelectCarousel({
         const prevGroupKey = groupIndex > 0 ? songGroups[groupIndex - 1].songKey : null;
         const fallbackBelowExpanded = prevGroupKey !== null && prevGroupKey === expandedSongKey && prevGroupKey !== group.songKey;
         const fallbackMarginTopPx = groupIndex === 0 ? 0 : isGroupActive || fallbackBelowExpanded ? SELECTED_GAP_PX : -UNSELECTED_OVERLAP_PX;
-        const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
-        const rankBadge = getRankStatusBadge(group);
-        const uniqueKeys = Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
-          .sort((a, b) => Number(a) - Number(b));
-        const diffDots = sortedDiffs.slice(0, 12).map((m) => getDiffDotColor(getStarRating(m)));
 
         return (
-          <div
+          <CarouselGroupCard
             key={group.songKey}
-            className="flex flex-col gap-1 lazer-carousel-taper-item"
-            style={{ marginLeft: fallbackIndentPx, marginRight: fallbackExtendRightPx, marginTop: fallbackMarginTopPx, zIndex: isGroupActive ? 2 : 1 }}
-            ref={(el) => {
-              if (el) {
-                itemEls.current.set(group.songKey, el);
-              } else {
-                itemEls.current.delete(group.songKey);
-              }
-              if (isGroupActive && activeItemRef) {
-                activeItemRef.current = el;
-              }
-            }}
-          >
-            {/* SET CARD — hud/songselect.jpg: tall art card, status pill, title/artist, mode icon + diff dots */}
-            <div
-              role="button"
-              tabIndex={0}
-              aria-pressed={isGroupActive}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelectGroup(group);
-                }
-              }}
-              onClick={() => onSelectGroup(group)}
-              className={`lazer-carousel-card ${isGroupActive ? 'is-active' : ''}`}
-            >
-              <SongBannerArt group={group} />
-              <div className="absolute inset-0 pointer-events-none lazer-carousel-card-shade" />
-
-              {/* Set Card Content */}
-              <div className="relative flex items-center justify-between px-3.5 py-2 gap-3 min-h-[56px]">
-                <div className="flex items-start gap-2 min-w-0 flex-1">
-                  <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
-                    <h4 className="font-extrabold font-sans text-[15px] sm:text-base text-white tracking-tight truncate leading-tight order-first">
-                      {group.title}
-                    </h4>
-                    <span className="text-[11px] font-sans text-slate-200/90 truncate">
-                      {group.artist || 'Unknown Artist'}
-                    </span>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className={`px-1.5 py-px rounded text-[9px] font-mono font-black uppercase tracking-wider ${rankBadge.bgClass}`}>
-                        {rankBadge.label}
-                      </span>
-                      {/* mania mode icon */}
-                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/50 text-[8px] font-black text-white/90" title="mania mode">
-                        M
-                      </span>
-                      <span className="flex items-center gap-[3px]" aria-hidden="true">
-                        {diffDots.map((c, i) => (
-                          <span key={i} className="inline-block w-[5px] h-[10px] rounded-[2.5px]" style={{ background: c }} />
-                        ))}
-                      </span>
-                      {uniqueKeys.length > 0 && (
-                        <span className="flex items-center gap-1" aria-hidden="true">
-                          {uniqueKeys.map((k) => (
-                            <span key={k} title={`${k}K`} className={`w-2 h-2 rounded-full inline-block ${getKeyDotColor(k)}`} />
-                          ))}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right side: diff count + favorite */}
-                <div className="flex items-center gap-2 shrink-0 select-none">
-                  <span className="px-2 py-0.5 bg-white/10 border border-white/15 rounded text-[10px] font-mono font-bold text-slate-200">
-                    {group.maps.length} {group.maps.length === 1 ? 'diff' : 'diffs'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleFavorite(group.songKey);
-                    }}
-                    title={favoriteSongs.includes(group.songKey) ? 'Remove from favorites' : 'Add to favorites'}
-                    className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                  >
-                    <Heart
-                      className={`h-4 w-4 transition-colors ${
-                        favoriteSongs.includes(group.songKey)
-                          ? 'fill-rose-500 text-rose-500'
-                          : 'text-slate-300/70 hover:text-slate-100'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* EXPANDED DIFFICULTY ROWS */}
-            <AnimatePresence>
-              {isExpanded && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="overflow-hidden pl-5 pr-1 flex flex-col gap-1"
-                >
-                  {sortedDiffs.map((diff) => {
-                    const isDiffSelected = selectedMapId === diff.id;
-                    const rating = getStarRating(diff);
-                    const dotCount = getStarDotCount(rating);
-                    const tint = getDiffTint(rating);
-                    const bestRecord = playHistory
-                      .filter((r) => r.beatmapId === diff.id || (diff.beatmapHash && r.beatmapHash === diff.beatmapHash))
-                      .sort((a, b) => (b.score !== a.score ? b.score - a.score : b.accuracy - a.accuracy))[0];
-
-                    return (
-                      <div
-                        key={diff.id}
-                        data-diff-id={diff.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          if (isDiffSelected) {
-                            onStartPlay(diff);
-                          } else {
-                            onSelectDifficulty(diff);
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            if (isDiffSelected) {
-                              onStartPlay(diff);
-                            } else {
-                              onSelectDifficulty(diff);
-                            }
-                          }
-                        }}
-                        className={`lazer-carousel-diff-row ${isDiffSelected ? 'is-selected' : ''}`}
-                        style={{
-                          background: tint.bg,
-                          borderColor: isDiffSelected ? tint.edge : undefined,
-                          // First-paint base; the taper refines non-selected
-                          // rows by viewport position right after. Selected
-                          // diff cancels the wrapper gutter to sit flush
-                          // with the banner edge; unselected rows keep a
-                          // right inset so they read slightly shorter.
-                          marginLeft: isDiffSelected ? DIFF_SELECTED_ML_PX : DIFF_BASE_ML_PX,
-                          marginRight: isDiffSelected ? DIFF_SELECTED_MR_PX : DIFF_BASE_MR_PX,
-                        }}
-                      >
-                        {/* Selected edge indicator */}
-                        {isDiffSelected && <div className="lazer-carousel-diff-bar" style={{ background: tint.edge, boxShadow: `0 0 8px ${tint.edge}` }} />}
-
-                        <div className="flex items-center justify-between px-3 py-2 gap-2 relative z-10">
-                          {/* Left: grade circle, [4K] name, mapper */}
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            {bestRecord ? (
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${getGradeCircleClass(bestRecord.grade)}`}>
-                                {bestRecord.grade}
-                              </span>
-                            ) : (
-                              <span className="w-6 h-6 rounded-full border border-white/40 flex items-center justify-center text-[9px] font-black text-white/70 shrink-0">
-                                {diff.keyCount || 4}K
-                              </span>
-                            )}
-
-                            <div className="flex items-center gap-1.5 truncate text-xs sm:text-[13px]">
-                              <span className="font-sans font-bold text-white/95 truncate">
-                                [{diff.keyCount || 4}K] {diff.difficulty}
-                              </span>
-                              {diff.creator && (
-                                <span className="text-[10px] font-sans text-white/70 truncate hidden md:inline">
-                                  mapped by {diff.creator}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right: star pill + dots */}
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${tint.pill}`}>
-                              ★ {rating.toFixed(2)}
-                            </span>
-                            <span className="lazer-star-meter hidden sm:flex items-center gap-[2px]" aria-hidden="true">
-                              {Array.from({ length: 10 }, (_, i) => (
-                                <span
-                                  key={i}
-                                  className={`lazer-star-meter-dot ${i < dotCount ? 'is-filled' : ''}`}
-                                  style={i < dotCount ? undefined : { background: 'rgba(255,255,255,0.25)', boxShadow: 'none' }}
-                                />
-                              ))}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+            group={group}
+            isActive={isGroupActive}
+            isExpanded={isExpanded}
+            isFavorite={favoriteSet.has(group.songKey)}
+            selectedMapId={selectedMapId}
+            best={best}
+            fallbackIndentPx={fallbackIndentPx}
+            fallbackExtendRightPx={fallbackExtendRightPx}
+            fallbackMarginTopPx={fallbackMarginTopPx}
+            onSelectGroup={onSelectGroup}
+            onSelectDifficulty={onSelectDifficulty}
+            onStartPlay={onStartPlay}
+            onToggleFavorite={onToggleFavorite}
+            getStarRating={getStarRating}
+            getGradeBadgeClass={getGradeBadgeClass}
+            registerItem={registerItem}
+          />
         );
       })}
       {/* Small bottom pad only; no centring gap. */}
