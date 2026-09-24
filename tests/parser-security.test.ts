@@ -105,6 +105,16 @@ describe('beatmap parser security boundaries', () => {
     expect(map.coverUrl).toBe('https://assets.ppy.sh/beatmaps/123456/covers/slimcover@2x.jpg');
   });
 
+  it('ignores unrecognized sections such as Colours between TimingPoints and HitObjects', () => {
+    const withColours = playableMap.replace(
+      '[HitObjects]',
+      '[Colours]\nCombo1 : 45,6,7\nCombo2 : 172,13,13\n\n[HitObjects]',
+    );
+    const map = parseBeatmap(withColours, 'colours-map');
+    expect(map.timingPoints.length).toBe(2);
+    expect(map.notes.length).toBe(2);
+  });
+
   it('converts beatmaps between 1K and 10K correctly and rejects out-of-range targets', () => {
     const original4K = parseBeatmap(playableMap.replace('CircleSize: 2', 'CircleSize: 4'), 'test-4k');
     expect(original4K.keyCount).toBe(4);

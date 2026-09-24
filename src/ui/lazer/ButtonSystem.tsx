@@ -53,6 +53,14 @@ export type ButtonSystemProps = {
   onBackToTopLevel: () => void;
   onIdleTimeout?: () => void;
   className?: string;
+  /**
+   * Render the grey strip in its final state instead of playing the
+   * unfold (scaleY grow) entrance. Used when the menu (re)mounts with
+   * buttons already visible — e.g. returning from song select — so the
+   * screen transition is a pure fade like every other page. The unfold
+   * still plays for the in-menu idle -> top-level promotion.
+   */
+  skipStripEnterAnimation?: boolean;
 };
 
 export const ButtonSystem: React.FC<ButtonSystemProps> = ({
@@ -64,6 +72,7 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
   onBackToTopLevel,
   onIdleTimeout,
   className = '',
+  skipStripEnterAnimation = false,
 }) => {
   const reducedMotion = useLazerReducedMotion();
   const {
@@ -109,10 +118,12 @@ export const ButtonSystem: React.FC<ButtonSystemProps> = ({
       className={`lazer-button-system ${className}`}
       data-button-system-phase={phase}
     >
-      {/* 100px Grey Strip across viewport */}
+      {/* 100px Grey Strip across viewport. Skips the unfold entrance when
+          the menu mounts with buttons already visible (returning from
+          another screen) so the page transition is a pure fade. */}
       <motion.div
         className="lazer-button-strip"
-        initial="exit"
+        initial={skipStripEnterAnimation ? 'enter' : 'exit'}
         animate="enter"
         exit="exit"
         variants={{

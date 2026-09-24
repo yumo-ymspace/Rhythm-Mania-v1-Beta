@@ -1646,6 +1646,7 @@ html[data-ui="lazer"] {
    offsetTop/scrollHeight estimates, which breaks the centre-distance math
    and makes the bottom of the list jump.) */
 .lazer-carousel-taper-item {
+  position: relative;
   transition: none;
 }
 
@@ -2219,8 +2220,11 @@ html[data-ui="lazer"] {
   flex-shrink: 0;
   /* Bleed to the right screen edge (cancels the column pr-2 / lg:pr-3). */
   margin-right: -8px;
-  /* Slightly longer shell: extends left past the column edge; the extra
-     left padding keeps the rows exactly where they were. */
+  /* Small left overlap stays inside the column's visible padding box —
+     anything further left would be cut off by the column's overflow clip
+     (which is what swallowed the slant). The extra length comes from the
+     wider right column instead. Left padding clears the 33px slant cut so
+     no row content sits over background art. */
   margin-left: -20px;
   padding: 4px 20px 6px 50px;
 }
@@ -2232,11 +2236,13 @@ html[data-ui="lazer"] {
 }
 
 /* Single shell: slanted left edge only, mirrored against the song info
-   wedge. The inset is scaled to the shell height (~21px here vs 46px on
-   the taller wedge) so both faces share the same slant ANGLE; rectangular
-   on the right and bled flush to the right screen edge. The bottom-left
-   slant joint carries a small rounded curve in the same style as the info
-   wedge's bottom-right joint, sized to this shorter shell. */
+   wedge. The slant is deliberately shallow (~10px offset: top inset
+   minus bottom inset), much less steep than the wedge's faces;
+   rectangular on the right and bled flush to the right screen edge. The
+   bottom-left slant joint carries a small rounded curve in the same style
+   as the info wedge's bottom-right joint, sized to this shorter shell.
+   Every inset stays clear of the ~4px strip hidden under the column's
+   overflow clip, so the whole slant is visible end to end. */
 .lazer-song-filter-stack::before {
   content: "";
   position: absolute;
@@ -2246,7 +2252,7 @@ html[data-ui="lazer"] {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  clip-path: polygon(21px 0, 100% 0, 100% 100%, 20px 100%, 9px calc(100% - 2px), 4px calc(100% - 8.5px), 4px calc(100% - 19px));
+  clip-path: polygon(22px 0, 100% 0, 100% 100%, 12px 100%, 7px calc(100% - 3px), 6px calc(100% - 10px), 6px calc(100% - 20px));
 }
 
 /* --- Search row: flat segment with a divider, thinner than before. --- */

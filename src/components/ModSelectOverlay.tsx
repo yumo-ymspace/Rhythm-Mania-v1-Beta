@@ -10,15 +10,15 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Search, RotateCcw, Sparkles, Sliders,
+  X, Search, ChevronLeft, ChevronDown, ChevronUp, Plus,
   Infinity as InfinityIcon, Rewind, FastForward, ArrowUpToLine,
   Skull, Award, Target, SquareSlash, Eye, Layers, Flashlight,
   Zap, FlipHorizontal, Shuffle, Gauge, ArrowUpDown, Ban,
   Clock, TrendingUp, TrendingDown, Activity, VolumeX, Film,
-  Keyboard, MousePointerClick, AlertTriangle
+  Keyboard, MousePointerClick, Sparkles, Sliders, ArrowLeftRight,
 } from 'lucide-react';
 import { GameSettings } from '../types';
 import { computeModMultiplier } from '../ruleset/mania/scoreProcessor';
@@ -38,58 +38,64 @@ export interface ModItem {
   exclusiveWith?: readonly string[];
 }
 
+/**
+ * osu!lazer-inspired category palette.
+ * Header background uses `color`; body text stays light on the dark olive panel.
+ */
 export const MOD_CATEGORIES: { id: ModCategory; name: string; description: string; color: string; bgClass: string; textClass: string; borderClass: string; glowColor: string }[] = [
   {
     id: 'reduction',
     name: 'Difficulty Reduction',
     description: 'Make the map easier or more forgiving.',
-    color: '#10b981',
+    color: '#9ee854',
     bgClass: 'bg-emerald-500/15',
     textClass: 'text-emerald-400',
     borderClass: 'border-emerald-500/40',
-    glowColor: 'rgba(16, 185, 129, 0.35)',
+    glowColor: 'rgba(158, 232, 84, 0.35)',
   },
   {
     id: 'increase',
     name: 'Difficulty Increase',
     description: 'Add challenge and push your limits.',
-    color: '#f43f5e',
+    color: '#ff5d5d',
     bgClass: 'bg-rose-500/15',
     textClass: 'text-rose-400',
     borderClass: 'border-rose-500/40',
-    glowColor: 'rgba(244, 63, 94, 0.35)',
+    glowColor: 'rgba(255, 93, 93, 0.35)',
   },
   {
     id: 'automation',
     name: 'Automation',
     description: 'Sit back and enjoy the show.',
-    color: '#0ea5e9',
+    color: '#5ecdf1',
     bgClass: 'bg-sky-500/15',
     textClass: 'text-sky-400',
     borderClass: 'border-sky-500/40',
-    glowColor: 'rgba(14, 165, 233, 0.35)',
+    glowColor: 'rgba(94, 205, 241, 0.35)',
   },
   {
     id: 'conversion',
     name: 'Conversion',
     description: 'Transform gameplay mechanics and key counts.',
-    color: '#a855f7',
+    color: '#9d6bff',
     bgClass: 'bg-purple-500/15',
     textClass: 'text-purple-400',
     borderClass: 'border-purple-500/40',
-    glowColor: 'rgba(168, 85, 247, 0.35)',
+    glowColor: 'rgba(157, 107, 255, 0.35)',
   },
   {
     id: 'fun',
     name: 'Fun',
     description: 'Quirky experiments and dynamic speeds.',
-    color: '#f59e0b',
+    color: '#ff7ab8',
     bgClass: 'bg-amber-500/15',
     textClass: 'text-amber-400',
     borderClass: 'border-amber-500/40',
-    glowColor: 'rgba(245, 158, 11, 0.35)',
+    glowColor: 'rgba(255, 122, 184, 0.35)',
   },
 ];
+
+export const PRESET_COLUMN_COLOR = '#e9d44a';
 
 export const ALL_MODS: ModItem[] = [
   // Difficulty Reduction
@@ -435,6 +441,92 @@ export function getConflictingMods(modId: string, activeMods: string[]): string[
   return Array.from(conflicts);
 }
 
+interface LazerModCardProps {
+  mod: ModItem;
+  categoryColor: string;
+  isActive: boolean;
+  conflictingMods: string[];
+  onClick: () => void;
+}
+
+const HEX_CLIP = 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)';
+
+/**
+ * osu!lazer-style mod row: hex icon on the left, bold name plus
+ * single-line description on the right. Selected rows fill with the
+ * category colour; incompatible rows dim until hovered.
+ */
+export const LazerModCard: React.FC<LazerModCardProps> = ({
+  mod,
+  categoryColor,
+  isActive,
+  conflictingMods,
+  onClick,
+}) => {
+  const Icon = mod.icon;
+  const isConflicting = conflictingMods.length > 0 && !isActive;
+  const tooltipText = isConflicting
+    ? `${mod.description} Incompatible with: ${conflictingMods.join(', ')} (click to swap)`
+    : `${mod.title} - ${mod.description} (${mod.multiplier})`;
+
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        title={tooltipText}
+        aria-label={tooltipText}
+        aria-pressed={isActive}
+        className={`w-full flex items-center gap-3 rounded-lg pl-2 pr-3 py-[7px] text-left border transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
+          isActive ? 'shadow-[0_4px_18px_rgba(0,0,0,0.45)]' : ''
+        } ${isConflicting ? 'opacity-40 hover:opacity-90' : 'hover:brightness-110 active:scale-[0.98]'}`}
+        style={
+          isActive
+            ? { backgroundColor: categoryColor, borderColor: categoryColor, color: '#10160f' }
+            : { backgroundColor: 'rgba(66, 82, 63, 0.85)', borderColor: 'rgba(255,255,255,0.07)', color: '#f2f5ef' }
+        }
+      >
+        <span
+          className="w-9 h-9 shrink-0 grid place-items-center"
+          style={{
+            clipPath: HEX_CLIP,
+            backgroundColor: isActive ? 'rgba(0,0,0,0.32)' : '#222b22',
+          }}
+        >
+          <Icon className="w-4 h-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-bold leading-tight truncate">{mod.name}</span>
+          <span
+            className="block text-[11px] leading-tight truncate"
+            style={{ color: isActive ? 'rgba(16,22,15,0.72)' : 'rgba(242,245,239,0.62)' }}
+          >
+            {mod.description}
+          </span>
+        </span>
+      </button>
+
+      {/* Hover tooltip, lazer style: dark card with description + incompat pills */}
+      <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-30 hidden group-hover:block w-[248px] rounded-lg bg-black/95 border border-white/15 px-3 py-2 shadow-2xl">
+        <span className="block text-[12px] font-bold text-white leading-snug">{mod.name}</span>
+        <span className="block text-[11px] text-white/70 leading-snug mt-0.5">{mod.description}</span>
+        {isConflicting && (
+          <span className="block mt-1.5">
+            <span className="block text-[10px] uppercase tracking-wider text-white/50 font-bold">Incompatible with:</span>
+            <span className="flex flex-wrap gap-1 mt-1">
+              {conflictingMods.map(c => (
+                <span key={c} className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/80 text-white">
+                  {c}
+                </span>
+              ))}
+            </span>
+          </span>
+        )}
+      </span>
+    </div>
+  );
+};
+
 interface HexModButtonProps {
   id: string;
   acronym: string;
@@ -450,134 +542,63 @@ interface HexModButtonProps {
 }
 
 /**
- * Argon-style hexagonal mod button.
- * Uses a crisp regular hexagon shape with layered highlights, acronym, and multiplier.
+ * Backwards-compatible hex button wrapper, restyled as a lazer row card.
+ * Kept so existing imports keep working; new code should use LazerModCard.
  */
 export const HexModButton: React.FC<HexModButtonProps> = ({
-  acronym,
+  id,
   name,
   multiplier,
   categoryColor,
-  icon: Icon,
+  icon,
   isActive,
   conflictingMods,
   isDisabled = false,
   disabledReason,
   onClick,
 }) => {
-  const isConflicting = conflictingMods.length > 0;
-
-  // Tooltip content
-  const tooltip = isDisabled
-    ? disabledReason
-    : isConflicting
-    ? `Incompatible with ${conflictingMods.join(', ')} (click to swap)`
-    : `${name} (${acronym}) - ${multiplier}`;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={isDisabled}
-      title={tooltip}
-      aria-label={tooltip}
-      aria-pressed={isActive}
-      className={`group relative flex flex-col items-center gap-1.5 p-1 rounded-xl transition-all select-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
-        isDisabled
-          ? 'cursor-not-allowed opacity-35'
-          : isConflicting
-          ? 'opacity-40 hover:opacity-85'
-          : 'hover:scale-105 active:scale-95'
-      }`}
-    >
-      {/* Hexagon Shape Container */}
-      <div className="relative w-[76px] h-[88px] sm:w-[84px] sm:h-[96px] flex items-center justify-center">
-        {/* SVG Regular Hexagon (pointy top/bottom) */}
-        <svg
-          viewBox="0 0 100 115"
-          className="absolute inset-0 w-full h-full overflow-visible transition-all duration-200"
-          style={{
-            filter: isActive ? `drop-shadow(0 0 14px ${categoryColor})` : undefined,
-          }}
-        >
-          {/* Base Hexagon Background */}
-          <polygon
-            points="50 3, 97 29, 97 86, 50 112, 3 86, 3 29"
-            fill={isActive ? categoryColor : '#16171d'}
-            fillOpacity={isActive ? 0.28 : 0.85}
-            stroke={isActive ? categoryColor : isConflicting ? 'rgba(239, 68, 68, 0.45)' : 'rgba(255, 255, 255, 0.14)'}
-            strokeWidth={isActive ? 3.5 : isConflicting ? 2 : 1.75}
-            strokeLinejoin="round"
-            className="transition-all duration-200 group-hover:stroke-white/35"
-          />
-
-          {/* Inner Accent Inset Line when active */}
-          {isActive && (
-            <polygon
-              points="50 9, 91 32, 91 83, 50 106, 9 83, 9 32"
-              fill="none"
-              stroke={categoryColor}
-              strokeWidth={1}
-              strokeOpacity={0.6}
-            />
-          )}
-        </svg>
-
-        {/* Inner Content on top of Hexagon */}
-        <div className="relative z-10 flex flex-col items-center justify-center text-center px-2 pointer-events-none">
-          {/* Multiplier Tag */}
-          <span
-            className={`text-[9px] sm:text-[10px] font-mono font-black tracking-tight leading-none mb-1 transition-colors ${
-              isActive ? 'text-white' : 'text-white/55 group-hover:text-white/80'
-            }`}
-          >
-            {multiplier}
-          </span>
-
-          {/* Mod Icon & Acronym */}
-          <div className="flex items-center justify-center gap-1">
-            <Icon
-              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] transition-colors ${
-                isActive ? 'text-white' : 'text-white/70 group-hover:text-white'
-              }`}
-            />
-            <span
-              className={`text-sm sm:text-base font-black tracking-wider leading-none transition-colors ${
-                isActive ? 'text-white' : 'text-white/85 group-hover:text-white'
-              }`}
-            >
-              {acronym}
-            </span>
-          </div>
-
-          {/* Active status indicator dot */}
-          {isActive && (
-            <div
-              className="mt-1 w-1.5 h-1.5 rounded-full shadow-[0_0_6px_currentColor]"
-              style={{ backgroundColor: categoryColor, color: categoryColor }}
-            />
-          )}
-
-          {/* Conflict warning badge */}
-          {isConflicting && !isActive && (
-            <div className="absolute -top-1.5 -right-1.5 bg-rose-500/90 text-white rounded-full p-0.5 shadow-md">
-              <AlertTriangle className="w-2.5 h-2.5" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Mod Label Below */}
-      <span
-        className={`max-w-[88px] text-[10px] sm:text-[11px] font-semibold text-center truncate leading-tight transition-colors ${
-          isActive ? 'text-white font-bold' : 'text-white/60 group-hover:text-white/90'
-        }`}
+  const found = ALL_MODS.find(m => m.id === id);
+  const mod: ModItem = found ?? {
+    id,
+    name,
+    acronym: id,
+    title: `${name} (${id})`,
+    category: 'conversion',
+    multiplier,
+    icon,
+    description: disabledReason ?? multiplier,
+  };
+  void multiplier;
+  if (isDisabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        title={disabledReason}
+        aria-label={disabledReason}
+        className="w-full flex items-center gap-3 rounded-lg pl-2 pr-3 py-[7px] text-left border opacity-30 cursor-not-allowed"
+        style={{ backgroundColor: 'rgba(66, 82, 63, 0.85)', borderColor: 'rgba(255,255,255,0.07)', color: '#f2f5ef' }}
       >
-        {name}
-      </span>
-    </button>
-  );
+        <span className="w-9 h-9 shrink-0 grid place-items-center" style={{ clipPath: HEX_CLIP, backgroundColor: '#222b22' }}>
+          {React.createElement(icon, { className: 'w-4 h-4' })}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-bold leading-tight truncate">{name}</span>
+          <span className="block text-[11px] leading-tight truncate text-white/50">{disabledReason ?? ''}</span>
+        </span>
+      </button>
+    );
+  }
+  return <LazerModCard mod={{ ...mod, icon }} categoryColor={categoryColor} isActive={isActive} conflictingMods={conflictingMods} onClick={onClick} />;
 };
+
+export interface BeatmapStatsSummary {
+  stars?: number;
+  bpm?: number;
+  keyCount?: number;
+  od?: number;
+  hp?: number;
+}
 
 export interface ModSelectOverlayProps {
   isOpen: boolean;
@@ -589,6 +610,30 @@ export interface ModSelectOverlayProps {
   onUpdateDifficultyAdjust?: (da: NonNullable<GameSettings['difficultyAdjust']>) => void;
   defaultOd?: number;
   defaultHp?: number;
+  beatmapStats?: BeatmapStatsSummary;
+}
+
+interface ModPreset {
+  name: string;
+  mods: string[];
+}
+
+const PRESETS_KEY = 'rhythm_mania_v1_mod_presets';
+const COLUMN_CLIP = 'polygon(26px 0, 100% 0, calc(100% - 26px) 100%, 0 100%)';
+
+function loadPresets(): ModPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((p): p is ModPreset => typeof p === 'object' && p !== null && typeof (p as ModPreset).name === 'string' && Array.isArray((p as ModPreset).mods))
+      .slice(0, 20)
+      .map(p => ({ name: p.name.slice(0, 32), mods: sanitizeGameplayMods(p.mods.filter(m => typeof m === 'string')).slice(0, 24) }));
+  } catch {
+    return [];
+  }
 }
 
 export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
@@ -601,9 +646,27 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
   onUpdateDifficultyAdjust,
   defaultOd = 8,
   defaultHp = 5,
+  beatmapStats,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryTab, setSelectedCategoryTab] = useState<ModCategory | 'all'>('all');
+  const [customiseOpen, setCustomiseOpen] = useState(false);
+  const [presets, setPresets] = useState<ModPreset[]>(() => loadPresets());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery('');
+      setCustomiseOpen(false);
+    }
+  }, [isOpen]);
 
   // Compute live score multiplier
   const currentMultiplier = useMemo(() => {
@@ -643,385 +706,419 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
     }
   };
 
-  // Filter mods by query
-  const filteredMods = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return ALL_MODS.filter(mod => {
-      if (selectedCategoryTab !== 'all' && mod.category !== selectedCategoryTab) {
-        return false;
-      }
-      if (!query) return true;
-      return (
-        mod.name.toLowerCase().includes(query) ||
-        mod.acronym.toLowerCase().includes(query) ||
-        mod.description.toLowerCase().includes(query) ||
-        mod.id.toLowerCase().includes(query)
-      );
-    });
-  }, [searchQuery, selectedCategoryTab]);
+  const persistPresets = (next: ModPreset[]) => {
+    setPresets(next);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(next));
+    } catch {
+      // storage may be unavailable; presets stay in memory only
+    }
+  };
+
+  const handleSavePreset = () => {
+    if (selectedMods.length === 0) return;
+    const next: ModPreset[] = [...presets, { name: `Preset ${presets.length + 1}`, mods: [...selectedMods] }].slice(-20);
+    persistPresets(next);
+  };
+
+  // Filter mods by query (lazer search filters rows inside each column)
+  const query = searchQuery.trim().toLowerCase();
+  const matchesQuery = (mod: ModItem) => {
+    if (!query) return true;
+    return (
+      mod.name.toLowerCase().includes(query) ||
+      mod.acronym.toLowerCase().includes(query) ||
+      mod.description.toLowerCase().includes(query) ||
+      mod.id.toLowerCase().includes(query)
+    );
+  };
+
+  const stars = beatmapStats?.stars;
+  const bpm = beatmapStats?.bpm;
+  const keyCount = beatmapStats?.keyCount;
+  const od = beatmapStats?.od;
+  const hp = beatmapStats?.hp;
+  const firstActiveMod = selectedMods.length > 0 ? ALL_MODS.find(m => m.id === selectedMods[0]) : undefined;
+  const FirstActiveIcon = firstActiveMod?.icon;
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="mod-select-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+        <motion.div
+          key="mod-select-lazer"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[100] flex flex-col bg-black/60 font-sans text-slate-100"
+          style={{ willChange: 'opacity' }}
+        >
+          {/* Dim + blur the song select behind, click outside panels closes */}
+          <button
+            type="button"
+            aria-label="Close mod select"
             onClick={onClose}
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md cursor-pointer"
+            className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-[2px]"
           />
-
-          {/* Modal Container */}
-          <motion.div
-            key="mod-select-panel"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-            className="fixed inset-2 sm:inset-5 md:inset-8 lg:inset-[5vh_auto] lg:left-1/2 lg:-translate-x-1/2 z-[110] w-auto lg:w-[min(1180px,calc(100vw-48px))] max-h-[calc(100vh-16px)] md:max-h-[90vh] bg-[#14151b]/95 border border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.85)] flex flex-col rounded-2xl overflow-hidden font-sans text-slate-100"
-            style={{ willChange: 'opacity' }}
-          >
-            {/* Header: Title, Live Multiplier, Close Button */}
-            <div className="flex-none px-5 sm:px-8 py-4 border-b border-white/[.08] bg-[#1a1b24] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#ff80a5] shadow-[0_0_8px_#ff80a5]" />
-                    Mod Select
-                  </h1>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-white/10 text-white/70 border border-white/10">
-                    Argon
-                  </span>
-                </div>
-                <p className="text-[11px] text-white/50 mt-1 tracking-wide">
-                  Customize gameplay rules, difficulty, and mechanics.
+          <div className="relative flex-1 min-h-0 flex flex-col">
+            {/* Top info banner */}
+            <div className="flex-none mx-2 sm:mx-6 lg:mx-10 mt-2 rounded-xl bg-[#2f442f]/95 border border-white/10 shadow-[0_10px_36px_rgba(0,0,0,0.55)] px-5 py-3 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-[15px] font-bold tracking-wide text-white">Mod Select</h1>
+                <p className="text-[11px] text-white/60 leading-snug mt-0.5">
+                  Mods provide different ways to enjoy gameplay. Some have an effect on the score you can achieve during ranked play. Others are just for fun.
                 </p>
               </div>
-
-              {/* Multiplier badge and controls */}
-              <div className="flex items-center gap-3">
-                {/* Score Multiplier Display */}
-                <div
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
-                    isUnranked
-                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
-                      : currentMultiplier < 1
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                      : currentMultiplier > 1
-                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                      : 'bg-white/10 border-white/15 text-white/90'
-                  }`}
-                >
-                  <span className="text-[10px] uppercase tracking-wider text-white/60">Multiplier:</span>
-                  <span className="text-sm font-black">
-                    {currentMultiplier.toFixed(2)}x
-                  </span>
-                  {isUnranked && (
-                    <span className="text-[10px] bg-sky-500/30 text-sky-200 px-1.5 py-0.5 rounded uppercase font-sans font-bold tracking-wider">
-                      Unranked
-                    </span>
-                  )}
-                </div>
-
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition flex items-center justify-center cursor-pointer"
-                  title="Close Mod Select (Esc)"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                title="Close Mod Select (Esc)"
+                className="h-8 w-8 shrink-0 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition flex items-center justify-center cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            {/* Subheader: Category Navigation Tabs & Search */}
-            <div className="flex-none px-5 sm:px-8 py-2.5 bg-[#171821] border-b border-white/[.06] flex flex-wrap items-center justify-between gap-3">
-              {/* Category Filter Tabs */}
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategoryTab('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    selectedCategoryTab === 'all'
-                      ? 'bg-white/20 text-white shadow-sm'
-                      : 'text-white/60 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  All ({ALL_MODS.length})
-                </button>
-
-                {MOD_CATEGORIES.map(cat => {
-                  const isTabActive = selectedCategoryTab === cat.id;
-                  const catMods = ALL_MODS.filter(m => m.category === cat.id);
-                  const activeCount = selectedMods.filter(m => catMods.some(cm => cm.id === m)).length;
-                  return (
-                    <button
-                      type="button"
-                      key={cat.id}
-                      onClick={() => setSelectedCategoryTab(cat.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        isTabActive
-                          ? `${cat.bgClass} ${cat.textClass} border ${cat.borderClass} shadow-sm`
-                          : 'text-white/60 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <span>{cat.name}</span>
-                      {activeCount > 0 && (
-                        <span className="w-4 h-4 rounded-full bg-white/20 text-[9px] flex items-center justify-center font-mono font-bold">
-                          {activeCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative flex items-center w-full sm:w-56">
-                <Search className="absolute left-2.5 w-3.5 h-3.5 text-white/40 pointer-events-none" />
+            {/* Search + Customise toolbar */}
+            <div className="flex-none mx-2 sm:mx-6 lg:mx-10 mt-3 flex items-center gap-3">
+              <div className="flex items-center bg-[#2b3b2b]/95 border border-white/10 rounded-xl overflow-hidden w-[280px] max-w-[46vw] focus-within:border-white/25 transition">
                 <input
                   type="text"
-                  placeholder="Search mods..."
+                  placeholder="tab to search..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#1e202a] border border-white/10 rounded-lg pl-8 pr-7 py-1 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#ff80a5]/60 transition"
+                  onKeyDown={e => {
+                    if (e.key === 'Tab') e.preventDefault();
+                  }}
+                  className="flex-1 min-w-0 bg-transparent px-4 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none"
                 />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2 text-white/40 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                <span className="flex-none self-stretch w-12 grid place-items-center bg-[#3a4f3a]/80 border-l border-white/10">
+                  <Search className="w-4 h-4 text-white/75" />
+                </span>
+              </div>
+
+              <div className="flex-1" />
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCustomiseOpen(v => !v)}
+                  aria-expanded={customiseOpen}
+                  className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold transition cursor-pointer border ${
+                    customiseOpen
+                      ? 'bg-[#7ee65a] text-[#10210f] border-[#7ee65a]'
+                      : 'bg-[#2b3b2b]/95 text-white/75 border-white/10 hover:text-white'
+                  }`}
+                >
+                  <span>Customise</span>
+                  {customiseOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+
+                {customiseOpen && (
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-[320px] max-w-[80vw] rounded-xl overflow-hidden border border-white/10 shadow-2xl z-40">
+                    <div className="bg-[#7ee65a] text-[#10210f] px-4 py-2 text-[13px] font-bold flex items-center justify-between">
+                      <span>Customise</span>
+                      <ChevronUp className="w-4 h-4" />
+                    </div>
+                    <div className="bg-[#232f23]/95 backdrop-blur px-4 py-4 flex flex-col gap-4">
+                      {selectedMods.includes('DA') && onUpdateDifficultyAdjust ? (
+                        <>
+                          <div>
+                            <div className="flex items-center justify-between text-[12px]">
+                              <span className="font-bold text-white">Difficulty Adjust</span>
+                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/80">DA</span>
+                            </div>
+                          </div>
+                          <label className="block">
+                            <span className="block text-[11px] text-white/60 mb-1">Overall Difficulty (OD)</span>
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="10"
+                                step="0.5"
+                                value={difficultyAdjust?.overallDifficulty ?? defaultOd}
+                                onChange={e => {
+                                  const val = parseFloat(e.target.value);
+                                  onUpdateDifficultyAdjust({
+                                    ...(difficultyAdjust || {}),
+                                    overallDifficulty: val,
+                                  });
+                                }}
+                                className="flex-1 accent-[#9ee854] h-1.5 cursor-pointer"
+                              />
+                              <span className="text-[12px] font-mono font-bold text-white w-7 text-right">
+                                {(difficultyAdjust?.overallDifficulty ?? defaultOd).toFixed(1)}
+                              </span>
+                            </span>
+                          </label>
+                          <label className="block">
+                            <span className="block text-[11px] text-white/60 mb-1">HP Drain Rate (HP)</span>
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="10"
+                                step="0.5"
+                                value={difficultyAdjust?.hpDrainRate ?? defaultHp}
+                                onChange={e => {
+                                  const val = parseFloat(e.target.value);
+                                  onUpdateDifficultyAdjust({
+                                    ...(difficultyAdjust || {}),
+                                    hpDrainRate: val,
+                                  });
+                                }}
+                                className="flex-1 accent-[#9ee854] h-1.5 cursor-pointer"
+                              />
+                              <span className="text-[12px] font-mono font-bold text-white w-7 text-right">
+                                {(difficultyAdjust?.hpDrainRate ?? defaultHp).toFixed(1)}
+                              </span>
+                            </span>
+                          </label>
+                        </>
+                      ) : (
+                        <p className="text-[12px] text-white/60 leading-snug">
+                          Select a customisable mod (for example <span className="text-white font-bold">Difficulty Adjust</span> in Conversion) to tweak its settings here.
+                        </p>
+                      )}
+                      {selectedMods.length > 0 && (
+                        <div className="pt-3 border-t border-white/10">
+                          <p className="text-[10px] uppercase tracking-wider text-white/45 font-bold mb-1.5">Active mods</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedMods.map(id => (
+                              <span key={id} className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-white/10 text-white/85 border border-white/10">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Selected Mods Summary Bar (if any active) */}
-            {selectedMods.length > 0 && (
-              <div className="flex-none px-5 sm:px-8 py-2 bg-[#101117]/90 border-b border-white/[.05] flex items-center gap-2 overflow-x-auto scrollbar-none">
-                <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider whitespace-nowrap">
-                  Active ({selectedMods.length}):
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {selectedMods.map(modId => {
-                    const mod = ALL_MODS.find(m => m.id === modId);
-                    const isKey = /^K(?:[1-9]|10)$/.test(modId);
-                    const displayName = mod ? mod.acronym : modId;
-                    return (
+            {/* Columns */}
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+              <div className="flex gap-4 lg:gap-5 px-2 sm:px-6 lg:px-10 py-4 items-stretch min-h-full w-max min-w-full">
+                {/* Personal Presets column */}
+                <section aria-label="Personal Presets" className="w-[270px] lg:w-[290px] shrink-0 flex flex-col min-h-0 max-h-full">
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ clipPath: COLUMN_CLIP, backgroundColor: '#2c3a2d' }}>
+                    <header className="flex-none px-9 pt-2.5 pb-2 text-[13px] font-bold" style={{ backgroundColor: PRESET_COLUMN_COLOR, color: '#141a10' }}>
+                      Personal Presets
+                    </header>
+                    <div className="flex-1 min-h-0 overflow-y-auto px-7 py-3 flex flex-col gap-2 lazer-scroll">
                       <button
                         type="button"
-                        key={modId}
-                        onClick={() => {
-                          const nextMods = selectedMods.filter(m => m !== modId);
-                          onUpdateMods(sanitizeGameplayMods(nextMods));
-                        }}
-                        title={`Click to remove ${mod?.name || modId}`}
-                        className="group flex items-center gap-1 px-2 py-0.5 bg-white/10 hover:bg-rose-500/20 hover:border-rose-500/40 border border-white/15 rounded-md text-xs font-mono font-bold text-white transition cursor-pointer"
+                        onClick={handleSavePreset}
+                        disabled={selectedMods.length === 0}
+                        title={selectedMods.length === 0 ? 'Select mods first, then save them as a preset' : 'Save current mods as a preset'}
+                        className="w-full rounded-lg bg-black/25 border border-white/10 hover:border-white/25 hover:bg-black/35 transition py-4 grid place-items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <span>{isKey ? `${modId.substring(1)}K` : displayName}</span>
-                        <X className="w-3 h-3 text-white/40 group-hover:text-rose-400" />
+                        <Plus className="w-5 h-5 text-white/80" />
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                      {presets.length === 0 && (
+                        <p className="text-[11px] text-white/40 leading-snug text-center mt-1">
+                          Save your current mod combo for one-tap reuse.
+                        </p>
+                      )}
+                      {presets.map((preset, idx) => (
+                        <div key={`${preset.name}-${idx}`} className="group/preset relative">
+                          <button
+                            type="button"
+                            onClick={() => onUpdateMods(sanitizeGameplayMods(preset.mods))}
+                            title={`Apply ${preset.name}: ${preset.mods.join(', ') || 'no mods'}`}
+                            className="w-full rounded-lg bg-[#42523f]/80 hover:bg-[#4b5f46] border border-white/[0.06] pl-2 pr-8 py-2 text-left transition cursor-pointer"
+                          >
+                            <span className="block text-[13px] font-bold text-white truncate">{preset.name}</span>
+                            <span className="block text-[11px] text-white/55 truncate font-mono">
+                              {preset.mods.length > 0 ? preset.mods.join(' + ') : 'No mods'}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => persistPresets(presets.filter((_, i) => i !== idx))}
+                            title={`Delete ${preset.name}`}
+                            aria-label={`Delete ${preset.name}`}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md hidden group-hover/preset:grid place-items-center bg-black/40 hover:bg-rose-500/70 text-white/70 hover:text-white transition cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
 
-            {/* Scrollable Categories Content */}
-            <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6 min-h-0 bg-[#121319] flex flex-col gap-8">
-              {MOD_CATEGORIES.map(cat => {
-                // If a category tab is selected and not 'all', skip other categories
-                if (selectedCategoryTab !== 'all' && selectedCategoryTab !== cat.id) {
-                  return null;
-                }
-
-                const catMods = filteredMods.filter(m => m.category === cat.id);
-                if (catMods.length === 0 && (!searchQuery || cat.id !== 'conversion')) {
-                  return null;
-                }
-
-                return (
-                  <section key={cat.id} className="flex flex-col gap-3.5">
-                    {/* Category Header */}
-                    <div className="flex items-center justify-between border-b border-white/[.07] pb-2">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-2.5 h-2.5 rounded-sm"
-                          style={{ backgroundColor: cat.color }}
-                        />
-                        <h2 className="text-sm font-black uppercase tracking-wider text-white">
+                {MOD_CATEGORIES.map(cat => {
+                  const catMods = ALL_MODS.filter(m => m.category === cat.id && matchesQuery(m));
+                  const showKeySection =
+                    cat.id === 'conversion' && (!query || 'key conversion 1k 2k 3k 4k 5k 6k 7k 8k 9k 10k keys'.includes(query));
+                  if (catMods.length === 0 && !showKeySection) return null;
+                  return (
+                    <section key={cat.id} aria-label={cat.name} className="w-[290px] lg:w-[310px] shrink-0 flex flex-col min-h-0 max-h-full">
+                      <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ clipPath: COLUMN_CLIP, backgroundColor: '#2c3a2d' }}>
+                        <header className="flex-none px-9 pt-2.5 pb-2 text-[13px] font-bold truncate" style={{ backgroundColor: cat.color, color: '#141a10' }}>
                           {cat.name}
-                        </h2>
-                        <span className="text-[11px] text-white/40 hidden sm:inline">
-                          — {cat.description}
-                        </span>
-                      </div>
+                        </header>
+                        <div className="flex-1 min-h-0 overflow-y-auto px-7 py-3 flex flex-col gap-2 lazer-scroll">
+                          {catMods.map(mod => (
+                            <LazerModCard
+                              key={mod.id}
+                              mod={mod}
+                              categoryColor={cat.color}
+                              isActive={selectedMods.includes(mod.id)}
+                              conflictingMods={getConflictingMods(mod.id, selectedMods)}
+                              onClick={() => handleToggleMod(mod)}
+                            />
+                          ))}
 
-                      <div className="text-[11px] font-mono text-white/50">
-                        {catMods.length} mods
-                      </div>
-                    </div>
-
-                    {/* Mod Hex Buttons Grid */}
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4 justify-items-center">
-                      {catMods.map(mod => {
-                        const isActive = selectedMods.includes(mod.id);
-                        const conflicts = getConflictingMods(mod.id, selectedMods);
-
-                        return (
-                          <HexModButton
-                            key={mod.id}
-                            id={mod.id}
-                            acronym={mod.acronym}
-                            name={mod.name}
-                            multiplier={mod.multiplier}
-                            categoryColor={cat.color}
-                            icon={mod.icon}
-                            isActive={isActive}
-                            conflictingMods={conflicts}
-                            onClick={() => handleToggleMod(mod)}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    {/* Key Conversion Sub-section (Inside Conversion category) */}
-                    {cat.id === 'conversion' && (!searchQuery || 'key conversion'.includes(searchQuery.toLowerCase())) && (
-                      <div className="mt-4 pt-4 border-t border-white/[.05] flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs font-bold text-white/80 uppercase tracking-wider">
-                            <Keyboard className="w-3.5 h-3.5 text-purple-400" />
-                            <span>Key Count Conversion (1K – 10K)</span>
-                          </div>
-                          <span className="text-[10px] font-mono text-white/40">
-                            0.90x Multiplier
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 justify-items-center">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(k => {
-                            const id = `K${k}`;
-                            const isActive = selectedMods.includes(id);
-                            const isNative = availableKeyCounts.includes(k);
-                            const conflicts = getConflictingMods(id, selectedMods);
-
-                            return (
-                              <HexModButton
-                                key={id}
-                                id={id}
-                                acronym={`${k}K`}
-                                name={`${k} Keys`}
-                                multiplier="0.90x"
-                                categoryColor={cat.color}
-                                icon={Keyboard}
-                                isActive={isActive}
-                                conflictingMods={conflicts}
-                                isDisabled={isNative}
-                                disabledReason={`${k}K is already native to this beatmap`}
-                                onClick={() => !isNative && handleToggleKeyMod(k)}
-                              />
-                            );
-                          })}
+                          {cat.id === 'conversion' && showKeySection && (
+                            <div className="mt-1 pt-2 border-t border-white/10">
+                              <p className="text-[10px] uppercase tracking-wider text-white/45 font-bold mb-1.5 px-0.5">
+                                Key Conversion
+                              </p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(k => {
+                                  const id = `K${k}`;
+                                  const isActive = selectedMods.includes(id);
+                                  const isNative = availableKeyCounts.includes(k);
+                                  return (
+                                    <button
+                                      key={id}
+                                      type="button"
+                                      disabled={isNative}
+                                      onClick={() => !isNative && handleToggleKeyMod(k)}
+                                      title={isNative ? `${k}K is already native to this beatmap` : `Convert playfield to ${k}K (0.90x)`}
+                                      className={`rounded-md px-2 py-1.5 text-[12px] font-mono font-bold border transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                                        isActive ? '' : 'bg-[#42523f]/80 border-white/[0.06] text-white/85 hover:bg-[#4b5f46]'
+                                      }`}
+                                      style={isActive ? { backgroundColor: cat.color, borderColor: cat.color, color: '#10160f' } : undefined}
+                                    >
+                                      {k}K
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </section>
-                );
-              })}
-
-              {/* Difficulty Adjust (DA) Customization Slider Panel */}
-              {selectedMods.includes('DA') && onUpdateDifficultyAdjust && (
-                <div className="mt-2 p-5 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 flex flex-col gap-4">
-                  <div className="flex items-center gap-2 font-black text-sm text-yellow-300">
-                    <Sliders className="w-4 h-4 text-yellow-400" />
-                    <span>Difficulty Adjust (DA) Settings</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
-                    {/* OD Slider */}
-                    <div className="flex flex-col gap-2 p-3 bg-black/30 rounded-xl border border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-white/80">Overall Difficulty (OD):</span>
-                        <span className="font-mono font-black text-yellow-400 text-sm">
-                          {(difficultyAdjust?.overallDifficulty ?? defaultOd).toFixed(1)}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="10"
-                        step="0.5"
-                        value={difficultyAdjust?.overallDifficulty ?? defaultOd}
-                        onChange={e => {
-                          const val = parseFloat(e.target.value);
-                          onUpdateDifficultyAdjust({
-                            ...(difficultyAdjust || {}),
-                            overallDifficulty: val,
-                          });
-                        }}
-                        className="accent-yellow-400 h-1.5 rounded-lg cursor-pointer"
-                      />
-                      <span className="text-[10px] text-white/40">Default: {defaultOd.toFixed(1)}</span>
-                    </div>
-
-                    {/* HP Drain Slider */}
-                    <div className="flex flex-col gap-2 p-3 bg-black/30 rounded-xl border border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-white/80">HP Drain Rate (HP):</span>
-                        <span className="font-mono font-black text-yellow-400 text-sm">
-                          {(difficultyAdjust?.hpDrainRate ?? defaultHp).toFixed(1)}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="10"
-                        step="0.5"
-                        value={difficultyAdjust?.hpDrainRate ?? defaultHp}
-                        onChange={e => {
-                          const val = parseFloat(e.target.value);
-                          onUpdateDifficultyAdjust({
-                            ...(difficultyAdjust || {}),
-                            hpDrainRate: val,
-                          });
-                        }}
-                        className="accent-yellow-400 h-1.5 rounded-lg cursor-pointer"
-                      />
-                      <span className="text-[10px] text-white/40">Default: {defaultHp.toFixed(1)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                    </section>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Footer: Reset & Close */}
-            <div className="flex-none px-6 sm:px-8 py-3.5 bg-[#161720] border-t border-white/[.08] flex items-center justify-between gap-4">
-              <button
-                type="button"
-                onClick={() => onUpdateMods([])}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-xl text-xs font-mono font-bold transition cursor-pointer border border-white/10"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset All Mods</span>
-              </button>
-
+            {/* Bottom action bar */}
+            <footer className="flex-none bg-[#20261f]/95 border-t border-white/10 px-2 sm:px-6 lg:px-10 pt-4 pb-3 flex items-center gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2 bg-[#ff80a5] hover:brightness-110 active:scale-95 text-slate-950 font-black font-sans text-xs rounded-xl transition cursor-pointer uppercase tracking-wider shadow-[0_0_15px_rgba(255,128,165,0.4)]"
+                className="-skew-x-[12deg] rounded-lg bg-[#f23a9c] hover:brightness-110 active:scale-95 transition px-6 sm:px-8 py-2.5 cursor-pointer"
               >
-                Apply Selection
+                <span className="skew-x-[12deg] flex items-center gap-2 text-[13px] font-bold text-white">
+                  <ChevronLeft className="w-4 h-4" />
+                  Back
+                </span>
               </button>
-            </div>
-          </motion.div>
-        </>
+
+              <div className="relative">
+                {(selectedMods.length > 0 || isUnranked) && (
+                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 flex items-center gap-1 whitespace-nowrap">
+                    {firstActiveMod && FirstActiveIcon && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-[#2c362c] border border-white/15 pl-1.5 pr-2.5 py-0.5 text-[11px] font-mono font-bold text-white shadow-lg">
+                        <span
+                          className="w-5 h-5 grid place-items-center text-white"
+                          style={{ clipPath: HEX_CLIP, backgroundColor: MOD_CATEGORIES.find(c => c.id === firstActiveMod.category)?.color ?? '#666' }}
+                        >
+                          <FirstActiveIcon className="w-3 h-3" />
+                        </span>
+                        {currentMultiplier.toFixed(2)}x
+                      </span>
+                    )}
+                    {isUnranked && (
+                      <span className="rounded-full bg-[#e9d44a] px-2.5 py-1 text-[10px] font-black tracking-wide text-[#141a10] shadow-lg">
+                        UNRANKED
+                      </span>
+                    )}
+                  </span>
+                )}
+                <div className="-skew-x-[12deg] rounded-lg bg-[#8fe35a] px-6 sm:px-9 py-2.5">
+                  <span className="skew-x-[12deg] flex flex-col items-center leading-none text-[#10210f]">
+                    <ArrowLeftRight className="w-4 h-4" />
+                    <span className="text-[11px] font-bold mt-0.5">Mods{selectedMods.length > 0 ? ` (${selectedMods.length})` : ''}</span>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onUpdateMods([])}
+                className="-skew-x-[12deg] rounded-lg bg-[#2c332c] hover:bg-[#384138] border border-white/10 transition px-6 sm:px-10 py-2.5 cursor-pointer"
+              >
+                <span className="skew-x-[12deg] block text-[12px] font-bold text-white/80">Deselect All</span>
+              </button>
+
+              <div className="flex-1" />
+
+              {/* Beatmap stat cluster */}
+              <div className="hidden md:flex items-center gap-4">
+                {stars !== undefined && (
+                  <span className="rounded-full bg-[#3fa35c]/25 border border-[#3fa35c]/50 px-2.5 py-1 text-[12px] font-bold text-[#7bd88f]">
+                    ★ {stars.toFixed(2)}
+                  </span>
+                )}
+                {bpm !== undefined && <span className="text-[13px] font-bold text-white whitespace-nowrap">{Math.round(bpm)} BPM</span>}
+                {keyCount !== undefined && (
+                  <span className="text-center leading-tight">
+                    <span className="block text-[9px] font-bold text-white/45">KC</span>
+                    <span className="block text-[13px] font-bold text-white">{keyCount.toFixed(1)}</span>
+                  </span>
+                )}
+                {od !== undefined && (
+                  <span className="text-center leading-tight">
+                    <span className="block text-[9px] font-bold text-white/45">OD</span>
+                    <span className="block text-[13px] font-bold text-white">{od.toFixed(1)}</span>
+                  </span>
+                )}
+                {hp !== undefined && (
+                  <span className="text-center leading-tight">
+                    <span className="block text-[9px] font-bold text-white/45">HP</span>
+                    <span className="block text-[13px] font-bold text-white">{hp.toFixed(1)}</span>
+                  </span>
+                )}
+                <span
+                  className={`-skew-x-[12deg] rounded-lg px-5 py-2 text-[12px] font-bold ${
+                    isUnranked ? 'bg-[#e9d44a] text-[#141a10]' : 'bg-[#2c332c] text-white/80 border border-white/10'
+                  }`}
+                >
+                  <span className="skew-x-[12deg] block">{isUnranked ? 'Unranked' : 'Ranked'}</span>
+                </span>
+                <span className="text-[13px] font-mono font-bold text-white whitespace-nowrap">{currentMultiplier.toFixed(2)}x</span>
+              </div>
+
+              {/* Compact multiplier for small screens */}
+              <div className="flex md:hidden items-center gap-2">
+                <span
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-bold ${
+                    isUnranked ? 'bg-[#e9d44a] text-[#141a10]' : 'bg-[#2c332c] text-white/80 border border-white/10'
+                  }`}
+                >
+                  {isUnranked ? 'Unranked' : `${currentMultiplier.toFixed(2)}x`}
+                </span>
+              </div>
+            </footer>
+          </div>
+
+          <style>{`
+            .lazer-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.55) transparent; }
+            .lazer-scroll::-webkit-scrollbar { width: 5px; }
+            .lazer-scroll::-webkit-scrollbar-track { background: transparent; }
+            .lazer-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.55); border-radius: 9999px; }
+          `}</style>
+        </motion.div>
       )}
     </AnimatePresence>
   );

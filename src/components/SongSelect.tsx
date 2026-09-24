@@ -1185,7 +1185,7 @@ export default function SongSelect({
         {/* =======================================================
             LEFT COLUMN: INFO WEDGE & LOCAL RANKING — transparent, hud refs
             ======================================================= */}
-        <div className="w-full lg:w-[620px] xl:w-[700px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 flex">
+        <div className="w-full lg:w-[596px] xl:w-[676px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 flex">
           <SongSelectLeftPanel
             selectedMap={selectedCustomMap}
             currentStarRating={currentStarRating}
@@ -1209,7 +1209,7 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-0 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
+        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-0 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[49%] lg:min-w-[400px] lg:max-w-[704px] xl:max-w-[744px] flex">
 
           {/* TOP-RIGHT FILTER BOX — single shell, slanted left, flush right (hud refs) */}
           <div className="lazer-song-filter-stack">
@@ -1439,6 +1439,13 @@ export default function SongSelect({
         onUpdateDifficultyAdjust={(da) => updateSettings({ difficultyAdjust: da })}
         defaultOd={selectedCustomMap?.overallDifficulty ?? 8}
         defaultHp={selectedCustomMap?.hpDrainRate ?? 5}
+        beatmapStats={{
+          stars: currentStarRating,
+          bpm: selectedCustomMap?.bpm,
+          keyCount: selectedCustomMap?.keyCount,
+          od: selectedCustomMap?.overallDifficulty,
+          hp: selectedCustomMap?.hpDrainRate,
+        }}
       />
 
     </div>

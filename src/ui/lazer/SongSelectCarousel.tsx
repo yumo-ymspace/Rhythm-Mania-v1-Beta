@@ -354,14 +354,21 @@ export function SongSelectCarousel({
   // difficulty rows are measured via getBoundingClientRect (their offsetTop
   // is relative to the group wrapper, not the scroll container, so it must
   // not be compared against the container-space viewport centre).
-  const MAX_INDENT_PX = 72;
-  const CENTER_INDENT_PX = 16;
+  const MAX_INDENT_PX = 32;
+  const CENTER_INDENT_PX = 12;
   const RANGE_PX = 300;
-  // The native scrollbar is hidden (see tokens.css): a custom overlay thumb
-  // floats over the art, so every banner ends exactly at the screen edge and
-  // only the left indent tapers.
+  // The native scrollbar is hidden (see tokens.css): every banner stays
+  // flush to the right screen edge (marginRight 0) while unselected banners
+  // sit only slightly shorter through their small left indent, so all
+  // banners read at nearly the same horizontal length. The custom overlay
+  // thumb floats on top of the banner art (no layout gap between banners
+  // and the screen edge).
   const SELECTED_RIGHT_EXTEND_PX = 0;
   const UNSELECTED_RIGHT_OVERLAP_PX = 0;
+  // Unselected song banners stack with a slight vertical overlap
+  // (osu!lazer-style); the selected/expanded group keeps a normal gap.
+  const UNSELECTED_OVERLAP_PX = 3;
+  const SELECTED_GAP_PX = 6;
   // Difficulty-row taper: every row sticks to the screen edge on the right
   // (the -4 cancels the wrapper gutter); unselected rows read slightly
   // shorter through their larger left indent, which still tapers with
@@ -371,7 +378,7 @@ export function SongSelectCarousel({
   const DIFF_SELECTED_ML_PX = -12;
   const DIFF_SELECTED_MR_PX = -4;
   const DIFF_RANGE_PX = 220;
-  const DIFF_MAX_EXTRA_PX = 26;
+  const DIFF_MAX_EXTRA_PX = 10;
 
   const focusKey = expandedSongKey || selectedGroupKey;
   let focusIndex = songGroups.findIndex((g) => g.songKey === focusKey);
@@ -418,9 +425,25 @@ export function SongSelectCarousel({
     if (!container) return;
     const selectedKey = selectedKeyRef.current;
     const viewCenter = container.scrollTop + container.clientHeight / 2;
-    for (const g of groupsRef.current) {
+    const expandedKeyForStack = expandedKeyRef.current;
+    for (let gi = 0; gi < groupsRef.current.length; gi += 1) {
+      const g = groupsRef.current[gi];
       const el = itemEls.current.get(g.songKey);
       if (!el) continue;
+      // Vertical stacking: first group never overlaps upward; the selected
+      // group keeps a normal gap while unselected groups overlap the one
+      // above so neighbouring banners visibly stack. The group directly
+      // below an expanded diff list keeps a gap so rows are never covered.
+      const prevKey = gi > 0 ? groupsRef.current[gi - 1].songKey : null;
+      const belowExpandedDiffs = prevKey !== null && prevKey === expandedKeyForStack && prevKey !== g.songKey;
+      const targetMarginTop = gi === 0
+        ? '0px'
+        : g.songKey === selectedKey || belowExpandedDiffs
+          ? `${SELECTED_GAP_PX}px`
+          : `${-UNSELECTED_OVERLAP_PX}px`;
+      if (el.style.marginTop !== targetMarginTop) el.style.marginTop = targetMarginTop;
+      const targetZ = g.songKey === selectedKey ? '2' : '1';
+      if (el.style.zIndex !== targetZ) el.style.zIndex = targetZ;
       if (g.songKey === selectedKey) {
         // Selected: pinned full-width, always longer than the rest.
         if (el.style.marginLeft !== '0px') el.style.marginLeft = '0px';
@@ -436,7 +459,8 @@ export function SongSelectCarousel({
       const indent = Math.round(CENTER_INDENT_PX + (MAX_INDENT_PX - CENTER_INDENT_PX) * Math.pow(t, 0.85));
       const left = `${indent}px`;
       if (el.style.marginLeft !== left) el.style.marginLeft = left;
-      // Every banner ends at the screen edge; only the left indent tapers.
+      // Every banner stays flush to the right screen edge; the overlay
+      // scrollbar thumb floats on top of the art instead of taking a gap.
       if (el.style.marginRight !== `${UNSELECTED_RIGHT_OVERLAP_PX}px`) el.style.marginRight = `${UNSELECTED_RIGHT_OVERLAP_PX}px`;
     }
 
@@ -714,7 +738,7 @@ export function SongSelectCarousel({
   const carouselWrapClassName =
     'flex-1 relative min-h-0 flex flex-col mr-[-8px] lg:mr-[-12px]';
   const carouselClassName =
-    'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-0 flex flex-col gap-1.5 relative z-10 min-h-0';
+    'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-0 flex flex-col gap-0 relative z-10 min-h-0';
   const carouselOverlay = (
     <div className="pointer-events-none absolute top-0 bottom-0 right-0 w-[7px] z-20" aria-hidden="true">
       <div
@@ -776,8 +800,11 @@ export function SongSelectCarousel({
         // focus index. The scroll handler takes over immediately after.
         const fallbackIndentPx = isGroupActive
           ? 0
-          : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 16;
+          : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 4;
         const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : UNSELECTED_RIGHT_OVERLAP_PX;
+        const prevGroupKey = groupIndex > 0 ? songGroups[groupIndex - 1].songKey : null;
+        const fallbackBelowExpanded = prevGroupKey !== null && prevGroupKey === expandedSongKey && prevGroupKey !== group.songKey;
+        const fallbackMarginTopPx = groupIndex === 0 ? 0 : isGroupActive || fallbackBelowExpanded ? SELECTED_GAP_PX : -UNSELECTED_OVERLAP_PX;
         const sortedDiffs = [...group.maps].sort((a, b) => getStarRating(a) - getStarRating(b));
         const rankBadge = getRankStatusBadge(group);
         const uniqueKeys = Array.from(new Set(group.maps.map(m => m.keyCount).filter(Boolean)))
@@ -788,7 +815,7 @@ export function SongSelectCarousel({
           <div
             key={group.songKey}
             className="flex flex-col gap-1 lazer-carousel-taper-item"
-            style={{ marginLeft: fallbackIndentPx, marginRight: fallbackExtendRightPx }}
+            style={{ marginLeft: fallbackIndentPx, marginRight: fallbackExtendRightPx, marginTop: fallbackMarginTopPx, zIndex: isGroupActive ? 2 : 1 }}
             ref={(el) => {
               if (el) {
                 itemEls.current.set(group.songKey, el);

@@ -113,15 +113,15 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
     const line = rawLine.trim();
     if (!line || line.startsWith('//')) continue;
 
-    // Direct section markers - robust case-insensitive check ignoring inner/outer spacing
+    // Direct section markers - robust case-insensitive check ignoring inner/outer spacing.
+    // Any unrecognized section (e.g. [Editor], [Colours]) must exit the
+    // TimingPoints/HitObjects/Events modes, otherwise lines like
+    // "Combo1 : 45,6,7" would be misparsed as timing points.
     if (line.startsWith('[') && line.endsWith(']')) {
       const headerName = line.substring(1, line.length - 1).trim().toLowerCase().replace(/\s+/g, '');
-      if (headerName === 'general') { inHitObjects = false; inTimingPoints = false; inEvents = false; continue; }
-      if (headerName === 'metadata') { inHitObjects = false; inTimingPoints = false; inEvents = false; continue; }
-      if (headerName === 'difficulty') { inHitObjects = false; inTimingPoints = false; inEvents = false; continue; }
-      if (headerName === 'events') { inHitObjects = false; inTimingPoints = false; inEvents = true; continue; }
-      if (headerName === 'timingpoints') { inHitObjects = false; inTimingPoints = true; inEvents = false; continue; }
-      if (headerName === 'hitobjects') { inHitObjects = true; inTimingPoints = false; inEvents = false; continue; }
+      inHitObjects = headerName === 'hitobjects';
+      inTimingPoints = headerName === 'timingpoints';
+      inEvents = headerName === 'events';
       continue;
     }
 

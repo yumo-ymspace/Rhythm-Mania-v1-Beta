@@ -166,6 +166,17 @@ export const MainMenu = ({
     if (phase !== 'play') soloNavigatedRef.current = false;
   }, [phase]);
 
+  // The grey button strip's unfold entrance belongs to the in-menu
+  // idle -> top-level promotion. When MainMenu (re)mounts with buttons
+  // already visible (back from song select, history, results, ...), the
+  // strip renders in its final state so the screen transition is a pure
+  // fade like every other page. Read during render, synced after commit.
+  const prevPhaseRef = useRef<LazerMenuPhase>(phase);
+  const skipStripEnter = prevPhaseRef.current !== 'idle';
+  useEffect(() => {
+    prevPhaseRef.current = phase;
+  }, [phase]);
+
   useEffect(() => () => {
     if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
   }, []);
@@ -374,6 +385,7 @@ export const MainMenu = ({
             onOpenBrowse={onOpenBrowse}
             onBackToTopLevel={returnTopLevel}
             onIdleTimeout={returnIdle}
+            skipStripEnterAnimation={skipStripEnter}
           />
         )}
       </AnimatePresence>
