@@ -63,7 +63,9 @@ const SECTION_LENGTH_MS = 400;
 const PEAK_DECAY_WEIGHT = 0.9;
 const INDIVIDUAL_DECAY_BASE = 0.125;
 const OVERALL_DECAY_BASE = 0.3;
-const RELEASE_THRESHOLD_MS = 24;
+// lazer OverallStrainEvaluator.release_threshold + DiffUtils.Logistic multiplier.
+const RELEASE_THRESHOLD_MS = 30;
+const HOLD_LOGISTIC_MULTIPLIER = 0.27;
 const ROUND_PRECISION_ERROR = 1e-15;
 const SORT_DEPTH_LIMIT = 32;
 
@@ -229,6 +231,54 @@ function endTimeOf(time: number, endTime: number, hold: boolean): number {
   return hold ? endTime : time;
 }
 
+/** ppy/osu Precision.DefinitelyBigger(a, b, 1): a - 1 > b. */
+function definitelyBigger(a: number, b: number, epsilon = 1): boolean {
+  return a - epsilon > b;
+}
+
+/**
+ * lazer-equivalent hold strain terms.
+ * Mirrors IndividualStrainEvaluator + OverallStrainEvaluator over the
+ * per-column previous objects (PreviousHitObjects): chord mates sharing the
+ * same start time are ignored via the startTime > prevStart + 1 checks, and
+ * columns with no previous object are skipped for closestEndTime.
+ */
+function evaluateHoldStrain(
+  startTime: number,
+  endTime: number,
+  columnStartTimes: readonly number[],
+  columnEndTimes: readonly number[],
+  columnHasObject: readonly boolean[],
+  columns: number,
+): { holdFactor: number; holdAddition: number } {
+  let overlapping = false;
+  let closestEndTime = Math.abs(endTime - startTime);
+  let holdFactor = 1;
+  for (let c = 0; c < columns; c++) {
+    if (!columnHasObject[c]) continue;
+    const prevStart = columnStartTimes[c];
+    const prevEnd = columnEndTimes[c];
+    const startsAfterPrevStart = definitelyBigger(startTime, prevStart, 1);
+    if (definitelyBigger(prevEnd, endTime, 1) && startsAfterPrevStart) {
+      holdFactor = 1.25;
+    }
+    if (
+      definitelyBigger(prevEnd, startTime, 1) &&
+      definitelyBigger(endTime, prevEnd, 1) &&
+      startsAfterPrevStart
+    ) {
+      overlapping = true;
+    }
+    closestEndTime = Math.min(closestEndTime, Math.abs(endTime - prevEnd));
+  }
+  let holdAddition = 0;
+  if (overlapping) {
+    // DiffUtils.Logistic(closestEndTime, 30, 0.27).
+    holdAddition = 1 / (1 + Math.exp(HOLD_LOGISTIC_MULTIPLIER * (RELEASE_THRESHOLD_MS - closestEndTime)));
+  }
+  return { holdFactor, holdAddition };
+}
+
 /**
  * Computes lazer-equivalent mania difficulty attributes for a chart.
  * clockRate is the DT/HT style track rate (1.5 / 0.75, otherwise 1.0);
@@ -283,6 +333,7 @@ export function calculateManiaDifficultyAttributes(
   const individualStrains = new Array<number>(columns).fill(0);
   const columnStartTimes = new Array<number>(columns).fill(0);
   const columnEndTimes = new Array<number>(columns).fill(0);
+  const columnHasObject = new Array<boolean>(columns).fill(false);
   let individualStrain = 0;
   let overallStrain = 1;
   let sectionPeak = 0;
@@ -306,22 +357,14 @@ export function calculateManiaDifficultyAttributes(
     const startTime = current.startTime;
     const endTime = current.endTime;
     const column = current.column;
-    let overlapping = false;
-    let closestEndTime = Math.abs(endTime - startTime);
-    let holdFactor = 1;
-    let holdAddition = 0;
-    for (let c = 0; c < columns; c++) {
-      const columnEnd = columnEndTimes[c];
-      const coversStart = columnEnd - 1 > startTime;
-      const coveredByEnd = endTime - 1 > columnEnd;
-      const extendsBeyondEnd = columnEnd - 1 > endTime;
-      overlapping = overlapping || (coversStart && coveredByEnd);
-      if (extendsBeyondEnd) holdFactor = 1.25;
-      closestEndTime = Math.min(closestEndTime, Math.abs(endTime - columnEnd));
-    }
-    if (overlapping) {
-      holdAddition = 1 / (1 + Math.exp(0.5 * (RELEASE_THRESHOLD_MS - closestEndTime)));
-    }
+    const { holdFactor, holdAddition } = evaluateHoldStrain(
+      startTime,
+      endTime,
+      columnStartTimes,
+      columnEndTimes,
+      columnHasObject,
+      columns,
+    );
 
     individualStrains[column] =
       individualStrains[column] * Math.pow(INDIVIDUAL_DECAY_BASE, (startTime - columnStartTimes[column]) / 1000) +
@@ -334,6 +377,7 @@ export function calculateManiaDifficultyAttributes(
       (1 + holdAddition) * holdFactor;
     columnStartTimes[column] = startTime;
     columnEndTimes[column] = endTime;
+    columnHasObject[column] = true;
 
     const strain = individualStrain + overallStrain;
     if (strain > sectionPeak) sectionPeak = strain;
@@ -411,6 +455,7 @@ export function calculateTimedManiaDifficultyAttributes(
   const individualStrains = new Array<number>(columns).fill(0);
   const columnStartTimes = new Array<number>(columns).fill(0);
   const columnEndTimes = new Array<number>(columns).fill(0);
+  const columnHasObject = new Array<boolean>(columns).fill(false);
   let individualStrain = 0;
   let overallStrain = 1;
   let sectionPeak = 0;
@@ -434,22 +479,14 @@ export function calculateTimedManiaDifficultyAttributes(
     const startTime = current.startTime;
     const endTime = current.endTime;
     const column = current.column;
-    let overlapping = false;
-    let closestEndTime = Math.abs(endTime - startTime);
-    let holdFactor = 1;
-    let holdAddition = 0;
-    for (let c = 0; c < columns; c++) {
-      const columnEnd = columnEndTimes[c];
-      const coversStart = columnEnd - 1 > startTime;
-      const coveredByEnd = endTime - 1 > columnEnd;
-      const extendsBeyondEnd = columnEnd - 1 > endTime;
-      overlapping = overlapping || (coversStart && coveredByEnd);
-      if (extendsBeyondEnd) holdFactor = 1.25;
-      closestEndTime = Math.min(closestEndTime, Math.abs(endTime - columnEnd));
-    }
-    if (overlapping) {
-      holdAddition = 1 / (1 + Math.exp(0.5 * (RELEASE_THRESHOLD_MS - closestEndTime)));
-    }
+    const { holdFactor, holdAddition } = evaluateHoldStrain(
+      startTime,
+      endTime,
+      columnStartTimes,
+      columnEndTimes,
+      columnHasObject,
+      columns,
+    );
 
     individualStrains[column] =
       individualStrains[column] * Math.pow(INDIVIDUAL_DECAY_BASE, (startTime - columnStartTimes[column]) / 1000) +
@@ -462,6 +499,7 @@ export function calculateTimedManiaDifficultyAttributes(
       (1 + holdAddition) * holdFactor;
     columnStartTimes[column] = startTime;
     columnEndTimes[column] = endTime;
+    columnHasObject[column] = true;
 
     const strain = individualStrain + overallStrain;
     if (strain > sectionPeak) sectionPeak = strain;

@@ -1209,10 +1209,12 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 py-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
+        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-3 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[47%] lg:min-w-[400px] lg:max-w-[680px] xl:max-w-[720px] flex">
 
-          {/* SEARCH BOX — dark rounded, italic placeholder, yellow matches, magnifier */}
-          <div className="relative flex-shrink-0 lazer-song-search">
+          {/* TOP-RIGHT FILTER STACK — thin slant boxes (visual-refs/hud songselect refs) */}
+          <div className="lazer-song-filter-stack">
+          {/* SEARCH BOX — slanted wedge, italic placeholder, yellow matches, magnifier */}
+          <div className="relative flex-shrink-0 lazer-song-search lazer-song-filter-wedge is-search">
             <input
               id="song-search-input"
               type="text"
@@ -1228,7 +1230,7 @@ export default function SongSelect({
           </div>
 
           {/* STAR RATING RAINBOW BAR + Show converts — drag/scroll directly on the bar */}
-          <div className="flex-shrink-0 flex items-center gap-2">
+          <div className="flex-shrink-0 flex items-center gap-2 lazer-song-filter-wedge is-star">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="lazer-filter-tab">Star Rating</span>
               <div
@@ -1288,8 +1290,8 @@ export default function SongSelect({
             <span className="lazer-filter-tab opacity-80 hidden sm:inline-flex">Show converts</span>
           </div>
 
-          {/* SORT / GROUP / COLLECTION ROW */}
-          <div className="flex-shrink-0 flex flex-wrap items-center gap-2 relative z-20">
+          {/* SORT / GROUP / COLLECTION ROW — slanted pills, row stays unclipped for dropdowns */}
+          <div className="flex-shrink-0 flex flex-wrap items-center gap-2 relative z-20 lazer-song-filter-row">
             {([
               { key: 'sort' as const, label: 'Sort', value: sortBy, options: ['Title', 'Artist', 'Difficulty', 'BPM', 'Length', 'Date Added'] },
               { key: 'group' as const, label: 'Group', value: groupBy, options: ['None', 'Artist', 'Creator'] },
@@ -1332,6 +1334,7 @@ export default function SongSelect({
                 )}
               </div>
             ))}
+          </div>
           </div>
 
           {/* CAROUSEL SETS AND DIFFICULTY PILLS (TASK-V-021) */}
