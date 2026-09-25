@@ -1177,6 +1177,8 @@ export default function App() {
         showPenarDuringPlay: updated.showPenarDuringPlay !== undefined ? Boolean(updated.showPenarDuringPlay) : true,
         localDisplayName: updated.localDisplayName !== undefined ? String(updated.localDisplayName).slice(0, 32) : '',
         difficultyAdjust: updated.difficultyAdjust,
+        renderEngine: updated.renderEngine === 'webgl' ? 'webgl' : 'canvas',
+        allowCanvasFallback: updated.allowCanvasFallback !== undefined ? Boolean(updated.allowCanvasFallback) : true,
       };
 
       if (updated.bindings) {

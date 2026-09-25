@@ -14,6 +14,105 @@ import React from 'react';
 import type { PenarBreakdown } from '../types';
 import { formatPenar } from '../utils/penar';
 
+export interface HudHitErrorTick {
+  id: string;
+  error: number;
+  timestamp: number;
+  color: string;
+}
+
+/**
+ * Draws one argon dual vertical hit-error meter. This is the sole owner of
+ * hit-error meter rendering: the playfield canvas never draws HUD meters.
+ * Called imperatively from the gameplay rAF loop with the live tick list so
+ * React reconciliation stays off the per-frame path. Each meter canvas uses
+ * its own 2D context; the right meter is mirrored via CSS `scale-x-[-1]`.
+ */
+export function drawVerticalHitErrorMeter(
+  canvas: HTMLCanvasElement | null,
+  ticks: HudHitErrorTick[],
+  avgMs: number | null,
+  maxMs: number = 150
+): void {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  const halfH = h / 2;
+  const trackH = 180;
+  const trackHalfH = trackH / 2;
+  const centerX = 12;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background guide track (subtle rounded track)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.beginPath();
+  ctx.roundRect(centerX - 1.5, halfH - trackHalfH, 3, trackH, 1.5);
+  ctx.fill();
+
+  // Draw window color ranges (OD ranges in ms: Meh 136, Ok 112, Good 82, Great 49, Perfect 19.4)
+  const drawSegment = (ms: number, color: string, thickness: number = 3) => {
+    const yOffset = Math.min(trackHalfH, (ms / maxMs) * trackHalfH);
+    ctx.fillStyle = color;
+    ctx.fillRect(centerX - thickness / 2, halfH - yOffset, thickness, yOffset * 2);
+  };
+
+  drawSegment(136, 'rgba(244, 63, 94, 0.25)', 3);
+  drawSegment(112, 'rgba(249, 115, 22, 0.35)', 3);
+  drawSegment(82, 'rgba(234, 179, 8, 0.45)', 3);
+  drawSegment(49, 'rgba(34, 197, 94, 0.60)', 3);
+  drawSegment(19.4, 'rgba(102, 204, 255, 0.80)', 4);
+
+  // Center 0ms marker
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(centerX, halfH, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw ticks
+  const now = Date.now();
+  ticks.forEach(tick => {
+    const age = now - tick.timestamp;
+    if (age > 2000) return;
+    const alpha = Math.max(0, 1 - age / 2000);
+    const clampedError = Math.max(-maxMs, Math.min(maxMs, tick.error));
+    const tickY = halfH + (clampedError / maxMs) * trackHalfH;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = tick.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 7, tickY);
+    ctx.lineTo(centerX + 7, tickY);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Draw running average pointer / chevron
+  if (avgMs !== null) {
+    const clampedAvg = Math.max(-maxMs, Math.min(maxMs, avgMs));
+    const avgY = halfH + (clampedAvg / maxMs) * trackHalfH;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(centerX - 3, avgY);
+    ctx.lineTo(2, avgY - 4);
+    ctx.lineTo(2, avgY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 3, avgY);
+    ctx.lineTo(centerX + 7, avgY);
+    ctx.stroke();
+  }
+}
+
 export interface ManiaHudProps {
   score: number;
   hp: number; // 0..100

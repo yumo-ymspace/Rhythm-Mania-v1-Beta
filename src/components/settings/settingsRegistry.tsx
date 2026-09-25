@@ -186,6 +186,24 @@ export const ROWS: RowDef[] = [
     defaultValue: DEFAULT_SETTINGS.uncappedMenuMotion,
     keywords: ['menu', 'background', 'fps', 'frames', 'uncapped', 'throttle', 'motion', 'triangles', 'performance', 'gpu'],
   },
+  {
+    id: 'renderEngine', section: 'graphics', label: 'Playfield renderer',
+    description: 'Canvas2D is the default. WebGL2 is a batched GPU playfield (argon/default skins first, others fall back to Canvas2D). SV and judgement are unchanged.',
+    control: { kind: 'select', options: [
+      { value: 'canvas', label: 'Canvas2D (default)' },
+      { value: 'webgl',  label: 'WebGL2 (experimental)' },
+    ]},
+    defaultValue: DEFAULT_SETTINGS.renderEngine,
+    keywords: ['renderer', 'webgl', 'canvas', 'gpu', 'playfield', 'performance', 'latency'],
+  },
+  {
+    id: 'allowCanvasFallback', section: 'graphics', label: 'Allow Canvas2D fallback',
+    description: 'When WebGL2 init fails, fall back to Canvas2D. Turn off to surface a hard error for testing.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.allowCanvasFallback,
+    showWhen: (s) => s.renderEngine === 'webgl',
+    keywords: ['fallback', 'canvas', 'webgl', 'testing', 'error'],
+  },
   // ── GAMEPLAY ──────────────────────────────────────────────────────────
   {
     id: 'scrollSpeed', section: 'gameplay', label: 'Scroll speed',

@@ -71,7 +71,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     const { ctx } = this;
     if (!ctx) return;
 
-    const { width, height, columns, notes, hitErrorTicks, hitErrorAvgMs, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
+    const { width, height, columns, notes, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
     const receptorY = frame.receptorY;
 
     ctx.clearRect(0, 0, width, height);
@@ -917,104 +917,12 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     }
 
     ctx.restore(); // POP screen shake translations
+    // Playfield canvas is playfield-only. All hit-error meters live in the
+    // ManiaHud overlay and are never drawn here.
+  }
 
-    // 7. DRAW TIMING (HIT ERROR) METER (Legacy skins only; Argon uses dual vertical meters in ManiaHud)
-    if (settingsSlice.skinId !== 'argon') {
-      const maxMs = 150;
-      const barWidth = 300;
-      const barHeight = 8;
-      const centerX = width / 2;
-      const barY = settingsSlice.upsurfaceNoteMode ? receptorY - 55 : receptorY + 55;
-
-      ctx.save();
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.beginPath();
-    ctx.roundRect(centerX - barWidth / 2, barY, barWidth, barHeight, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    const orangeColor = 'rgba(236, 154, 41, 0.35)';
-    const greenColor = 'rgba(34, 197, 94, 0.5)';
-    const blueColor = 'rgba(59, 130, 246, 0.7)';
-
-    // Bad region (using generic OD range representation from frames)
-    // We can compute the width of the blocks based on standard OD settings represented by typical threshold ms:
-    // Bad window region: 135ms standard
-    const badWin = 135;
-    const badX1 = centerX - (badWin / maxMs) * (barWidth / 2);
-    const badX2 = centerX + (badWin / maxMs) * (barWidth / 2);
-    ctx.fillStyle = orangeColor;
-    ctx.fillRect(badX1, barY, badX2 - badX1, barHeight);
-
-    // Great window region: 75ms standard
-    const greatWin = 75;
-    const greatX1 = centerX - (greatWin / maxMs) * (barWidth / 2);
-    const greatX2 = centerX + (greatWin / maxMs) * (barWidth / 2);
-    ctx.fillStyle = greenColor;
-    ctx.fillRect(greatX1, barY, greatX2 - greatX1, barHeight);
-
-    // Perfect region: 40ms standard
-    const perfectWin = 40;
-    const perfectX1 = centerX - (perfectWin / maxMs) * (barWidth / 2);
-    const perfectX2 = centerX + (perfectWin / maxMs) * (barWidth / 2);
-    ctx.fillStyle = blueColor;
-    ctx.fillRect(perfectX1, barY, perfectX2 - perfectX1, barHeight);
-
-    // Centered perfect line
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(centerX, barY - 3);
-    ctx.lineTo(centerX, barY + barHeight + 3);
-    ctx.stroke();
-
-    // Render timing ticks
-    hitErrorTicks.forEach(t => {
-      const clampedError = Math.max(-maxMs, Math.min(maxMs, t.error));
-      const tickX = centerX + (clampedError / maxMs) * (barWidth / 2);
-
-      ctx.save();
-      const age = Date.now() - t.timestamp;
-      ctx.globalAlpha = Math.max(0, 1 - age / 2000);
-      ctx.strokeStyle = t.color;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(tickX, barY - 2);
-      ctx.lineTo(tickX, barY + barHeight + 2);
-      ctx.stroke();
-      ctx.restore();
-    });
-
-    // Render rolling average white indicator pointer
-    if (hitErrorAvgMs !== null) {
-      const clampedAvg = Math.max(-maxMs, Math.min(maxMs, hitErrorAvgMs));
-      const avgX = centerX + (clampedAvg / maxMs) * (barWidth / 2);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.lineWidth = 1;
-
-      ctx.beginPath();
-      ctx.moveTo(avgX, barY - 1);
-      ctx.lineTo(avgX - 4, barY - 7);
-      ctx.lineTo(avgX + 4, barY - 7);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(avgX, barY - 1);
-      ctx.lineTo(avgX, barY + barHeight + 1);
-      ctx.stroke();
-    }
-
-      ctx.restore();
-    }
+  isReady(): boolean {
+    return this.ctx !== null;
   }
 
   destroy(): void {

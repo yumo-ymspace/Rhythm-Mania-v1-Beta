@@ -351,6 +351,8 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     showPenarDuringPlay: settings.showPenarDuringPlay !== undefined ? Boolean(settings.showPenarDuringPlay) : (defaultSettings.showPenarDuringPlay ?? true),
     localDisplayName: sanitizeString(settings.localDisplayName, '', 32),
     menuCursorEnabled: settings.menuCursorEnabled !== undefined ? Boolean(settings.menuCursorEnabled) : (defaultSettings.menuCursorEnabled ?? true),
+    renderEngine: settings.renderEngine === 'webgl' ? 'webgl' : 'canvas',
+    allowCanvasFallback: settings.allowCanvasFallback !== undefined ? Boolean(settings.allowCanvasFallback) : (defaultSettings.allowCanvasFallback ?? true),
     difficultyAdjust: isRecord(settings.difficultyAdjust)
       ? {
           overallDifficulty: settings.difficultyAdjust.overallDifficulty !== undefined

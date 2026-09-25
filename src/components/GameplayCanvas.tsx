@@ -13,7 +13,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Pause, Maximize, Settings, Info, Home, Sliders, X } from 'lucide-react';
 import PauseOverlay from './PauseOverlay';
-import ManiaHud from './ManiaHud';
+import ManiaHud, { drawVerticalHitErrorMeter } from './ManiaHud';
 import { mainAudio } from '../audio/AudioEngine';
 import { previewPlayer } from '../utils/previewPlayer';
 import { Beatmap, GameSettings, HitObject, JudgementType, JudgementWindow, PenarBreakdown, ScoreState, ReplayFrame, PlayHistoryRecord } from '../types';
@@ -92,6 +92,8 @@ import { calculateManiaDifficultyAttributes, calculateTimedManiaDifficultyAttrib
 // HIGH PERFORMANCE INTEGRATED RENDERER IMPORTS
 import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
 import { Canvas2DRenderer } from '../render/Canvas2DRenderer';
+import { WebGL2PlayfieldRenderer } from '../render/WebGL2PlayfieldRenderer';
+import { isArgonSkin } from '../render/argonSkin';
 import { getLaneColors } from '../render/skinTheme';
 import { calculateScrollSpeedFactor, computeScrollTravelTimeMs, updateColumnsLayout } from '../render/playfieldLayout';
 import { getColumnStyles } from '../render/laneLayout';
@@ -296,90 +298,13 @@ interface HitErrorTick {
   color: string;
 }
 
-function drawVerticalHitErrorMeter(
-  canvas: HTMLCanvasElement | null,
-  ticks: HitErrorTick[],
-  avgMs: number | null,
-  maxMs: number = 150
-): void {
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const w = canvas.width;
-  const h = canvas.height;
-  const halfH = h / 2;
-  const trackH = 180;
-  const trackHalfH = trackH / 2;
-  const centerX = 12;
+// Vertical hit-error meters are owned by the ManiaHud overlay module
+// (drawVerticalHitErrorMeter). The playfield canvas never draws HUD meters.
 
-  ctx.clearRect(0, 0, w, h);
-
-  // Background guide track (subtle rounded track)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-  ctx.beginPath();
-  ctx.roundRect(centerX - 1.5, halfH - trackHalfH, 3, trackH, 1.5);
-  ctx.fill();
-
-  // Draw window color ranges (OD ranges in ms: Meh 136, Ok 112, Good 82, Great 49, Perfect 19.4)
-  const drawSegment = (ms: number, color: string, thickness: number = 3) => {
-    const yOffset = Math.min(trackHalfH, (ms / maxMs) * trackHalfH);
-    ctx.fillStyle = color;
-    ctx.fillRect(centerX - thickness / 2, halfH - yOffset, thickness, yOffset * 2);
-  };
-
-  drawSegment(136, 'rgba(244, 63, 94, 0.25)', 3);
-  drawSegment(112, 'rgba(249, 115, 22, 0.35)', 3);
-  drawSegment(82, 'rgba(234, 179, 8, 0.45)', 3);
-  drawSegment(49, 'rgba(34, 197, 94, 0.60)', 3);
-  drawSegment(19.4, 'rgba(102, 204, 255, 0.80)', 4);
-
-  // Center 0ms marker
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(centerX, halfH, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Draw ticks
-  const now = Date.now();
-  ticks.forEach(tick => {
-    const age = now - tick.timestamp;
-    if (age > 2000) return;
-    const alpha = Math.max(0, 1 - age / 2000);
-    const clampedError = Math.max(-maxMs, Math.min(maxMs, tick.error));
-    const tickY = halfH + (clampedError / maxMs) * trackHalfH;
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = tick.color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(centerX - 7, tickY);
-    ctx.lineTo(centerX + 7, tickY);
-    ctx.stroke();
-    ctx.restore();
-  });
-
-  // Draw running average pointer / chevron
-  if (avgMs !== null) {
-    const clampedAvg = Math.max(-maxMs, Math.min(maxMs, avgMs));
-    const avgY = halfH + (clampedAvg / maxMs) * trackHalfH;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.moveTo(centerX - 3, avgY);
-    ctx.lineTo(2, avgY - 4);
-    ctx.lineTo(2, avgY + 4);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(centerX - 3, avgY);
-    ctx.lineTo(centerX + 7, avgY);
-    ctx.stroke();
-  }
-}
+// All ManiaHud React state (score, accuracy, PENAR/PP, combo, HP, judgement,
+// combo burst) flushes on this single cadence so the overlay reconciles at a
+// stable 8Hz instead of per-hit or per-frame.
+export const MANIA_HUD_UPDATE_INTERVAL_MS = 125;
 
 export default function GameplayCanvas({
   beatmap: originalBeatmap,
@@ -751,20 +676,20 @@ export default function GameplayCanvas({
   const [uiScore, setUiScore] = useState<number>(0);
   const [uiCombo, setUiCombo] = useState<number>(0);
   const [uiHp, setUiHp] = useState<number>(100);
+  const [uiAccuracy, setUiAccuracy] = useState<number>(100);
   const [uiPenar, setUiPenar] = useState<PenarBreakdown | null>(null);
   const [uiJudgement, setUiJudgement] = useState<{ text: string; color: string; time: number } | null>(null);
   const [comboBurst, setComboBurst] = useState<number | null>(null);
   // Throttled HUD sync: applyJudgement only writes these refs (no setState in
-  // the input path). The rAF loop flushes to React at ~12Hz, so per-note
+  // the input path). The rAF loop flushes to React at 8Hz, so per-note
   // reconciliation never blocks judgement or audio.
-  const hudPendingRef = useRef({ score: 0, combo: 0, hp: 100 });
+  const hudPendingRef = useRef({ score: 0, combo: 0, hp: 100, accuracy: 100 });
   // Lazer-accurate PENAR difficulty, computed once per chart+rate at setup.
   const penarDifficultyRef = useRef<{ starRating: number; maxCombo: number } | null>(null);
   // Progressive (timed) difficulty for the live PENAR counter. lazer pairs
   // each judgement with the difficulty processed so far; using the
   // full-chart rating mid-map awards near-final PENAR after a few notes.
   const timedPenarRef = useRef<TimedManiaDifficultyAttributes[]>([]);
-  const lastPenarUpdateRef = useRef<number>(0);
   const hudJudgementRef = useRef<{ text: string; color: string; time: number } | null>(null);
   const hudBurstRef = useRef<{ value: number; time: number } | null>(null);
   const lastHudFlushRef = useRef<number>(0);
@@ -874,6 +799,9 @@ export default function GameplayCanvas({
   const colsLayoutBufferRef = useRef<ColumnLayout[]>([]);
   const [loadingAudioProgress, setLoadingAudioProgress] = useState<number>(0);
   const [isAudioLoaded, setIsAudioLoaded] = useState<boolean>(false);
+  // Hard renderer failure (e.g. WebGL2 unavailable with Canvas2D fallback
+  // disabled). Surfaced as an overlay instead of a blank playfield.
+  const [rendererError, setRendererError] = useState<string | null>(null);
 
   // Custom pre-play stage states
   const [isPrePlay, setIsPrePlay] = useState<boolean>(true);
@@ -904,6 +832,10 @@ export default function GameplayCanvas({
 
   // Playfield Renderer References
   const activeRendererRef = useRef<IPlayfieldRenderer | null>(null);
+  // A canvas element is bound to one context type for life; switching between
+  // Canvas2D and WebGL2 requires a fresh canvas node (getContext would else
+  // return null). Track the bound kind to know when to swap.
+  const rendererKindRef = useRef<'canvas' | 'webgl' | null>(null);
   // Cached CSS size avoids a forced layout (clientWidth) on every rAF tick.
   const canvasCssSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
@@ -921,13 +853,95 @@ export default function GameplayCanvas({
         activeRendererRef.current = null;
       }
 
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvasRef.current) return;
+      // Non-null local: the ref may be swapped to a fresh node below, while
+      // canvasRef.current stays the source of truth for the rAF loop.
+      let canvas: HTMLCanvasElement = canvasRef.current;
+
+      // Renderer selection: WebGL2 is opt-in (settings.renderEngine) and MVP-
+      // scoped to argon/default skins without Flashlight. Everything else
+      // stays on Canvas2D. SV/judgement are untouched: both renderers consume
+      // the same SV-projected PlayfieldFrame.
+      const wantsWebGL = settings.renderEngine === 'webgl';
+      const hasFlashlight = (settings.selectedMods || []).some(m => m.toUpperCase() === 'FL');
+      const webglSupportedSkin = isArgonSkin({
+        upsurfaceNoteMode: settings.upsurfaceNoteMode,
+        scrollSpeed: settings.scrollSpeed,
+        audioOffset: settings.audioOffset,
+        visualOffset: settings.visualOffset,
+        skinId: settings.skinId,
+        squareRenderStyle: settings.squareRenderStyle,
+        playfieldStyle: settings.playfieldStyle,
+        noteSizeMultiplier: settings.noteSizeMultiplier,
+        receptorSizeMultiplier: settings.receptorSizeMultiplier,
+      });
+      const useWebGL = wantsWebGL && webglSupportedSkin && !hasFlashlight;
+      const desiredKind: 'canvas' | 'webgl' = useWebGL ? 'webgl' : 'canvas';
+
+      // A canvas keeps its first context type forever. When the desired
+      // renderer kind differs from the bound kind, swap in a fresh canvas
+      // node with identical styling so getContext can succeed.
+      if (rendererKindRef.current !== null && rendererKindRef.current !== desiredKind && canvas.parentNode) {
+        const fresh = document.createElement('canvas');
+        fresh.className = canvas.className;
+        canvas.parentNode.replaceChild(fresh, canvas);
+        canvasRef.current = fresh;
+        canvas = fresh;
+      }
+
+      // Swap the canvas node for a fresh unbound one. Required when the
+      // current node already carries the other context type (a canvas keeps
+      // its first context for life; getContext would else return null).
+      const swapFreshCanvas = () => {
+        if (!canvas.parentNode) return;
+        const fresh = document.createElement('canvas');
+        fresh.className = canvas.className;
+        canvas.parentNode.replaceChild(fresh, canvas);
+        canvasRef.current = fresh;
+        canvas = fresh;
+      };
+
+      const createFallback = async (): Promise<IPlayfieldRenderer | null> => {
+        const fallback: IPlayfieldRenderer = new Canvas2DRenderer();
+        await fallback.init(canvas, { settings, keyCount: beatmap.keyCount });
+        if (!fallback.isReady()) {
+          // The node is bound to a WebGL context (failed WebGL attempt);
+          // retry once on a fresh node.
+          swapFreshCanvas();
+          await fallback.init(canvas, { settings, keyCount: beatmap.keyCount });
+          if (!fallback.isReady()) throw new Error('Canvas2D fallback could not bind a 2D context');
+        }
+        rendererKindRef.current = 'canvas';
+        return fallback;
+      };
 
       try {
-        const renderer: IPlayfieldRenderer = new Canvas2DRenderer();
-        const keyCount = beatmap.keyCount;
-        await renderer.init(canvas, { settings, keyCount });
+        setRendererError(null);
+        let renderer: IPlayfieldRenderer | null = null;
+        if (useWebGL) {
+          try {
+            const webgl = new WebGL2PlayfieldRenderer();
+            await webgl.init(canvas, { settings, keyCount: beatmap.keyCount });
+            renderer = webgl;
+            rendererKindRef.current = 'webgl';
+          } catch (webglErr) {
+            console.warn('WebGL2 playfield init failed:', webglErr);
+            if (settings.allowCanvasFallback !== false) {
+              swapFreshCanvas();
+              renderer = await createFallback();
+            } else {
+              throw webglErr;
+            }
+          }
+        } else {
+          if (wantsWebGL && !webglSupportedSkin) {
+            console.info('WebGL2 MVP supports argon/default skins only; using Canvas2D fallback for this skin.');
+          } else if (wantsWebGL && hasFlashlight) {
+            console.info('WebGL2 MVP does not cover Flashlight; using Canvas2D fallback.');
+          }
+          renderer = await createFallback();
+        }
+        if (!renderer) return;
 
         if (!active) {
           renderer.destroy();
@@ -945,6 +959,10 @@ export default function GameplayCanvas({
         renderer.resize(width, height, dpr);
       } catch (err) {
         console.error('Failed to initialize playfield renderer:', err);
+        if (active) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setRendererError(`Playfield renderer failed: ${msg}`);
+        }
       }
     };
 
@@ -958,8 +976,15 @@ export default function GameplayCanvas({
         } catch (e) {}
         activeRendererRef.current = null;
       }
+      // NOTE: rendererKindRef is intentionally preserved across re-runs so a
+      // Canvas2D<->WebGL switch swaps in a fresh canvas node. It resets on
+      // unmount via the effect below, when React drops the canvas anyway.
     };
-  }, [settings.limitDprToOne, beatmap.keyCount, isAudioLoaded]);
+  }, [settings.limitDprToOne, settings.renderEngine, settings.allowCanvasFallback, settings.skinId, settings.squareRenderStyle, settings.playfieldStyle, settings.selectedMods, beatmap.keyCount, isAudioLoaded]);
+
+  useEffect(() => () => {
+    rendererKindRef.current = null;
+  }, []);
 
   // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD; DT/HT/NC/DC scale song-time hit-windows with clock rate.
   // Classic mod restores stable-style hit windows but keeps lazer speed compensation (totalMultiplier = speed / difficulty).
@@ -1053,8 +1078,8 @@ export default function GameplayCanvas({
     currentComboPortionRef.current = 0;
 
     // Lazer-accurate PENAR difficulty: strain passes run once per chart+rate;
-    // live PP reuses the progressive table at 4Hz so per-frame rendering
-    // stays free.
+    // live PP reuses the progressive table on the 8Hz HUD tick so per-frame
+    // rendering stays free.
     const penarRate = getSpeedMultiplier(settings.selectedMods);
     penarDifficultyRef.current = calculateManiaDifficultyAttributes(
       beatmap.notes,
@@ -1066,7 +1091,6 @@ export default function GameplayCanvas({
       beatmap.keyCount,
       penarRate,
     );
-    lastPenarUpdateRef.current = 0;
     scoreStateRef.current.penar = computePenar({
       starRating: penarDifficultyRef.current.starRating,
       maxCombo: 0,
@@ -1091,12 +1115,14 @@ export default function GameplayCanvas({
     hudPendingRef.current.score = 0;
     hudPendingRef.current.combo = 0;
     hudPendingRef.current.hp = 100;
+    hudPendingRef.current.accuracy = 100;
     hudJudgementRef.current = null;
     hudBurstRef.current = null;
     lastHudFlushRef.current = 0;
     setUiScore(0);
     setUiCombo(0);
     setUiHp(100);
+    setUiAccuracy(100);
     setUiJudgement(null);
     setComboBurst(null);
     setIsPaused(false);
@@ -1935,7 +1961,10 @@ export default function GameplayCanvas({
         if (scoreStateRef.current.comboBreakCount !== undefined) {
           scoreStateRef.current.comboBreakCount++;
         }
-        setUiCombo(0);
+        // Route through the 8Hz HUD queue; force the next rAF tick to flush
+        // so the combo break surfaces without per-event reconciliation.
+        // (Pending HP is synced below after the health judgement.)
+        lastHudFlushRef.current = 0;
         if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
           mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
         }
@@ -1949,6 +1978,11 @@ export default function GameplayCanvas({
           'body_break',
         );
         scoreStateRef.current.hp = healthToDisplayPercent(healthStateRef.current.health);
+        // Route through the 8Hz HUD queue; force the next rAF tick to flush
+        // so the combo break surfaces without per-event reconciliation.
+        hudPendingRef.current.combo = 0;
+        hudPendingRef.current.hp = scoreStateRef.current.hp;
+        lastHudFlushRef.current = 0;
         if (justFailed && !isReplayMode) {
           scoreStateRef.current.failed = true;
           isPlayingRef.current = false;
@@ -2167,7 +2201,7 @@ export default function GameplayCanvas({
       modMultiplier,
     });
 
-    // Live PENAR is refreshed at ~4Hz by the HUD flush loop reusing the
+    // Live PENAR is refreshed at 8Hz by the HUD flush loop reusing the
     // cached chart difficulty; per-judgement PP would waste frame budget.
 
     // Muted (MU) mod: fade audio as combo builds, restore on break/miss
@@ -2177,7 +2211,7 @@ export default function GameplayCanvas({
     }
 
     // Update canvas visual trackers (no React setState here — the rAF loop
-    // flushes hudPendingRef at ~12Hz so input never waits on reconciliation).
+    // flushes hudPendingRef at 8Hz so input never waits on reconciliation).
     const now = Date.now();
     currentJudgementRef.current = {
       text: judg.name,
@@ -2188,6 +2222,7 @@ export default function GameplayCanvas({
     hudPendingRef.current.score = state.score;
     hudPendingRef.current.combo = state.combo;
     hudPendingRef.current.hp = state.hp;
+    hudPendingRef.current.accuracy = state.accuracy;
     hudJudgementRef.current = { text: judg.name, color: judg.color, time: now };
     // A miss/combo-break or fail must surface immediately even between flushes.
     if (judg.type === 'miss' || state.failed || state.combo === 0) {
@@ -2362,39 +2397,38 @@ export default function GameplayCanvas({
         }
       }
 
-      // Throttled HUD flush (~12Hz): moves React reconciliation off the input
-      // path. Judgement popups expire after 600ms and combo bursts after 900ms
+      // Throttled 8Hz HUD flush: moves all ManiaHud React reconciliation
+      // (score, accuracy, PENAR/PP, combo, HP) off the input path.
+      // Judgement popups expire after 600ms and combo bursts after 900ms
       // without per-hit setTimeout churn.
       {
         const nowMs = performance.now();
-        if (nowMs - lastHudFlushRef.current >= 80) {
+        if (nowMs - lastHudFlushRef.current >= MANIA_HUD_UPDATE_INTERVAL_MS) {
           lastHudFlushRef.current = nowMs;
           const pending = hudPendingRef.current;
           setUiScore((prev) => (prev === pending.score ? prev : pending.score));
           setUiCombo((prev) => (prev === pending.combo ? prev : pending.combo));
           setUiHp((prev) => (prev === pending.hp ? prev : pending.hp));
-          // Live PENAR refresh at ~4Hz: same PP formula, but evaluated with
+          setUiAccuracy((prev) => (prev === pending.accuracy ? prev : pending.accuracy));
+          // Live PENAR refresh at 8Hz: same PP formula, but evaluated with
           // the progressive difficulty at the current progress time, exactly
           // like lazer's live PP counter. The HUD counter below renders it
-          // on the next flush.
-          if (nowMs - lastPenarUpdateRef.current >= 250) {
-            lastPenarUpdateRef.current = nowMs;
-            const live = scoreStateRef.current;
-            const difficulty = penarDifficultyRef.current;
-            live.penar = computeLivePenar({
-              timedAttributes: timedPenarRef.current,
-              progressTime: songTime,
-              fallbackStarRating: difficulty ? difficulty.starRating : null,
-              marvelousCount: live.marvelousCount,
-              perfectCount: live.perfectCount,
-              greatCount: live.greatCount,
-              goodCount: live.goodCount,
-              badCount: live.badCount,
-              missCount: live.missCount,
-              maxCombo: live.maxCombo,
-              mods: settingsRef.current.selectedMods || [],
-            });
-          }
+          // on the same flush.
+          const live = scoreStateRef.current;
+          const difficulty = penarDifficultyRef.current;
+          live.penar = computeLivePenar({
+            timedAttributes: timedPenarRef.current,
+            progressTime: songTime,
+            fallbackStarRating: difficulty ? difficulty.starRating : null,
+            marvelousCount: live.marvelousCount,
+            perfectCount: live.perfectCount,
+            greatCount: live.greatCount,
+            goodCount: live.goodCount,
+            badCount: live.badCount,
+            missCount: live.missCount,
+            maxCombo: live.maxCombo,
+            mods: settingsRef.current.selectedMods || [],
+          });
           const flushedPenar = scoreStateRef.current.penar ?? null;
           setUiPenar((prev) => (prev === flushedPenar ? prev : flushedPenar));
           const wallNow = Date.now();
@@ -2655,7 +2689,8 @@ export default function GameplayCanvas({
           return !hasPressed ? key : '';
         });
 
-        // Execute drawing call
+        // Execute drawing call (playfield-only; HUD meters are drawn below
+        // from the same tick data via the ManiaHud overlay helper)
         activeRendererRef.current.render({
           width,
           height,
@@ -2663,8 +2698,6 @@ export default function GameplayCanvas({
           receptorY,
           columns: colsLayout,
           notes: visibleNotes,
-          hitErrorTicks: hitErrorTicksRef.current,
-          hitErrorAvgMs,
           shake: currentSettings.disableLaneShake ? 0 : screenShakeRef.current,
           settingsSlice: renderSettings,
           showKeyLabels: true,
@@ -2883,9 +2916,8 @@ export default function GameplayCanvas({
     maxComboPortionRef.current =
       holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : computeMaxComboPortion(totalJudgementsRef.current);
 
-    // Keep live PENAR consistent after scrub resets; the 4Hz flush loop
+    // Keep live PENAR consistent after scrub resets; the 8Hz flush loop
     // recomputes it from these counts on its next tick.
-    lastPenarUpdateRef.current = 0;
     scoreStateRef.current.penar = computePenar({
       starRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
       maxCombo: 0,
@@ -2899,9 +2931,15 @@ export default function GameplayCanvas({
     unstableRateAccumulatorRef.current.reset();
 
     if (replayData.length === 0) {
+      hudPendingRef.current.score = 0;
+      hudPendingRef.current.combo = 0;
+      hudPendingRef.current.hp = 100;
+      hudPendingRef.current.accuracy = 100;
+      lastHudFlushRef.current = 0;
       setUiScore(0);
       setUiCombo(0);
       setUiHp(100);
+      setUiAccuracy(100);
       return;
     }
 
@@ -2969,7 +3007,7 @@ export default function GameplayCanvas({
         modMultiplier,
       });
 
-      // Live PENAR for replay simulation also flows through the 4Hz HUD
+      // Live PENAR for replay simulation also flows through the 8Hz HUD
       // flush loop; see the live applyJudgement path above.
     };
 
@@ -3268,10 +3306,12 @@ export default function GameplayCanvas({
     hudPendingRef.current.score = scoreStateRef.current.score;
     hudPendingRef.current.combo = scoreStateRef.current.combo;
     hudPendingRef.current.hp = scoreStateRef.current.hp;
+    hudPendingRef.current.accuracy = scoreStateRef.current.accuracy;
     lastHudFlushRef.current = 0;
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
+    setUiAccuracy(scoreStateRef.current.accuracy);
   };
 
   const simulateAutoplayToTime = (targetTimeMs: number) => {
@@ -3320,10 +3360,12 @@ export default function GameplayCanvas({
     hudPendingRef.current.score = scoreStateRef.current.score;
     hudPendingRef.current.combo = scoreStateRef.current.combo;
     hudPendingRef.current.hp = scoreStateRef.current.hp;
+    hudPendingRef.current.accuracy = scoreStateRef.current.accuracy;
     lastHudFlushRef.current = 0;
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
+    setUiAccuracy(scoreStateRef.current.accuracy);
   };
 
   const handleSeek = (newTimeMs: number) => {
@@ -3949,7 +3991,7 @@ export default function GameplayCanvas({
           <ManiaHud
             score={uiScore}
             hp={uiHp}
-            accuracy={scoreStateRef.current.accuracy}
+            accuracy={uiAccuracy}
             penar={uiPenar}
             showPenar={settings.showPenarDuringPlay !== false}
             combo={uiCombo}
@@ -4224,6 +4266,16 @@ export default function GameplayCanvas({
             {/* PIANO TILES ACTIVE TOUCH ZONE BOUNDARY INDICATOR (Invisible / Logical Only) */}
 
             <canvas ref={canvasRef} className="block w-full h-full cursor-none game-canvas-element touch-none select-none" />
+
+            {rendererError && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none p-6">
+                <div className="max-w-md rounded-xl border border-rose-400/40 bg-slate-950/90 px-5 py-4 text-center shadow-2xl">
+                  <div className="font-mono text-xs font-black uppercase tracking-[0.25em] text-rose-300">Renderer error</div>
+                  <div className="mt-2 font-mono text-xs text-slate-200 break-words">{rendererError}</div>
+                  <div className="mt-2 font-mono text-[11px] text-slate-400">Switch Graphics → Playfield renderer back to Canvas2D, or enable the Canvas2D fallback.</div>
+                </div>
+              </div>
+            )}
 
             <span
               ref={breakLabelRef}

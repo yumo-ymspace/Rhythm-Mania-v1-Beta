@@ -91,8 +91,8 @@ export interface PlayfieldFrame {
   receptorY: number;
   columns: ColumnLayout[];
   notes: VisibleNote[];
-  hitErrorTicks: HitErrorTick[];
-  hitErrorAvgMs: number | null;
+  // NOTE: playfield frames carry no HUD state. Hit-error meters are drawn by
+  // the ManiaHud overlay from its own tick data, never from this frame.
   shake: number;
   settingsSlice: PlayfieldVisualSettings;
   showKeyLabels: boolean;
@@ -126,4 +126,6 @@ export interface IPlayfieldRenderer {
   resize(width: number, height: number, dpr: number): void;
   render(frame: PlayfieldFrame): void;
   destroy(): void;
+  /** True when the backing graphics context bound successfully. */
+  isReady(): boolean;
 }

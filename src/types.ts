@@ -329,6 +329,8 @@ export interface GameSettings {
   localDisplayName?: string; // optional device-local player name; not an account
   menuCursorEnabled?: boolean; // lazer-style menu arrow cursor overlay
   difficultyAdjust?: DifficultyAdjustSettings; // Difficulty Adjust (DA) mod overrides
+  renderEngine?: 'canvas' | 'webgl'; // playfield renderer: Canvas2D default, WebGL2 batched
+  allowCanvasFallback?: boolean; // when WebGL init fails, fall back to Canvas2D (false = hard error for testing)
 }
 
 export type GameScreen = 'menu' | 'select' | 'play' | 'results' | 'settings' | 'skins' | 'calibrate' | 'history';
