@@ -4278,6 +4278,7 @@ export default function GameplayCanvas({
                     style={{ 
                       color: uiJudgement.color,
                       textShadow: `0 0 15px currentColor`,
+                      fontFamily: "'Orbitron', system-ui, sans-serif",
                     }}
                   >
                     {uiJudgement.text}

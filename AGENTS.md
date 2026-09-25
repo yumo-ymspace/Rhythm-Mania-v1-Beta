@@ -540,6 +540,16 @@ contracts first, then both renderers; preserve equal-width lanes and document
 intentional Babylon divergence in executable behavior/tests rather than relying
 on this file.
 
+All webfonts are self-hosted from `public/fonts` and must never come from a
+Google Fonts `@import` or any other third-party font CDN. The current set is
+four variable-weight TTFs (`Inter-Variable.ttf`, `Nunito-Variable.ttf`,
+`Orbitron-Variable.ttf`, `SpaceGrotesk-Variable.ttf`) plus their `OFL-*.txt`
+license files, declared with `@font-face` (`font-display: swap`) in
+`src/index.css` and precached in `public/sw.js` `STATIC_ASSETS` so text renders
+offline and behind adblockers. When adding a font, keep only the needed
+variable file and weights, add its `@font-face` block and precache entry, and
+verify no `fonts.googleapis.com` / `fonts.gstatic.com` reference remains.
+
 After substantive TypeScript changes, run `npm run lint` and `npm test`; run
 `npm run build` for build-impacting changes. Because the repository contains
 browser-only paths and optional API/database paths, use targeted browser and

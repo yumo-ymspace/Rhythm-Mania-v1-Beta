@@ -39,7 +39,11 @@ const STATIC_ASSETS = [
   '/backgrounds/wxyz.webp',
   '/sounds/d1.mp3',
   '/sounds/d2.mp3',
-  '/sounds/d3.mp3'
+  '/sounds/d3.mp3',
+  '/fonts/Inter-Variable.ttf',
+  '/fonts/Nunito-Variable.ttf',
+  '/fonts/Orbitron-Variable.ttf',
+  '/fonts/SpaceGrotesk-Variable.ttf'
 ];
 
 self.addEventListener('install', (event) => {
