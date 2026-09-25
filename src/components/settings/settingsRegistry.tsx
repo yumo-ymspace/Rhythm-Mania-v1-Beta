@@ -44,7 +44,7 @@ export interface SectionDef {
 
 export const SECTIONS: SectionDef[] = [
   { id: 'general',     label: 'General',     description: 'Account-agnostic preferences for the client.', icon: SlidersHorizontal },
-  { id: 'graphics',    label: 'Graphics',    description: 'Display, video, particles, and pixel ratio.',        icon: Monitor },
+  { id: 'graphics',    label: 'Graphics',    description: 'Display, video, and pixel ratio.',        icon: Monitor },
   { id: 'gameplay',    label: 'Gameplay',    description: 'Scroll speed, scroll direction, and timing.',      icon: Gamepad2 },
   { id: 'audio',       label: 'Audio',       description: 'Volumes and the universal audio offset.',          icon: Volume2 },
   { id: 'input',       label: 'Input',       description: 'Keyboard bindings per key count.',                 icon: Keyboard },
@@ -159,10 +159,11 @@ export const ROWS: RowDef[] = [
     showWhen: (s) => !s.disableVideo,
   },
   {
-    id: 'disableParticles', section: 'graphics', label: 'Disable hit particles',
-    description: 'Completely turn off burst effects on hits to save GPU performance.',
+    id: 'disableComboBurst', section: 'graphics', label: 'Disable combo burst',
+    description: 'Hide the combo milestone popup shown every 50 combo during gameplay.',
     control: { kind: 'toggle' },
-    defaultValue: DEFAULT_SETTINGS.disableParticles,
+    defaultValue: DEFAULT_SETTINGS.disableComboBurst,
+    keywords: ['combo', 'burst', 'milestone', 'popup', '50', 'celebration'],
   },
   {
     id: 'disableLaneShake', section: 'graphics', label: 'Disable lane shake',

@@ -296,7 +296,7 @@ export interface GameSettings {
   settingsMenuBackgroundDim?: number; // settings drawer backdrop dim overlay opacity (0 to 1)
   disableVideo?: boolean; // whether background video playback is completely disabled
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
-  disableParticles?: boolean; // completely disable particle visual burst generator
+  disableComboBurst?: boolean; // hide the combo milestone burst popup
   limitDprToOne?: boolean; // cap canvas device pixel ratio to 1x to save GPU rendering cost
   skinId?: string; // 'argon' (default Canvas2D reference) | 'custom' | legacy ids
   customSkinColors?: string[]; // user parsed custom colors: [blueKeyColor, whiteKeyColor, accentKeyColor, cyanKeyColor, holdNoteColor]

@@ -135,7 +135,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
       customSkinName: undefined,
       videoOffset: 0,
       disableVideo: false,
-      disableParticles: false,
+      disableComboBurst: false,
       limitDprToOne: false,
     });
   };

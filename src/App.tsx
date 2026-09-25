@@ -1145,7 +1145,7 @@ export default function App() {
         settingsMenuBackgroundDim: Number(updated.settingsMenuBackgroundDim !== undefined ? updated.settingsMenuBackgroundDim : 0),
         disableVideo: Boolean(updated.disableVideo),
         videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
-        disableParticles: Boolean(updated.disableParticles),
+        disableComboBurst: Boolean(updated.disableComboBurst),
         limitDprToOne: false,
         skinId: updated.skinId === 'rhythmmania-3d' ? 'argon' : (updated.skinId || 'argon'),
         customSkinColors: updated.customSkinColors,

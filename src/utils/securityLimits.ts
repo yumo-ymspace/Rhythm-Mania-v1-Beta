@@ -314,7 +314,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     settingsMenuBackgroundDim: clamp(settings.settingsMenuBackgroundDim, 0, 1, defaultSettings.settingsMenuBackgroundDim ?? 0),
     disableVideo: Boolean(settings.disableVideo),
     videoOffset: clamp(settings.videoOffset, -10000, 10000, defaultSettings.videoOffset || 0),
-    disableParticles: Boolean(settings.disableParticles),
+    disableComboBurst: Boolean(settings.disableComboBurst),
     disableLaneShake: Boolean(settings.disableLaneShake),
     limitDprToOne: false,
     skinId: (() => {

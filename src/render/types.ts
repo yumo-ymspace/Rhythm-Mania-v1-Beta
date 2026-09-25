@@ -53,17 +53,6 @@ export interface VisibleNote {
   styleKey: string;
 }
 
-export interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  color: string;
-  alpha: number;
-  decay: number;
-}
-
 export interface HitErrorTick {
   id: string;
   error: number;
@@ -90,7 +79,6 @@ export interface PlayfieldVisualSettings {
   laneSeparatorOpacity?: number;
   selectedMods?: string[];
   backgroundDim?: number;
-  disableParticles?: boolean;
   disableLaneShake?: boolean;
   enableMapSV?: boolean;
   playfieldWidthPercent?: number;
@@ -103,7 +91,6 @@ export interface PlayfieldFrame {
   receptorY: number;
   columns: ColumnLayout[];
   notes: VisibleNote[];
-  particles: Particle[];
   hitErrorTicks: HitErrorTick[];
   hitErrorAvgMs: number | null;
   shake: number;

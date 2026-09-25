@@ -289,17 +289,6 @@ interface GameplayCanvasProps {
   replayRecord?: PlayHistoryRecord | null;
 }
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  color: string;
-  alpha: number;
-  decay: number;
-}
-
 interface HitErrorTick {
   id: string;
   error: number;
@@ -821,7 +810,6 @@ export default function GameplayCanvas({
   };
   const progressBarRef = useRef<HTMLElement | HTMLInputElement | null>(null);
   const isScrubbingRef = useRef<boolean>(false);
-  const suppressSeekParticlesRef = useRef<boolean>(false);
   const lastVideoSeekTimeRef = useRef<number>(0);
   const wasPlayingRef = useRef<boolean>(false);
   const timeLabelRef = useRef<HTMLSpanElement>(null);
@@ -875,7 +863,6 @@ export default function GameplayCanvas({
   }, []);
   
   // Dynamic visual visualizers
-  const particlesRef = useRef<Particle[]>([]);
   const screenShakeRef = useRef<number>(0);
   const laneGlowRef = useRef<number[]>([]);
   
@@ -1285,11 +1272,9 @@ export default function GameplayCanvas({
     setIsSkipVisible(false);
 
     const targetMs = skipTargetMs;
-    suppressSeekParticlesRef.current = true;
     mainAudio.seekGameplayTimeMs(targetMs);
     audioTimeRef.current = targetMs;
     smoothOffsetRef.current = settingsRef.current.audioOffset;
-    particlesRef.current = [];
     laneGlowRef.current.fill(0);
     screenShakeRef.current = 0;
     hitErrorTicksRef.current = [];
@@ -1327,7 +1312,6 @@ export default function GameplayCanvas({
       replayFramesRef.current.push({ time: targetMs, keysPressed: keys });
     }
 
-    suppressSeekParticlesRef.current = false;
     return true;
   }, [beatmap.bpm, beatmap.keyCount, firstNoteTime, introSkippable, isAutoplay, isReplayMode, skipTargetMs]);
 
@@ -1699,7 +1683,6 @@ export default function GameplayCanvas({
       );
       if (activeHold && activeHold.holdState && !activeHold.holdState.isHolding && activeHold.endTime !== undefined && playTime < activeHold.endTime) {
         onHoldKeyPress(activeHold.holdState, playTime, judgementWindows);
-        spawnParticles(colIndex, '#22d3ee');
         return;
       }
 
@@ -1755,8 +1738,6 @@ export default function GameplayCanvas({
             color: tickColor
           });
 
-          spawnParticles(colIndex, resolvedJudg.color);
-
           if (action.judgement === 'marvelous' && !settingsRef.current.disableLaneShake) {
             screenShakeRef.current = 4;
           }
@@ -1796,8 +1777,6 @@ export default function GameplayCanvas({
           color: tickColor
         });
 
-        spawnParticles(colIndex, resolvedJudgement.color);
-
         if (resolvedJudgement.type === 'marvelous' && !settingsRef.current.disableLaneShake) {
           screenShakeRef.current = 4;
         }
@@ -1818,7 +1797,6 @@ export default function GameplayCanvas({
       } else {
         markHoldTailResumed(earlyReleasedHold, playTime);
       }
-      spawnParticles(colIndex, '#22d3ee');
       return;
     }
     
@@ -1829,7 +1807,6 @@ export default function GameplayCanvas({
     if (activeHoldAndReleased) {
       if (isHoldGraceActive(playTime, activeHoldAndReleased.releaseGraceUntil)) {
         activeHoldAndReleased.releaseGraceUntil = undefined;
-        spawnParticles(colIndex, '#22d3ee');
         return;
       }
       const transition = resolveHoldGrace(activeHoldAndReleased, playTime);
@@ -1860,13 +1837,11 @@ export default function GameplayCanvas({
       }
       if (note.endTime !== undefined && playTime >= note.endTime - missWindow) {
         markHoldReleaseZonePressed(note, playTime);
-        spawnParticles(colIndex, '#22d3ee');
         return;
       }
       note.isHit = true;
       note.hitTime = playTime;
       markHoldTailEngaged(note, playTime);
-      spawnParticles(colIndex, '#22d3ee');
       return;
     }
 
@@ -1914,9 +1889,6 @@ export default function GameplayCanvas({
         timestamp: Date.now(),
         color: tickColor
       });
-      
-      // Spawn feedback particles
-      spawnParticles(colIndex, resolvedJudgement.color);
       
       // Screen shake for excellent accuracy
       if (resolvedJudgement.type === 'marvelous' && !settingsRef.current.disableLaneShake) {
@@ -2018,7 +1990,6 @@ export default function GameplayCanvas({
           color: tickColor
         });
 
-        spawnParticles(colIndex, tailJudg.color);
         return;
       }
 
@@ -2122,7 +2093,7 @@ export default function GameplayCanvas({
       if (state.combo > state.maxCombo) {
         state.maxCombo = state.combo;
       }
-      if (state.combo >= 50 && state.combo % 50 === 0 && !settingsRef.current.disableParticles) {
+      if (state.combo >= 50 && state.combo % 50 === 0 && !settingsRef.current.disableComboBurst) {
         hudBurstRef.current = { value: state.combo, time: Date.now() };
       }
       
@@ -2224,45 +2195,6 @@ export default function GameplayCanvas({
     }
   };
 
-  // Sparkles particle engine
-  const spawnParticles = (colIndex: number, color: string) => {
-    if (settings.disableParticles || suppressSeekParticlesRef.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const keyCount = beatmap.keyCount;
-     const totalWeight = keyCount;
-    const dpr = settings.limitDprToOne ? 1 : Math.min(1.5, window.devicePixelRatio || 1);
-    const logicalWidth = canvas.width / dpr;
-    const logicalHeight = canvas.height / dpr;
-    const baseWidth = logicalWidth / totalWeight;
-      const styles = getColumnStyles(keyCount, baseWidth, settings.skinId, settings.customSkinColors, getLaneColors(settings, keyCount));
-    
-    let spawnX = 0;
-    for (let i = 0; i < colIndex; i++) {
-      spawnX += styles[i].width;
-    }
-    spawnX += styles[colIndex].width / 2;
-    
-    // Receptor positioning depending on scrolling direction settings (upwards vs downwards)
-    const receptorY = settings.upsurfaceNoteMode ? 60 : logicalHeight - 155;
-
-    for (let i = 0; i < 18; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 2 + Math.random() * 6;
-      particlesRef.current.push({
-        x: spawnX,
-        y: receptorY,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - (settings.upsurfaceNoteMode ? -3 : 3), // rise or fall particle gravity
-        size: 3 + Math.random() * 5,
-        color,
-        alpha: 1.0,
-        decay: 0.03 + Math.random() * 0.04
-      });
-    }
-  };
-
   // Main rendering loop (RequestAnimationFrame)
   useEffect(() => {
     let requestId: number;
@@ -2317,7 +2249,6 @@ export default function GameplayCanvas({
           applyJudgement(tailJudg, n.column, 'hold_tail');
           recordHitErrorSample(errorMs);
           mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
-          spawnParticles(n.column, tailJudg.color);
         }
       );
     };
@@ -2584,7 +2515,6 @@ export default function GameplayCanvas({
                 }
                 mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
                 laneGlowRef.current[n.column] = 1.0;
-                spawnParticles(n.column, marvelousJudg.color);
                 if (!settingsRef.current.disableLaneShake) {
                   screenShakeRef.current = 4;
                 }
@@ -2604,8 +2534,6 @@ export default function GameplayCanvas({
 
                 applyJudgement(marvelousJudg, n.column);
                 recordHitErrorSample(0);
-
-                spawnParticles(n.column, marvelousJudg.color);
               }
             }
           }
@@ -2720,18 +2648,6 @@ export default function GameplayCanvas({
         const currentTimeScale = Date.now();
         hitErrorTicksRef.current = hitErrorTicksRef.current.filter(t => currentTimeScale - t.timestamp < 2000);
 
-        // Filter particles
-        if (!currentSettings.disableParticles) {
-          particlesRef.current = particlesRef.current.filter((p) => {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.alpha -= p.decay;
-            return p.alpha > 0;
-          });
-        } else if (particlesRef.current.length > 0) {
-          particlesRef.current = [];
-        }
-
         // Map key bindings for labels
         const layoutKeys = currentSettings.bindings[keyCount] || [];
         const keyLabelsMapped = layoutKeys.map((key, i) => {
@@ -2747,7 +2663,6 @@ export default function GameplayCanvas({
           receptorY,
           columns: colsLayout,
           notes: visibleNotes,
-          particles: particlesRef.current,
           hitErrorTicks: hitErrorTicksRef.current,
           hitErrorAvgMs,
           shake: currentSettings.disableLaneShake ? 0 : screenShakeRef.current,
@@ -3412,7 +3327,6 @@ export default function GameplayCanvas({
   };
 
   const handleSeek = (newTimeMs: number) => {
-    suppressSeekParticlesRef.current = true;
     mainAudio.seekGameplayTimeMs(newTimeMs);
     audioTimeRef.current = newTimeMs;
     smoothOffsetRef.current = settings.audioOffset;
@@ -3421,7 +3335,6 @@ export default function GameplayCanvas({
     // reset visuals
     hitErrorTicksRef.current = [];
     currentJudgementRef.current = null;
-    particlesRef.current = [];
     laneGlowRef.current.fill(0);
     screenShakeRef.current = 0;
     
@@ -3450,8 +3363,6 @@ export default function GameplayCanvas({
       });
       lastProcessedReplayTimeRef.current = newTimeMs;
     }
-
-    suppressSeekParticlesRef.current = false;
   };
 
   const restartMap = () => {
@@ -4113,7 +4024,6 @@ export default function GameplayCanvas({
                             defaultValue={0}
                             onPointerDown={() => {
                                 isScrubbingRef.current = true;
-                                suppressSeekParticlesRef.current = true;
                                 wasPlayingRef.current = isPlayingRef.current && !isPaused;
                                 mainAudio.pause();
                                 if (videoRef.current) {

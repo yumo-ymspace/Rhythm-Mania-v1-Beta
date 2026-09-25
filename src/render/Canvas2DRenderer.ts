@@ -71,7 +71,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     const { ctx } = this;
     if (!ctx) return;
 
-    const { width, height, columns, notes, particles, hitErrorTicks, hitErrorAvgMs, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
+    const { width, height, columns, notes, hitErrorTicks, hitErrorAvgMs, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
     const receptorY = frame.receptorY;
 
     ctx.clearRect(0, 0, width, height);
@@ -862,19 +862,6 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       const notePadding = isFocusMode ? 1.5 : 6;
       drawEndReceptor(getNoteVisualY(n.endY, colW, settingsSlice), xPos, colW, notePadding, n);
     });
-    }
-
-    // 6. RENDER PARTICLES BURST GENERATION
-    if (!settingsSlice.disableParticles) {
-      particles.forEach((p) => {
-        ctx.save();
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.alpha;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
     }
 
     // 6b. RENDER FLASHLIGHT VIGNETTE
