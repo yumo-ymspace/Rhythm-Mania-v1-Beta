@@ -46,19 +46,24 @@ function cacheKeyFor(map: Pick<Beatmap, 'id' | 'beatmapHash'> & { notes?: unknow
 }
 
 /**
- * Memoized star rating. Falls back to the uncached resolver on cache miss
- * and stores the result. Explicit `map.starRating` values bypass the notes
+ * Memoized star rating (lazer-strain, via resolveStarRating). Falls back to
+ * the uncached resolver on cache miss and stores the result. Explicit
+ * official (`osu-api-download`) and fresh strain v2 values bypass the notes
  * walk inside the resolver, so this is cheapest for imported maps.
+ * Rate mods change SR (DT/HT scale strain times), so non-1x rates get their
+ * own cache entries.
  */
-export function getCachedStarRating(map: Beatmap): number {
+export function getCachedStarRating(map: Beatmap, clockRate?: number): number {
+  const rate = typeof clockRate === 'number' && Number.isFinite(clockRate) && clockRate > 0 ? clockRate : 1;
   const key = cacheKeyFor(map);
-  if (key) {
-    const hit = starRatingCache.get(key);
+  const cacheKey = key ? (rate === 1 ? key : `${key}@${rate}`) : null;
+  if (cacheKey) {
+    const hit = starRatingCache.get(cacheKey);
     if (hit !== undefined) return hit;
   }
-  const rating = resolveStarRating(map);
-  if (key) {
-    starRatingCache.set(key, rating);
+  const rating = resolveStarRating(map, rate);
+  if (cacheKey) {
+    starRatingCache.set(cacheKey, rating);
     // Bound memory: libraries can hold thousands of diffs; LRU-trim.
     if (starRatingCache.size > 5000) {
       const oldest = starRatingCache.keys().next();

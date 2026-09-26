@@ -32,7 +32,8 @@ import { computeBeatmapHash } from '../utils/replayManager';
 import { extractZipEntry } from '../utils/zipResolver';
 import { previewPlayer } from '../utils/previewPlayer';
 import { getCachedStarRating, getCachedNoteCounts, buildSongMapsIndex } from '../utils/songSelectCache';
-import { calculateChartStarRating, CHART_STAR_RATING_VERSION } from '../utils/chartStarRating';
+import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
+import { STRAIN_STAR_RATING_VERSION } from '../utils/starRating';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { computeScrollTravelTimeMs } from '../render/playfieldLayout';
 import metadata from '../../metadata.json';
@@ -1134,9 +1135,13 @@ export default function SongSelect({
         mapWithMeta.catalogSetId = null;
         mapWithMeta.catalogMapId = null;
         mapWithMeta.beatmapHash = computeBeatmapHash(parsedMap);
-        mapWithMeta.starRating = calculateChartStarRating(parsedMap);
+        // Lazer-strain star rating feeds the PP curve; the legacy heuristic
+        // diverged from official ratings, so never bake it here.
+        mapWithMeta.starRating = Math.round(
+          calculateManiaDifficultyAttributes(parsedMap.notes, parsedMap.keyCount, 1).starRating * 100,
+        ) / 100;
         mapWithMeta.starRatingSource = 'chart-content';
-        mapWithMeta.starRatingVersion = CHART_STAR_RATING_VERSION;
+        mapWithMeta.starRatingVersion = STRAIN_STAR_RATING_VERSION;
 
         onImportBeatmap(parsedMap);
         setImportStatus({ type: 'ok', msg: `Successfully imported "${parsedMap.title}" - [${parsedMap.difficulty}] difficulty!` });
@@ -1188,9 +1193,11 @@ export default function SongSelect({
             mapWithMeta.catalogSetId = null;
             mapWithMeta.catalogMapId = null;
             mapWithMeta.beatmapHash = computeBeatmapHash(parsedMap);
-            mapWithMeta.starRating = calculateChartStarRating(parsedMap);
+            mapWithMeta.starRating = Math.round(
+              calculateManiaDifficultyAttributes(parsedMap.notes, parsedMap.keyCount, 1).starRating * 100,
+            ) / 100;
             mapWithMeta.starRatingSource = 'chart-content';
-            mapWithMeta.starRatingVersion = CHART_STAR_RATING_VERSION;
+            mapWithMeta.starRatingVersion = STRAIN_STAR_RATING_VERSION;
 
              stagedMaps.push(parsedMap);
             successCount++;

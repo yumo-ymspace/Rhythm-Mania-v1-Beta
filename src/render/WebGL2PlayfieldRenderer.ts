@@ -23,7 +23,7 @@ import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { mergeVisibleTailSegments } from './tailSegments';
 
 /**
- * Raw WebGL2 batched quad playfield renderer (MVP: argon/default skins).
+ * Raw WebGL2 batched quad playfield renderer (argon skin).
  *
  * SV parity is structural: this renderer never recomputes scroll positions.
  * All Y values come from `PlayfieldFrame` (built by `getVisibleNotes` with
@@ -36,6 +36,9 @@ import { mergeVisibleTailSegments } from './tailSegments';
  * - Opaque low-latency context (alpha:false, desynchronized, no AA, no
  *   preserveDrawingBuffer).
  * - No text, no textures, no readback.
+ * - Argon note glyphs (rice chevron, hold-head bar) are procedural SDFs in
+ *   the fragment shader, keyed by a per-vertex glyph id. Zero extra quads,
+ *   zero extra draw calls.
  */
 
 const VERTEX_SRC = `#version 300 es
@@ -45,6 +48,7 @@ layout(location=2) in vec4 aColorBottom;
 layout(location=3) in vec2 aUv;
 layout(location=4) in vec2 aSize;
 layout(location=5) in float aRadius;
+layout(location=6) in float aGlyph;
 uniform vec2 uResolution;
 uniform float uDpr;
 out vec4 vColorTop;
@@ -52,6 +56,7 @@ out vec4 vColorBottom;
 out vec2 vUv;
 out vec2 vSize;
 out float vRadius;
+out float vGlyph;
 void main() {
   vec2 px = aPos * uDpr;
   vec2 clip = vec2(px.x / uResolution.x * 2.0 - 1.0, 1.0 - px.y / uResolution.y * 2.0);
@@ -61,17 +66,29 @@ void main() {
   vUv = aUv;
   vSize = aSize * uDpr;
   vRadius = aRadius * uDpr;
+  vGlyph = aGlyph;
 }
 `;
 
 const FRAGMENT_SRC = `#version 300 es
-precision mediump float;
+// highp (not mediump): uniforms shared with the vertex stage (uDpr,
+// uGlyphFlip) must use identical precision in both stages or the link fails.
+precision highp float;
 in vec4 vColorTop;
 in vec4 vColorBottom;
 in vec2 vUv;
 in vec2 vSize;
 in float vRadius;
+in float vGlyph;
+uniform float uDpr;
+uniform float uGlyphFlip;
 out vec4 outColor;
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+  return length(pa - ba * h);
+}
 void main() {
   vec2 p = vUv * vSize;
   vec2 b = vSize * 0.5;
@@ -82,14 +99,50 @@ void main() {
   float alpha = 1.0 - smoothstep(-aa, aa, dist);
   if (alpha <= 0.001) discard;
   vec4 col = mix(vColorTop, vColorBottom, vUv.y);
+  if (vGlyph > 0.5) {
+    // Argon glyphs live on the note accent quad. Geometry mirrors
+    // drawChevronDown / hold-head bar in argonPlayfield (Canvas2D).
+    float gy = mix(p.y, vSize.y - p.y, uGlyphFlip);
+    float cx = vSize.x * 0.5;
+    float gsize = min(20.0 * uDpr, vSize.x * 0.42);
+    float aa2 = uDpr;
+    // Accent-local Y of the note center: (R - 0.5) / R with
+    // R = ARGON_NOTE_ACCENT_RATIO (0.82).
+    float cy = vSize.y * (0.82 - 0.5) / 0.82;
+    float mask = 0.0;
+    if (vGlyph < 1.5) {
+      float halfW = gsize * 0.38;
+      float halfH = gsize * 0.22;
+      float t = max(2.5 * uDpr, gsize * 0.14);
+      float cyy = cy + 4.0 * uDpr;
+      vec2 gp = vec2(p.x, gy);
+      vec2 a = vec2(cx - halfW, cyy - halfH);
+      vec2 bb = vec2(cx, cyy + halfH);
+      vec2 c = vec2(cx + halfW, cyy - halfH);
+      float d = min(segDist(gp, a, bb), segDist(gp, bb, c));
+      mask = 1.0 - smoothstep(t * 0.5 - aa2, t * 0.5 + aa2, d);
+    } else {
+      float barH = 5.0 * uDpr;
+      float cyy = cy + 2.0 * uDpr;
+      vec2 qq = abs(vec2(p.x - cx, gy - cyy)) - vec2(max(gsize * 0.5 - barH * 0.5, 0.0), 0.0);
+      float d = length(max(qq, 0.0)) + min(max(qq.x, qq.y), 0.0) - barH * 0.5;
+      mask = 1.0 - smoothstep(-aa2, aa2, d);
+    }
+    col.rgb = mix(col.rgb, vec3(1.0), mask);
+  }
   col.a *= alpha;
   outColor = col;
 }
 `;
 
-const FLOATS_PER_VERT = 15; // x,y + topRGBA + bottomRGBA + u,v + w,h + radius
+// Glyph ids for the aGlyph vertex attribute (SDF in the fragment shader).
+const GLYPH_NONE = 0;
+const GLYPH_CHEVRON = 1; // rice notes
+const GLYPH_BAR = 2; // hold heads
+
+const FLOATS_PER_VERT = 16; // x,y + topRGBA + bottomRGBA + u,v + w,h + radius + glyph
 const VERTS_PER_QUAD = 6;
-const MAX_QUADS = 4096;
+const MAX_QUADS = 5120;
 const BUFFER_FLOATS = MAX_QUADS * VERTS_PER_QUAD * FLOATS_PER_VERT;
 
 
@@ -102,6 +155,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
   private vbo: WebGLBuffer | null = null;
   private uResolution: WebGLUniformLocation | null = null;
   private uDpr: WebGLUniformLocation | null = null;
+  private uGlyphFlip: WebGLUniformLocation | null = null;
   private buffer = new Float32Array(BUFFER_FLOATS);
   private quadCount = 0;
   private cssWidth = 0;
@@ -149,6 +203,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.program = program;
     this.uResolution = gl.getUniformLocation(program, 'uResolution');
     this.uDpr = gl.getUniformLocation(program, 'uDpr');
+    this.uGlyphFlip = gl.getUniformLocation(program, 'uGlyphFlip');
 
     const vao = gl.createVertexArray();
     const vbo = gl.createBuffer();
@@ -169,6 +224,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     attrib(3, 10, 2); // aUv
     attrib(4, 12, 2); // aSize
     attrib(5, 14, 1); // aRadius
+    attrib(6, 15, 1); // aGlyph
     gl.bindVertexArray(null);
 
     gl.disable(gl.DEPTH_TEST);
@@ -217,43 +273,45 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     const x1 = x + w;
     const y1 = y + h;
     // Unrolled two triangles: (x,y)-(x1,y)-(x,y1) and (x1,y)-(x1,y1)-(x,y1).
-    // No per-quad xs/ys/us/vs array allocations.
+    // No per-quad xs/ys/us/vs array allocations. Quad slots are reused
+    // across frames, so the glyph lane (o+15) is explicitly zeroed here;
+    // pushQuad patches it back for glyph quads only.
     // v0 (0,0)
     let o = base;
     buf[o] = x; buf[o + 1] = y;
     buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
     buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
-    buf[o + 10] = 0; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    buf[o + 10] = 0; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius; buf[o + 15] = 0;
     // v1 (1,0)
     o += FLOATS_PER_VERT;
     buf[o] = x1; buf[o + 1] = y;
     buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
     buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
-    buf[o + 10] = 1; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    buf[o + 10] = 1; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius; buf[o + 15] = 0;
     // v2 (0,1)
     o += FLOATS_PER_VERT;
     buf[o] = x; buf[o + 1] = y1;
     buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
     buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
-    buf[o + 10] = 0; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    buf[o + 10] = 0; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius; buf[o + 15] = 0;
     // v3 (1,0)
     o += FLOATS_PER_VERT;
     buf[o] = x1; buf[o + 1] = y;
     buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
     buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
-    buf[o + 10] = 1; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    buf[o + 10] = 1; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius; buf[o + 15] = 0;
     // v4 (1,1)
     o += FLOATS_PER_VERT;
     buf[o] = x1; buf[o + 1] = y1;
     buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
     buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
-    buf[o + 10] = 1; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    buf[o + 10] = 1; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius; buf[o + 15] = 0;
     // v5 (0,1)
     o += FLOATS_PER_VERT;
     buf[o] = x; buf[o + 1] = y1;
     buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
     buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
-    buf[o + 10] = 0; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    buf[o + 10] = 0; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius; buf[o + 15] = 0;
     this.quadCount++;
   }
 
@@ -262,16 +320,25 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     top: [number, number, number, number],
     bottom: [number, number, number, number],
     radius: number,
+    glyph: number = GLYPH_NONE,
   ): void {
     // Two triangles in uv space: (0,0)-(1,0)-(0,1) and (1,0)-(1,1)-(0,1).
     // Slot A always carries the top stop, slot B the bottom stop; the
-    // fragment shader mixes by uv.y.
+    // fragment shader mixes by uv.y. Glyph quads are rare (notes only), so
+    // the 6-slot patch runs only when a glyph is actually requested.
+    const before = this.quadCount;
     this.pushQuadNumbers(
       x, y, w, h,
       top[0], top[1], top[2], top[3],
       bottom[0], bottom[1], bottom[2], bottom[3],
       radius,
     );
+    if (glyph !== GLYPH_NONE && this.quadCount > before) {
+      const start = before * VERTS_PER_QUAD * FLOATS_PER_VERT;
+      for (let k = 0; k < VERTS_PER_QUAD; k++) {
+        this.buffer[start + k * FLOATS_PER_VERT + 15] = glyph;
+      }
+    }
   }
 
   private quadRgb(
@@ -414,27 +481,64 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       }
     }
 
-    // Note heads + tails. Base + accent + white lip approximate
-    // drawArgonNotePiece (chevron/bar glyphs are MVP-simplified to a lip).
-    // drawNotePiece is a per-frame closure over shake/height by design, but it
-    // performs no allocations: colors resolve to cached tuples and quads write
-    // directly into the preallocated buffer.
-    const drawNotePiece = (rx: number, topY: number, rw: number, column: number, opacity: number, isTail: boolean) => {
+    // Note heads + tails. Mirrors drawArgonNotePiece (Canvas2D): dark base,
+    // vivid accent gradient, white judgement-side lip, and a white glyph
+    // (rice chevron, hold-head bar) drawn procedurally in the shader.
+    // Hold tails get the Canvas2D tail treatment instead: dark base plus a
+    // far-side additive-style highlight, no lip, no glyph. A soft
+    // transparent shadow on the far side keeps densely stacked notes
+    // readable, per the argon reference set. The closure performs no
+    // allocations: colors resolve to cached tuples and quads write directly
+    // into the preallocated buffer.
+    const SHADOW_H = 16;
+    const drawNotePiece = (rx: number, topY: number, rw: number, column: number, opacity: number, variant: 'rice' | 'head' | 'tail') => {
       if (topY > height + 100 || topY + noteHeight < -100) return;
       const o = opacity;
-      if (!isTail && o <= 0) return;
+      if (o <= 0) return;
       const dark = laneDarkBody[column];
       const base = laneBase[column];
       const light = laneLightHead[column];
       if (!dark || !base) return;
+      const accentH = noteHeight * ARGON_NOTE_ACCENT_RATIO;
+      // Separation shadow on the receptor-far side (transparent gradient).
+      const shadowAlpha = 0.45 * o;
+      if (shadowAlpha > 0.01) {
+        if (upscroll) {
+          this.pushQuadNumbers(X(rx), Y(topY + noteHeight), rw, SHADOW_H, dark[0], dark[1], dark[2], shadowAlpha, dark[0], dark[1], dark[2], 0, 0);
+        } else {
+          this.pushQuadNumbers(X(rx), Y(topY - SHADOW_H), rw, SHADOW_H, dark[0], dark[1], dark[2], 0, dark[0], dark[1], dark[2], shadowAlpha, 0);
+        }
+      }
       // Base shade (dark overlay gradient approximated as solid darkened).
       this.quadRgb(X(rx), Y(topY), rw, noteHeight, dark, o, ARGON_CORNER_RADIUS);
-      const accentH = noteHeight * ARGON_NOTE_ACCENT_RATIO;
-      const accentY = topY + noteHeight - accentH;
-      const accentRgb = isTail ? dark : (light ?? base);
-      this.pushQuadNumbers(X(rx), Y(accentY), rw, accentH, accentRgb[0], accentRgb[1], accentRgb[2], o, base[0], base[1], base[2], o, ARGON_CORNER_RADIUS);
+      if (variant === 'tail') {
+        // Canvas2D holdTail: darkened base with a lighter additive wash on
+        // the far half of the accent zone. No lip, no glyph.
+        const hl = light ?? base;
+        const hlAlpha = 0.4 * o;
+        if (upscroll) {
+          this.pushQuadNumbers(X(rx), Y(topY + accentH / 2), rw, accentH / 2, hl[0], hl[1], hl[2], 0, hl[0], hl[1], hl[2], hlAlpha, 0);
+        } else {
+          const accentY = topY + noteHeight - accentH;
+          this.pushQuadNumbers(X(rx), Y(accentY), rw, accentH / 2, hl[0], hl[1], hl[2], hlAlpha, hl[0], hl[1], hl[2], 0, 0);
+        }
+        return;
+      }
+      // Accent + lip sit on the judgement side (mirrored for upscroll, like
+      // the Canvas2D vertical flip in drawArgonNotePiece).
+      const accentY = upscroll ? topY : topY + noteHeight - accentH;
+      const accentRgb = light ?? base;
+      const glyph = variant === 'rice' ? GLYPH_CHEVRON : GLYPH_BAR;
+      this.pushQuad(
+        X(rx), Y(accentY), rw, accentH,
+        [accentRgb[0], accentRgb[1], accentRgb[2], o],
+        [base[0], base[1], base[2], o],
+        ARGON_CORNER_RADIUS,
+        glyph,
+      );
       const lipH = ARGON_CORNER_RADIUS * 2;
-      this.quadRgb(X(rx), Y(topY + noteHeight - lipH), rw, lipH, whiteRgb, o, lipH / 2);
+      const lipY = upscroll ? topY : topY + noteHeight - lipH;
+      this.quadRgb(X(rx), Y(lipY), rw, lipH, whiteRgb, o, lipH / 2);
     };
 
     for (const n of notes) {
@@ -452,7 +556,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const centerY = getNoteVisualY(n.y, col.width, settingsSlice);
         let opacity = n.opacity;
         if (n.type === 'hold' && n.isHoldFailed) opacity *= 0.35;
-        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, false);
+        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, n.type === 'hold' ? 'head' : 'rice');
       }
       if (n.type === 'hold' && n.endY !== undefined) {
         const releaseDone = n.holdRulesVersion !== 2
@@ -462,19 +566,34 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const centerY = getNoteVisualY(n.endY, col.width, settingsSlice);
         let opacity = n.endOpacity ?? n.opacity;
         if (n.isHoldFailed) opacity *= 0.35;
-        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, true);
+        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, 'tail');
       }
     }
 
-    // Receptors (target + lip + pressed glow). Key labels stay DOM-only.
+    // Receptors (target + lip + key pill + pressed glow). Key labels stay DOM-only.
+    // Mirrors the Canvas2D argon receptor: translucent white hit target with
+    // a solid lip on the judgement line, plus the outlined oval key pill
+    // below/above the receptor (hollow white ring idle, lane-color fill
+    // when pressed). Rings are two rounded quads (outer white, inner fill);
+    // still zero textures, zero extra draw calls.
     const hitTargetH = noteHeight * ARGON_NOTE_ACCENT_RATIO * receptorScale;
     const lipH = ARGON_CORNER_RADIUS * 2;
+    const CORE_H = 46;
     for (let i = 0; i < keyCount; i++) {
       const col = columns[i];
       if (!col) continue;
       const ix = col.x + ARGON_COLUMN_GAP / 2;
       const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
       const pressed = col.pressed;
+      if (pressed) {
+        // White-hot core hugging the judgement line, fading into the lane.
+        const coreAlpha = 0.3 * receptorOpacity;
+        if (upscroll) {
+          this.pushQuadNumbers(X(ix), Y(receptorY), iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
+        } else {
+          this.pushQuadNumbers(X(ix), Y(receptorY - CORE_H), iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, 0);
+        }
+      }
       const targetY = upscroll ? receptorY : receptorY - hitTargetH;
       this.quadRgb(
         X(ix), Y(targetY), iw, hitTargetH,
@@ -484,15 +603,27 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         X(ix), Y(receptorY - lipH / 2), iw, lipH,
         pressed ? whiteRgb : grayRgb, receptorOpacity, lipH / 2,
       );
-      if (pressed) {
-        const base = laneBase[i];
-        if (base) {
+      const base = laneBase[i];
+      const darkLane = laneDarkLane[i];
+      if (base && darkLane) {
+        const ovalW = Math.min(22, iw * 0.42);
+        const ovalH = 14;
+        const ovalCY = upscroll ? receptorY - 30 : receptorY + 30;
+        const cx = ix + iw / 2;
+        if (pressed) {
           const glowAlpha = 0.28 * receptorOpacity;
-          const ovalW = Math.min(22, iw * 0.42);
-          const ovalH = 14;
-          const ovalY = upscroll ? receptorY - 30 - ovalH / 2 : receptorY + 30 - ovalH / 2;
-          const ox = ix + (iw - ovalW) / 2 - 6;
-          this.pushQuadNumbers(X(ox), Y(ovalY - 6), ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
+          const ox = cx - (ovalW + 12) / 2;
+          this.pushQuadNumbers(X(ox), Y(ovalCY - (ovalH + 12) / 2), ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
+        }
+        // Outer white ring.
+        const outerW = ovalW + 4;
+        const outerH = ovalH + 4;
+        this.quadRgb(X(cx - outerW / 2), Y(ovalCY - outerH / 2), outerW, outerH, whiteRgb, (pressed ? 0.95 : 0.7) * receptorOpacity, outerH / 2);
+        // Inner fill: lane color when pressed, lane background when idle.
+        if (pressed) {
+          this.quadRgb(X(cx - ovalW / 2), Y(ovalCY - ovalH / 2), ovalW, ovalH, base, 0.85 * receptorOpacity, ovalH / 2);
+        } else {
+          this.quadRgb(X(cx - ovalW / 2), Y(ovalCY - ovalH / 2), ovalW, ovalH, darkLane, 0.8 * receptorOpacity, ovalH / 2);
         }
       }
     }
@@ -504,6 +635,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     gl.useProgram(this.program);
     gl.uniform2f(this.uResolution, this.canvas!.width, this.canvas!.height);
     gl.uniform1f(this.uDpr, this.dpr);
+    gl.uniform1f(this.uGlyphFlip, upscroll ? 1 : 0);
     gl.viewport(0, 0, this.canvas!.width, this.canvas!.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -536,6 +668,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.vbo = null;
     this.uResolution = null;
     this.uDpr = null;
+    this.uGlyphFlip = null;
     this.onContextLost = null;
     this.quadCount = 0;
   }

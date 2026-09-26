@@ -28,6 +28,7 @@ import { downloadReplayExport } from '../utils/replayTransfer';
 import { computeGradeFromScoreState } from '../ruleset/mania/scoreProcessor';
 import HitErrorGraph from './HitErrorGraph';
 import { resolveStarRating } from '../utils/starRating';
+import { getSpeedMultiplier } from '../ruleset/mania/hitWindows';
 import { formatPenar } from '../utils/penar';
 
 interface ResultsScreenProps {
@@ -286,7 +287,16 @@ export default function ResultsScreen({
     }
   };
 
-  const starRating = resolveStarRating(beatmap);
+  // Star rating shown must be the one that drove the PP curve: the stored
+  // PENAR breakdown carries the exact (rate-adjusted) strain SR from gameplay.
+  // Fall back to a rate-aware resolve so DT/HT displays stay consistent.
+  const penarStarRating = activeScoreState.penar &&
+    typeof activeScoreState.penar.starRating === 'number' &&
+    Number.isFinite(activeScoreState.penar.starRating) &&
+    activeScoreState.penar.starRating >= 0
+    ? activeScoreState.penar.starRating
+    : null;
+  const starRating = penarStarRating ?? resolveStarRating(beatmap, getSpeedMultiplier(activeMods));
   const totalJudgements = (marvelousCount + perfectCount + greatCount + goodCount + badCount + missCount) || 1;
 
   // osu!(lazer) mania judgement stats list

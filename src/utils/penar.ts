@@ -47,7 +47,15 @@ export interface ComputeLivePenarInput extends Omit<ComputePenarInput, 'starRati
  */
 export const PENAR_VERSION = 'penar-mania-1';
 
-/** Lazer mania PP accuracy weights (HitResult Perfect/Great/Good/Ok/Meh). */
+/** Lazer mania PP accuracy weights, from ppy/osu
+ * ManiaPerformanceCalculator.calculateCustomAccuracy:
+ *   (Perfect*320 + Great*300 + Good*200 + Ok*100 + Meh*50) / (totalHits*320)
+ * RhythmMania judgement mapping (6 tiers to 6 tiers, top-for-top):
+ *   marvelous->Perfect (320), perfect->Great (300), great->Good (200),
+ *   good->Ok (100), bad->Meh (50), miss->Miss (0).
+ * This is intentionally separate from the gameplay score/accuracy weights in
+ * scoreProcessor.ts (305/300/200/100/50/0), which drive score, not PP.
+ */
 const PP_WEIGHT_MARVELOUS = 320;
 const PP_WEIGHT_PERFECT = 300;
 const PP_WEIGHT_GREAT = 200;
@@ -65,14 +73,20 @@ function hasMod(mods: readonly string[], id: string): boolean {
 
 /**
  * Computes PENAR (Performance Evaluation & Numerical Achievement Rating).
- * lazer-equivalent osu!mania performance:
- *   difficultyValue = max(stars - 0.15, 0.05)^2.2
- *     * max(0, 5 * accuracy - 4)
- *     * (1 + 0.1 * min(1, totalHits / 1500))
- *   total = difficultyValue * 8 (NF: x0.75, EZ: x0.5)
- * Judgement mapping is marvelous->Perfect, perfect->Great, great->Good,
- * good->Ok, bad->Meh, miss->Miss. total is null only when no valid star
- * rating is available; with no judgements yet it is 0 like lazer live PP.
+ *
+ * Exact port of ppy/osu ManiaPerformanceCalculator:
+ *   totalHits = Perfect + Great + Good + Ok + Meh + Miss
+ *   accuracy = clamp((P*320 + Gr*300 + Go*200 + O*100 + Me*50) / (totalHits*320), 0, 1)
+ *   difficultyValue = 8 * max(SR - 0.15, 0.05)^2.2
+ *     * max(0, 5*accuracy - 4)              // 0 at 80%, full weight at 100%
+ *     * (1 + 0.1 * min(1, totalHits/1500))  // length bonus, capped at 1500
+ *   total = difficultyValue * multiplier    // NF x0.75, EZ x0.5, nothing else
+ *
+ * Notes:
+ * - SR already contains the effect of rate mods (DT/HT scale object times in
+ *   the strain pass), so DT/HT/NC/DC/HD/HR add no direct PP multiplier.
+ * - total is null only when no valid star rating is available; with no
+ *   judgements yet it is 0 like lazer live PP.
  *
  * The `starRating` MUST be the full-chart rating for completed plays and
  * results/history surfaces. For live (in-progress) display pass the
@@ -96,6 +110,8 @@ export function computePenar(input: ComputePenarInput): PenarBreakdown {
   let total: number | null = null;
   let accuracy = 0;
   if (stars !== null) {
+    // Lazer clamps the custom accuracy to [0, 1]; the weighted sum can never
+    // exceed the max, but the clamp guards hostile persisted counts.
     accuracy = totalHits > 0
       ? ((marvelous * PP_WEIGHT_MARVELOUS +
           perfect * PP_WEIGHT_PERFECT +
@@ -106,10 +122,13 @@ export function computePenar(input: ComputePenarInput): PenarBreakdown {
         100
       : 0;
     const accuracyRatio = Math.min(1, Math.max(0, accuracy / 100));
-    let difficultyValue = Math.pow(Math.max(stars - 0.15, 0.05), 2.2);
+    // computeDifficultyValue: star-rating curve x accuracy gate x length bonus.
+    let difficultyValue = 8 * Math.pow(Math.max(stars - 0.15, 0.05), 2.2);
     difficultyValue *= Math.max(0, 5 * accuracyRatio - 4);
     difficultyValue *= 1 + 0.1 * Math.min(1, totalHits / 1500);
-    let multiplier = 8;
+    // Only NF and EZ touch PP directly. Rate/visual/HP mods (DT, HT, NC, DC,
+    // HD, HR, ...) affect PP exclusively through the star rating.
+    let multiplier = 1;
     if (hasMod(mods, 'NF')) multiplier *= 0.75;
     if (hasMod(mods, 'EZ')) multiplier *= 0.5;
     total = difficultyValue * multiplier;
