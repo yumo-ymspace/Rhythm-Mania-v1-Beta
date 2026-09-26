@@ -2293,7 +2293,7 @@ html[data-ui="lazer"] {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 
 .lazer-song-filter-stack .lazer-song-search:focus-within {
@@ -2301,8 +2301,8 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-stack .lazer-song-search-input {
-  padding: 7px 38px 15px 10px;
-  font-size: 14px;
+  padding: 12px 50px 20px 18px;
+  font-size: 16px;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -2315,15 +2315,15 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-stack .lazer-song-search-matches {
-  left: 10px;
-  bottom: 3px;
-  font-size: 9px;
+  left: 18px;
+  bottom: 5px;
+  font-size: 11px;
 }
 
 .lazer-song-filter-stack .lazer-song-search-icon {
-  right: 10px;
-  width: 18px;
-  height: 18px;
+  right: 16px;
+  width: 22px;
+  height: 22px;
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -2335,41 +2335,41 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-star .lazer-filter-tab {
-  padding: 4px 12px;
-  font-size: 11px;
+  padding: 7px 16px;
+  font-size: 12px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   box-shadow: none;
-  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 .lazer-song-filter-star .lazer-starbar {
-  padding: 4px 10px;
+  padding: 7px 14px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   box-shadow: none;
-  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 .lazer-song-filter-star .lazer-starbar-value {
-  clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 .lazer-song-filter-star .lazer-starbar-value {
-  font-size: 10px;
-  padding: 0 5px;
-  min-width: 30px;
+  font-size: 11px;
+  padding: 2px 8px;
+  min-width: 36px;
 }
 
 .lazer-song-filter-star .lazer-starbar-track {
-  height: 10px;
+  height: 12px;
 }
 
 .lazer-song-filter-star .lazer-starbar-thumb {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 /* --- Sort/group/collection row: parallelogram labels + dropdowns. --- */
@@ -2379,23 +2379,23 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-row .lazer-filter-tab {
-  padding: 4px 12px;
-  font-size: 11px;
+  padding: 7px 16px;
+  font-size: 12px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   box-shadow: none;
-  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 .lazer-song-filter-row .lazer-filter-select {
-  padding: 4px 12px;
-  font-size: 11px;
-  min-width: 84px;
+  padding: 7px 16px;
+  font-size: 12px;
+  min-width: 96px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
-  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 @media (max-width: 768px) {
