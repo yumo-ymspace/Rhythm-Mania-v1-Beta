@@ -94,27 +94,33 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     } else {
     // Lane background rails & column glows
     const separatorOpacity = settingsSlice.laneSeparatorOpacity ?? 0.30;
+    const separatorStyle = `rgba(71,85,105,${separatorOpacity})`;
+    const borderStyle = `rgba(71,85,105,${separatorOpacity * 1.5})`;
     const isDynamicStyle = settingsSlice.squareRenderStyle === 'rhythmplus-dynamic';
+    const glowTop = settingsSlice.upsurfaceNoteMode ? 0 : height;
+    ctx.strokeStyle = separatorStyle;
+    ctx.lineWidth = 1;
+    // Batch all lane separators into a single path + stroke.
+    ctx.beginPath();
     for (let i = 0; i < this.keyCount; i++) {
       const col = columns[i];
       if (!col) continue;
+      ctx.moveTo(col.x, 0);
+      ctx.lineTo(col.x, height);
+    }
+    ctx.stroke();
 
+    for (let i = 0; i < this.keyCount; i++) {
+      const col = columns[i];
+      if (!col) continue;
       const xPos = col.x;
       const colW = col.width;
-
-      // Subtle lane background separators
-      ctx.strokeStyle = `rgba(71,85,105,${separatorOpacity})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(xPos, 0);
-      ctx.lineTo(xPos, height);
-      ctx.stroke();
 
       // Lane-pressed glowing flashes
       if (col.glow > 0) {
         const glowGrad = ctx.createLinearGradient(
           xPos,
-          settingsSlice.upsurfaceNoteMode ? 0 : height,
+          glowTop,
           xPos,
           receptorY
         );
@@ -128,7 +134,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     }
 
     // Last border outline
-    ctx.strokeStyle = `rgba(71,85,105,${separatorOpacity * 1.5})`;
+    ctx.strokeStyle = borderStyle;
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, width, height);
 
@@ -481,8 +487,11 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
               };
 
               const bodySegments = n.tailSegments?.map(mapHoldSegment) || [{ startY: visualStartY, endY: visualEndY }];
-              const renderSegments = n.holdRulesVersion === 2
-                ? mergeVisibleTailSegments([...bodySegments, ...(n.missedTailSegments || []).map(mapHoldSegment)])
+              const missedMapped = n.holdRulesVersion === 2 && n.missedTailSegments && n.missedTailSegments.length > 0
+                ? n.missedTailSegments.map(mapHoldSegment)
+                : null;
+              const renderSegments = missedMapped
+                ? mergeVisibleTailSegments([...bodySegments, ...missedMapped])
                 : bodySegments;
               const endpointTailSegment = n.endpointTailSegment
                 ? mapHoldSegment(n.endpointTailSegment)
@@ -720,6 +729,10 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     });
 
     // 5. Draw Receptors
+    ctx.font = '900 22px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const keyLabelY = settingsSlice.upsurfaceNoteMode ? receptorY + 50 : receptorY - 50;
     for (let i = 0; i < this.keyCount; i++) {
       const col = columns[i];
       if (!col) continue;
@@ -827,16 +840,13 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         ctx.fill();
       }
 
-      // Draw Key bindings labels
+      // Draw Key bindings labels (labels are pre-uppercased by the caller)
       if (showKeyLabels && keyLabels[i]) {
-        ctx.font = '900 22px system-ui, -apple-system, sans-serif';
         ctx.fillStyle = isPressed ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.25)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
         ctx.fillText(
-          keyLabels[i].toUpperCase(),
+          keyLabels[i],
           xPos + colW / 2,
-          settingsSlice.upsurfaceNoteMode ? receptorY + 50 : receptorY - 50
+          keyLabelY
         );
       }
 
@@ -865,7 +875,13 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     }
 
     // 6b. RENDER FLASHLIGHT VIGNETTE
-    const isFlashlight = (settingsSlice.selectedMods || []).some(m => m.toUpperCase() === 'FL');
+    const selectedMods = settingsSlice.selectedMods;
+    let isFlashlight = false;
+    if (selectedMods) {
+      for (let i = 0; i < selectedMods.length; i++) {
+        if (selectedMods[i].toUpperCase() === 'FL') { isFlashlight = true; break; }
+      }
+    }
     if (isFlashlight) {
       const combo = frame.combo || 0;
       let baseRadius = 240;
@@ -877,9 +893,9 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
 
       // Check break retraction
       let breakFactor = 1.0;
-      const breaks = frame.breaks || [];
+      const breaks = frame.breaks;
       const songTime = frame.timeMs;
-      if (breaks.length > 0) {
+      if (breaks && breaks.length > 0) {
         for (const b of breaks) {
           if (songTime >= b.startTime && songTime <= b.endTime) {
             const breakDuration = b.endTime - b.startTime;

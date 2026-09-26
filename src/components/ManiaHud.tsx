@@ -24,10 +24,60 @@ export interface HudHitErrorTick {
 /**
  * Draws one argon dual vertical hit-error meter. This is the sole owner of
  * hit-error meter rendering: the playfield canvas never draws HUD meters.
- * Called imperatively from the gameplay rAF loop with the live tick list so
- * React reconciliation stays off the per-frame path. Each meter canvas uses
- * its own 2D context; the right meter is mirrored via CSS `scale-x-[-1]`.
+ * Called imperatively from the gameplay 6Hz HUD flush with the live tick list
+ * so React reconciliation stays off the per-frame path. Each meter canvas uses
+ * its own cached 2D context; the right meter is mirrored via CSS `scale-x-[-1]`.
+ *
+ * Perf: the static track/segments/dot layer is pre-rendered once per canvas
+ * size and blitted with drawImage; ticks are stroked without per-tick
+ * save/restore.
  */
+const meterCtxCache = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D>();
+const meterStaticCache = new Map<string, HTMLCanvasElement>();
+
+function getMeterStaticLayer(w: number, h: number, maxMs: number): HTMLCanvasElement | null {
+  const key = `${w}x${h}|${maxMs}`;
+  const hit = meterStaticCache.get(key);
+  if (hit) return hit;
+  if (typeof document === 'undefined') return null;
+  const halfH = h / 2;
+  const trackH = 180;
+  const trackHalfH = trackH / 2;
+  const centerX = 12;
+  const layer = document.createElement('canvas');
+  layer.width = w;
+  layer.height = h;
+  const ctx = layer.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.beginPath();
+  ctx.roundRect(centerX - 1.5, halfH - trackHalfH, 3, trackH, 1.5);
+  ctx.fill();
+  // Window color ranges (OD ranges in ms: Meh 136, Ok 112, Good 82, Great 49, Perfect 19.4)
+  const segments: Array<[number, string, number]> = [
+    [136, 'rgba(244, 63, 94, 0.25)', 3],
+    [112, 'rgba(249, 115, 22, 0.35)', 3],
+    [82, 'rgba(234, 179, 8, 0.45)', 3],
+    [49, 'rgba(34, 197, 94, 0.60)', 3],
+    [19.4, 'rgba(102, 204, 255, 0.80)', 4],
+  ];
+  for (const [ms, color, thickness] of segments) {
+    const yOffset = Math.min(trackHalfH, (ms / maxMs) * trackHalfH);
+    ctx.fillStyle = color;
+    ctx.fillRect(centerX - thickness / 2, halfH - yOffset, thickness, yOffset * 2);
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(centerX, halfH, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  meterStaticCache.set(key, layer);
+  if (meterStaticCache.size > 8) {
+    const oldest = meterStaticCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) meterStaticCache.delete(oldest);
+  }
+  return layer;
+}
+
 export function drawVerticalHitErrorMeter(
   canvas: HTMLCanvasElement | null,
   ticks: HudHitErrorTick[],
@@ -35,8 +85,13 @@ export function drawVerticalHitErrorMeter(
   maxMs: number = 150
 ): void {
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  let ctx = meterCtxCache.get(canvas);
+  if (!ctx) {
+    const fresh = canvas.getContext('2d');
+    if (!fresh) return;
+    meterCtxCache.set(canvas, fresh);
+    ctx = fresh;
+  }
   const w = canvas.width;
   const h = canvas.height;
   const halfH = h / 2;
@@ -46,50 +101,54 @@ export function drawVerticalHitErrorMeter(
 
   ctx.clearRect(0, 0, w, h);
 
-  // Background guide track (subtle rounded track)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-  ctx.beginPath();
-  ctx.roundRect(centerX - 1.5, halfH - trackHalfH, 3, trackH, 1.5);
-  ctx.fill();
+  // Static background: blit the cached layer instead of rebuilding geometry.
+  const staticLayer = getMeterStaticLayer(w, h, maxMs);
+  if (staticLayer) {
+    ctx.drawImage(staticLayer, 0, 0);
+  } else {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.beginPath();
+    ctx.roundRect(centerX - 1.5, halfH - trackHalfH, 3, trackH, 1.5);
+    ctx.fill();
+  }
 
-  // Draw window color ranges (OD ranges in ms: Meh 136, Ok 112, Good 82, Great 49, Perfect 19.4)
-  const drawSegment = (ms: number, color: string, thickness: number = 3) => {
-    const yOffset = Math.min(trackHalfH, (ms / maxMs) * trackHalfH);
-    ctx.fillStyle = color;
-    ctx.fillRect(centerX - thickness / 2, halfH - yOffset, thickness, yOffset * 2);
-  };
-
-  drawSegment(136, 'rgba(244, 63, 94, 0.25)', 3);
-  drawSegment(112, 'rgba(249, 115, 22, 0.35)', 3);
-  drawSegment(82, 'rgba(234, 179, 8, 0.45)', 3);
-  drawSegment(49, 'rgba(34, 197, 94, 0.60)', 3);
-  drawSegment(19.4, 'rgba(102, 204, 255, 0.80)', 4);
-
-  // Center 0ms marker
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(centerX, halfH, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Draw ticks
+  // Draw ticks: one lineWidth, no save/restore per tick. Ticks are
+  // push-ordered and compacted by the caller, so iterate from newest back
+  // and stop at the 2000ms fade horizon. Ticks sharing a color and quantized
+  // alpha are stroked as one path.
   const now = Date.now();
-  ticks.forEach(tick => {
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 1;
+  let batchKey: string | null = null;
+  const flushBatch = () => {
+    if (batchKey !== null) {
+      ctx!.stroke();
+      batchKey = null;
+    }
+  };
+  for (let i = ticks.length - 1; i >= 0; i--) {
+    const tick = ticks[i];
     const age = now - tick.timestamp;
-    if (age > 2000) return;
+    if (age > 2000) break;
     const alpha = Math.max(0, 1 - age / 2000);
+    // Quantize alpha so same-color, same-age ticks share one stroke.
+    const qAlpha = Math.round(alpha * 16) / 16;
     const clampedError = Math.max(-maxMs, Math.min(maxMs, tick.error));
     const tickY = halfH + (clampedError / maxMs) * trackHalfH;
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = tick.color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
+    const key = `${tick.color}|${qAlpha}`;
+    if (batchKey !== key) {
+      flushBatch();
+      ctx.strokeStyle = tick.color;
+      ctx.globalAlpha = qAlpha;
+      ctx.beginPath();
+      batchKey = key;
+    }
     ctx.moveTo(centerX - 7, tickY);
     ctx.lineTo(centerX + 7, tickY);
-    ctx.stroke();
-    ctx.restore();
-  });
+  }
+  flushBatch();
+  ctx.globalAlpha = 1;
 
   // Draw running average pointer / chevron
   if (avgMs !== null) {

@@ -17,7 +17,7 @@ import {
   ARGON_NOTE_ACCENT_RATIO,
   getArgonNoteHeight,
 } from './argonSkin';
-import { darkenCached, getCachedRgb01, lightenCached, tupleWithAlpha } from './colorCache';
+import { darkenCached, getCachedRgb01, lightenCached } from './colorCache';
 import { getNoteVisualY } from './playfieldLayout';
 import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { mergeVisibleTailSegments } from './tailSegments';
@@ -109,6 +109,13 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
   private dpr = 1;
   private keyCount = 4;
   private onContextLost: ((e: Event) => void) | null = null;
+  // Per-frame lane color scratch (max 10 lanes): reused to avoid 5×
+  // Array(keyCount) allocations every rAF.
+  private laneBaseScratch: Array<readonly [number, number, number] | null> = new Array(10).fill(null);
+  private laneDarkLaneScratch: Array<readonly [number, number, number] | null> = new Array(10).fill(null);
+  private laneDarkBodyScratch: Array<readonly [number, number, number] | null> = new Array(10).fill(null);
+  private laneLightHeadScratch: Array<readonly [number, number, number] | null> = new Array(10).fill(null);
+  private laneLightPulseScratch: Array<readonly [number, number, number] | null> = new Array(10).fill(null);
 
   async init(canvas: HTMLCanvasElement, opts: InitOpts): Promise<void> {
     this.destroy();
@@ -197,41 +204,74 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
+  private pushQuadNumbers(
+    x: number, y: number, w: number, h: number,
+    tr: number, tg: number, tb: number, ta: number,
+    br: number, bg: number, bb: number, ba: number,
+    radius: number,
+  ): void {
+    if (w <= 0 || h <= 0) return;
+    if (this.quadCount >= MAX_QUADS) return; // drop overflow; counters stay bounded
+    const base = this.quadCount * VERTS_PER_QUAD * FLOATS_PER_VERT;
+    const buf = this.buffer;
+    const x1 = x + w;
+    const y1 = y + h;
+    // Unrolled two triangles: (x,y)-(x1,y)-(x,y1) and (x1,y)-(x1,y1)-(x,y1).
+    // No per-quad xs/ys/us/vs array allocations.
+    // v0 (0,0)
+    let o = base;
+    buf[o] = x; buf[o + 1] = y;
+    buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
+    buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
+    buf[o + 10] = 0; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    // v1 (1,0)
+    o += FLOATS_PER_VERT;
+    buf[o] = x1; buf[o + 1] = y;
+    buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
+    buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
+    buf[o + 10] = 1; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    // v2 (0,1)
+    o += FLOATS_PER_VERT;
+    buf[o] = x; buf[o + 1] = y1;
+    buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
+    buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
+    buf[o + 10] = 0; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    // v3 (1,0)
+    o += FLOATS_PER_VERT;
+    buf[o] = x1; buf[o + 1] = y;
+    buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
+    buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
+    buf[o + 10] = 1; buf[o + 11] = 0; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    // v4 (1,1)
+    o += FLOATS_PER_VERT;
+    buf[o] = x1; buf[o + 1] = y1;
+    buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
+    buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
+    buf[o + 10] = 1; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    // v5 (0,1)
+    o += FLOATS_PER_VERT;
+    buf[o] = x; buf[o + 1] = y1;
+    buf[o + 2] = tr; buf[o + 3] = tg; buf[o + 4] = tb; buf[o + 5] = ta;
+    buf[o + 6] = br; buf[o + 7] = bg; buf[o + 8] = bb; buf[o + 9] = ba;
+    buf[o + 10] = 0; buf[o + 11] = 1; buf[o + 12] = w; buf[o + 13] = h; buf[o + 14] = radius;
+    this.quadCount++;
+  }
+
   private pushQuad(
     x: number, y: number, w: number, h: number,
     top: [number, number, number, number],
     bottom: [number, number, number, number],
     radius: number,
   ): void {
-    if (w <= 0 || h <= 0) return;
-    if (this.quadCount >= MAX_QUADS) return; // drop overflow; counters stay bounded
-    const base = this.quadCount * VERTS_PER_QUAD * FLOATS_PER_VERT;
     // Two triangles in uv space: (0,0)-(1,0)-(0,1) and (1,0)-(1,1)-(0,1).
     // Slot A always carries the top stop, slot B the bottom stop; the
     // fragment shader mixes by uv.y.
-    const xs = [x, x + w, x, x + w, x + w, x];
-    const ys = [y, y, y + h, y, y + h, y + h];
-    const us = [0, 1, 0, 1, 1, 0];
-    const vs = [0, 0, 1, 0, 1, 1];
-    for (let i = 0; i < 6; i++) {
-      const o = base + i * FLOATS_PER_VERT;
-      this.buffer[o] = xs[i];
-      this.buffer[o + 1] = ys[i];
-      this.buffer[o + 2] = top[0];
-      this.buffer[o + 3] = top[1];
-      this.buffer[o + 4] = top[2];
-      this.buffer[o + 5] = top[3];
-      this.buffer[o + 6] = bottom[0];
-      this.buffer[o + 7] = bottom[1];
-      this.buffer[o + 8] = bottom[2];
-      this.buffer[o + 9] = bottom[3];
-      this.buffer[o + 10] = us[i];
-      this.buffer[o + 11] = vs[i];
-      this.buffer[o + 12] = w;
-      this.buffer[o + 13] = h;
-      this.buffer[o + 14] = radius;
-    }
-    this.quadCount++;
+    this.pushQuadNumbers(
+      x, y, w, h,
+      top[0], top[1], top[2], top[3],
+      bottom[0], bottom[1], bottom[2], bottom[3],
+      radius,
+    );
   }
 
   private quadRgb(
@@ -239,11 +279,14 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     rgb: readonly [number, number, number], alpha: number, radius = 0,
     gradientRgb?: readonly [number, number, number], gradientAlpha?: number,
   ): void {
-    const top = tupleWithAlpha(rgb, alpha);
-    const bottom = gradientRgb !== undefined
-      ? tupleWithAlpha(gradientRgb, gradientAlpha ?? alpha)
-      : top;
-    this.pushQuad(x, y, w, h, top, bottom, radius);
+    const a = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+    if (gradientRgb !== undefined) {
+      const ga = gradientAlpha ?? alpha;
+      const gb = ga < 0 ? 0 : ga > 1 ? 1 : ga;
+      this.pushQuadNumbers(x, y, w, h, rgb[0], rgb[1], rgb[2], a, gradientRgb[0], gradientRgb[1], gradientRgb[2], gb, radius);
+    } else {
+      this.pushQuadNumbers(x, y, w, h, rgb[0], rgb[1], rgb[2], a, rgb[0], rgb[1], rgb[2], a, radius);
+    }
   }
 
   render(frame: PlayfieldFrame): void {
@@ -271,15 +314,16 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     const noteHeight = getArgonNoteHeight(settingsSlice);
     const keyCount = this.keyCount;
 
-    // Per-column RGB resolved once per frame (no CSS parsing per note).
-    const laneBase: Array<readonly [number, number, number] | null> = new Array(keyCount);
-    const laneDarkLane: Array<readonly [number, number, number] | null> = new Array(keyCount);
-    const laneDarkBody: Array<readonly [number, number, number] | null> = new Array(keyCount);
-    const laneLightHead: Array<readonly [number, number, number] | null> = new Array(keyCount);
-    const laneLightPulse: Array<readonly [number, number, number] | null> = new Array(keyCount);
+    // Per-column RGB resolved once per frame (no CSS parsing per note;
+    // scratch arrays reused to avoid per-frame Array allocations).
+    const laneBase = this.laneBaseScratch;
+    const laneDarkLane = this.laneDarkLaneScratch;
+    const laneDarkBody = this.laneDarkBodyScratch;
+    const laneLightHead = this.laneLightHeadScratch;
+    const laneLightPulse = this.laneLightPulseScratch;
     for (let i = 0; i < keyCount; i++) {
       const col = columns[i];
-      if (!col) continue;
+      if (!col) { laneBase[i] = null; laneDarkLane[i] = null; laneDarkBody[i] = null; laneLightHead[i] = null; laneLightPulse[i] = null; continue; }
       const base = getCachedRgb01(col.color);
       laneBase[i] = base;
       laneDarkLane[i] = darkenCached(col.color, 3);
@@ -305,10 +349,9 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         // bottom-weighted alpha gradient in normal blending.
         const base = laneBase[i];
         if (base) {
-          const top = tupleWithAlpha(base, 0);
-          const bottom = tupleWithAlpha(base, 0.6 * press);
-          if (upscroll) this.pushQuad(X(ix), Y(0), iw, receptorY, top, bottom, 0);
-          else this.pushQuad(X(ix), Y(receptorY), iw, height - receptorY, top, bottom, 0);
+          const bottomAlpha = 0.6 * press;
+          if (upscroll) this.pushQuadNumbers(X(ix), Y(0), iw, receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+          else this.pushQuadNumbers(X(ix), Y(receptorY), iw, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
         }
       }
     }
@@ -316,6 +359,9 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     // Hold bodies. Geometry mirrors renderArgonPlayfield: segment Y values
     // are already SV-projected by getVisibleNotes; only the anchored start
     // snaps to the receptor, exactly like Canvas2D.
+    // Pulse phase is constant for the frame: hoist the sin out of the loop.
+    const pulsePhase = (frame.timeMs / 160) * Math.PI * 2;
+    const pulseBase = 0.75 + 0.25 * Math.sin(pulsePhase);
     for (const n of notes) {
       if (n.type !== 'hold' || n.endY === undefined) continue;
       if (isHoldSuccessfullyCompleted(n)) continue;
@@ -333,19 +379,19 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         ? n.tailSegments
         : [{ startY: visualStartY, endY: visualEndY }];
       const missed = n.missedTailSegments;
-      const renderSegments = n.holdRulesVersion === 2
-        ? (missed && missed.length > 0
-            ? mergeVisibleTailSegments(bodySegments.concat(missed))
-            : bodySegments)
-        : bodySegments;
+      // Avoid concat/merge allocs when there is nothing missed to union.
+      let renderSegments = bodySegments;
+      if (n.holdRulesVersion === 2 && missed && missed.length > 0) {
+        const combined = new Array(bodySegments.length + missed.length);
+        for (let s = 0; s < bodySegments.length; s++) combined[s] = bodySegments[s];
+        for (let s = 0; s < missed.length; s++) combined[bodySegments.length + s] = missed[s];
+        renderSegments = mergeVisibleTailSegments(combined);
+      }
       const failed = !!n.isHoldFailed;
       const hitting = n.isHolding !== undefined
         ? n.isHolding
         : (n.isHit && !n.isReleased && !n.isHoldFailed);
-      let pulse = 0;
-      if (hitting && !failed) {
-        pulse = 0.75 + 0.25 * Math.sin((frame.timeMs / 160) * Math.PI * 2);
-      }
+      const pulse = hitting && !failed ? pulseBase : 0;
       const bodyRgb = failed ? failedRgb : laneDarkBody[n.column];
       const pulseRgb = laneLightPulse[n.column];
       const baseRgb = laneBase[n.column];
@@ -357,9 +403,8 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const alpha = n.opacity * (failed ? 0.45 : 1);
         if (bodyRgb) this.quadRgb(X(rx), Y(topY), rw, h, bodyRgb, alpha, ARGON_CORNER_RADIUS);
         if (pulse > 0 && pulseRgb) {
-          const glow = tupleWithAlpha(pulseRgb, 0.3 * pulse * n.opacity);
-          const transparent: [number, number, number, number] = [glow[0], glow[1], glow[2], 0];
-          this.pushQuad(X(rx), Y(topY), rw, h, glow, transparent, 0);
+          const glowAlpha = 0.3 * pulse * n.opacity;
+          this.pushQuadNumbers(X(rx), Y(topY), rw, h, pulseRgb[0], pulseRgb[1], pulseRgb[2], glowAlpha, pulseRgb[0], pulseRgb[1], pulseRgb[2], 0, 0);
         }
       }
       if (n.hitSegmentStartY !== undefined && n.hitSegmentEndY !== undefined) {
@@ -371,6 +416,9 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
 
     // Note heads + tails. Base + accent + white lip approximate
     // drawArgonNotePiece (chevron/bar glyphs are MVP-simplified to a lip).
+    // drawNotePiece is a per-frame closure over shake/height by design, but it
+    // performs no allocations: colors resolve to cached tuples and quads write
+    // directly into the preallocated buffer.
     const drawNotePiece = (rx: number, topY: number, rw: number, column: number, opacity: number, isTail: boolean) => {
       if (topY > height + 100 || topY + noteHeight < -100) return;
       const o = opacity;
@@ -384,9 +432,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const accentH = noteHeight * ARGON_NOTE_ACCENT_RATIO;
       const accentY = topY + noteHeight - accentH;
       const accentRgb = isTail ? dark : (light ?? base);
-      const top = tupleWithAlpha(accentRgb, o);
-      const bottom = tupleWithAlpha(base, o);
-      this.pushQuad(X(rx), Y(accentY), rw, accentH, top, bottom, ARGON_CORNER_RADIUS);
+      this.pushQuadNumbers(X(rx), Y(accentY), rw, accentH, accentRgb[0], accentRgb[1], accentRgb[2], o, base[0], base[1], base[2], o, ARGON_CORNER_RADIUS);
       const lipH = ARGON_CORNER_RADIUS * 2;
       this.quadRgb(X(rx), Y(topY + noteHeight - lipH), rw, lipH, whiteRgb, o, lipH / 2);
     };
@@ -441,13 +487,12 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       if (pressed) {
         const base = laneBase[i];
         if (base) {
-          const glow = tupleWithAlpha(base, 0.28 * receptorOpacity);
-          const transparent: [number, number, number, number] = [glow[0], glow[1], glow[2], 0];
+          const glowAlpha = 0.28 * receptorOpacity;
           const ovalW = Math.min(22, iw * 0.42);
           const ovalH = 14;
           const ovalY = upscroll ? receptorY - 30 - ovalH / 2 : receptorY + 30 - ovalH / 2;
           const ox = ix + (iw - ovalW) / 2 - 6;
-          this.pushQuad(X(ox), Y(ovalY - 6), ovalW + 12, ovalH + 12, glow, transparent, (ovalH + 12) / 2);
+          this.pushQuadNumbers(X(ox), Y(ovalY - 6), ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
         }
       }
     }

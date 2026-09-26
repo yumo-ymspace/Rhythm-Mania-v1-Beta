@@ -14,7 +14,33 @@ import { PlayfieldVisualSettings, ColumnLayout } from './types';
 import { ScrollModel, getScrollDelta } from './scrollVelocity';
 import { getArgonNoteHeight, isArgonSkin } from './argonSkin';
 import { isCircleSkinMode, getLaneColors } from './skinTheme';
-import { getColumnStyles } from './laneLayout';
+import { getColumnStyles, type ColumnStyle } from './laneLayout';
+
+/**
+ * Column styles only depend on skin/key geometry, which is constant during a
+ * song. Cache the last result so the per-frame layout pass only writes x,
+ * pressed, and glow into the reused column buffer.
+ */
+let cachedColumnKey = '';
+let cachedColumnStyles: ColumnStyle[] = [];
+
+function getCachedColumnStyles(
+  keyCount: number,
+  baseWidth: number,
+  skinId: PlayfieldVisualSettings['skinId'],
+  customSkinColors: PlayfieldVisualSettings['customSkinColors'],
+  laneColors: string[] | null,
+): ColumnStyle[] {
+  const customKey = Array.isArray(customSkinColors) ? customSkinColors.join(',') : '';
+  const laneKey = Array.isArray(laneColors) ? laneColors.join(',') : '';
+  const key = `${keyCount}|${baseWidth}|${skinId ?? ''}|${customKey}|${laneKey}`;
+  if (key === cachedColumnKey && cachedColumnStyles.length === keyCount) {
+    return cachedColumnStyles;
+  }
+  cachedColumnStyles = getColumnStyles(keyCount, baseWidth, skinId, customSkinColors, laneColors);
+  cachedColumnKey = key;
+  return cachedColumnStyles;
+}
 
 export function updateColumnsLayout(
   existingColumns: ColumnLayout[],
@@ -25,8 +51,13 @@ export function updateColumnsLayout(
   laneGlows: number[]
 ): ColumnLayout[] {
   const baseWidth = width / keyCount;
-  const laneColors = getLaneColors(settings, keyCount);
-  const colStyles = getColumnStyles(keyCount, baseWidth, settings.skinId, settings.customSkinColors, laneColors);
+  const colStyles = getCachedColumnStyles(
+    keyCount,
+    baseWidth,
+    settings.skinId,
+    settings.customSkinColors,
+    getLaneColors(settings, keyCount),
+  );
 
   while (existingColumns.length < keyCount) {
     existingColumns.push({
@@ -134,11 +165,28 @@ export function computeCoverRatio(
   songTime?: number,
   breaks: readonly { startTime: number; endTime: number }[] = []
 ): CoverState {
-  const normalizedMods = mods.map(m => m.toUpperCase());
-  const isHD = normalizedMods.includes('HD');
-  const isFI = normalizedMods.includes('FI');
-  const isCover = normalizedMods.includes('COVER') || normalizedMods.includes('CO');
-  const isFL = normalizedMods.includes('FL');
+  // Allocation-free mod scan: the per-frame path passes a small array, so
+  // compare case-insensitively in place instead of mods.map(toUpperCase).
+  let isHD = false;
+  let isFI = false;
+  let isCover = false;
+  let isFL = false;
+  for (let i = 0; i < mods.length; i++) {
+    const m = mods[i];
+    if (m === 'HD' || m === 'hd' || m === 'Hd') isHD = true;
+    else if (m === 'FI' || m === 'fi' || m === 'Fi') isFI = true;
+    else if (m === 'COVER' || m === 'cover' || m === 'Cover' || m === 'CO' || m === 'co' || m === 'Co') isCover = true;
+    else if (m === 'FL' || m === 'fl' || m === 'Fl') isFL = true;
+    else {
+      // Fall back to a single upper-case compare for exotic casings (e.g. 'hD').
+      const u = m.toUpperCase();
+      if (u === 'HD') isHD = true;
+      else if (u === 'FI') isFI = true;
+      else if (u === 'COVER' || u === 'CO') isCover = true;
+      else if (u === 'FL') isFL = true;
+    }
+    if (isHD && isFI && isCover && isFL) break;
+  }
 
   if (!isHD && !isFI && !isCover && !isFL) {
     return { isHD: false, isFI: false, isCover: false, isFL: false, effectiveCoverage: 0 };

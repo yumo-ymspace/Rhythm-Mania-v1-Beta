@@ -750,6 +750,11 @@ export default function GameplayCanvas({
   };
   const progressBarRef = useRef<HTMLElement | HTMLInputElement | null>(null);
   const isScrubbingRef = useRef<boolean>(false);
+  // Last flushed overlay values so the 6Hz HUD flush skips redundant DOM writes.
+  const lastProgressPercentRef = useRef<number>(-1);
+  const lastScrubberBgRef = useRef<string>('');
+  const lastElapsedSecRef = useRef<number>(-1);
+  const lastRemainSecRef = useRef<number>(-1);
   const lastVideoSeekTimeRef = useRef<number>(0);
   const wasPlayingRef = useRef<boolean>(false);
   const timeLabelRef = useRef<HTMLSpanElement>(null);
@@ -811,6 +816,12 @@ export default function GameplayCanvas({
 
   // Hit error timing logs
   const hitErrorTicksRef = useRef<HitErrorTick[]>([]);
+  // Monotonic tick ids avoid Math.random().toString(36) churn per hit.
+  const hitErrorTickIdRef = useRef<number>(0);
+  // Cached mod multiplier: recomputed only when the selected-mods array
+  // identity changes (settings updates replace the array).
+  const cachedModsRef = useRef<readonly string[] | undefined>(undefined);
+  const cachedModMultiplierRef = useRef<number>(1);
   const colsLayoutBufferRef = useRef<ColumnLayout[]>([]);
   // Frame-loop scratch buffers: reused every rAF to avoid per-frame GC churn.
   const visibleNotesBufferRef = useRef<import('../render/types').VisibleNote[]>([]);
@@ -1019,6 +1030,16 @@ export default function GameplayCanvas({
   const marvelousJudg = judgementWindows.find(w => w.type === 'marvelous') || judgementWindows[0];
   const badJudg = judgementWindows.find(w => w.type === 'bad') || judgementWindows[judgementWindows.length - 2];
   const missJudg = judgementWindows.find(w => w.type === 'miss') || judgementWindows[judgementWindows.length - 1];
+  // O(1) judgement lookup for the input/tail paths (avoids .find per hit).
+  const judgementByType = React.useMemo(() => {
+    const map = new Map<string, (typeof judgementWindows)[number]>();
+    for (const w of judgementWindows) {
+      if (!map.has(w.type)) map.set(w.type, w);
+    }
+    return map;
+  }, [judgementWindows]);
+  const judgementByTypeRef = useRef(judgementByType);
+  judgementByTypeRef.current = judgementByType;
 
   const initializeGameplay = (runCountdown: boolean = false) => {
     // Deep copy notes from the beatmap, ensuring gameplay properties reset
@@ -1758,7 +1779,7 @@ export default function GameplayCanvas({
           note.hitTime = playTime;
           note.isHeadHit = true;
 
-          const resolvedJudg = judgementWindows.find(w => w.type === action.judgement) || marvelousJudg;
+          const resolvedJudg = judgementByType.get(action.judgement) || marvelousJudg;
           applyJudgement(resolvedJudg, colIndex);
           mainAudio.playBeatmapHitsound(note.hitSound, note.hitSample?.filename);
 
@@ -1777,7 +1798,7 @@ export default function GameplayCanvas({
           }
 
           hitErrorTicksRef.current.push({
-            id: Math.random().toString(36).substring(2, 9),
+            id: `tick-${++hitErrorTickIdRef.current}`,
             error: hitError,
             timestamp: Date.now(),
             color: tickColor
@@ -1816,7 +1837,7 @@ export default function GameplayCanvas({
         }
 
         hitErrorTicksRef.current.push({
-          id: Math.random().toString(36).substring(2, 9),
+          id: `tick-${++hitErrorTickIdRef.current}`,
           error: hitError,
           timestamp: Date.now(),
           color: tickColor
@@ -1929,7 +1950,7 @@ export default function GameplayCanvas({
         }
       
       hitErrorTicksRef.current.push({
-        id: Math.random().toString(36).substring(2, 9),
+        id: `tick-${++hitErrorTickIdRef.current}`,
         error: hitError,
         timestamp: Date.now(),
         color: tickColor
@@ -2020,7 +2041,7 @@ export default function GameplayCanvas({
         holdNote.isReleaseHit = true;
         holdNote.isReleaseMissed = false;
 
-        const tailJudg = judgementWindows.find(w => w.type === action.judgement) || missJudg;
+        const tailJudg = judgementByType.get(action.judgement) || missJudg;
         applyJudgement(tailJudg, colIndex, 'hold_tail', action.effectiveErrorMs);
         recordHitErrorSample(action.effectiveErrorMs);
         mainAudio.playBeatmapHitsound(holdNote.hitSound, holdNote.hitSample?.filename);
@@ -2037,7 +2058,7 @@ export default function GameplayCanvas({
         }
 
         hitErrorTicksRef.current.push({
-          id: Math.random().toString(36).substring(2, 9),
+          id: `tick-${++hitErrorTickIdRef.current}`,
           error: action.effectiveErrorMs,
           timestamp: Date.now(),
           color: tickColor
@@ -2210,7 +2231,15 @@ export default function GameplayCanvas({
       totalJudgementsRef.current = judgedCount;
     }
     currentComboPortionRef.current += getComboScoreChange(judg.type, state.combo);
-    const modMultiplier = computeModMultiplier(settings.selectedMods);
+    const selectedMods = settings.selectedMods;
+    let modMultiplier: number;
+    if (cachedModsRef.current === selectedMods && selectedMods !== undefined) {
+      modMultiplier = cachedModMultiplierRef.current;
+    } else {
+      modMultiplier = computeModMultiplier(selectedMods);
+      cachedModsRef.current = selectedMods;
+      cachedModMultiplierRef.current = modMultiplier;
+    }
     state.score = computeTotalScore({
       currentComboPortion: currentComboPortionRef.current,
       maxComboPortion: maxComboPortionRef.current,
@@ -2224,7 +2253,14 @@ export default function GameplayCanvas({
     // cached chart difficulty; per-judgement PP would waste frame budget.
 
     // Muted (MU) mod: fade audio as combo builds, restore on break/miss
-    if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
+    const muMods = settings.selectedMods;
+    let isMutedMod = false;
+    if (muMods) {
+      for (let i = 0; i < muMods.length; i++) {
+        if (muMods[i] === 'MU') { isMutedMod = true; break; }
+      }
+    }
+    if (isMutedMod && isPlayingRef.current && !isPausedRef.current) {
       const muteFactor = Math.max(0, 1 - state.combo / 30);
       mainAudio.setVolumes(settings.musicVolume * muteFactor, settings.hitsoundVolume, settings.masterVolume);
     }
@@ -2299,7 +2335,7 @@ export default function GameplayCanvas({
         isNoRelease,
         judgementWindows,
         (n, judgType, errorMs) => {
-          const tailJudg = judgementWindows.find(w => w.type === judgType) || missJudg;
+          const tailJudg = judgementByTypeRef.current.get(judgType) || missJudg;
           applyJudgement(tailJudg, n.column, 'hold_tail');
           recordHitErrorSample(errorMs);
           mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
@@ -2332,10 +2368,20 @@ export default function GameplayCanvas({
       }
 
       // Dynamic playback rate updates for WU (Wind Up), WD (Wind Down), and AS (Adaptive Speed)
-      const activeMods = settingsRef.current.selectedMods || [];
-      const isWU = activeMods.includes('WU');
-      const isWD = activeMods.includes('WD');
-      const isAS = activeMods.includes('AS');
+      // Allocation-free mod scan (no `|| []` / includes churn per frame).
+      const activeMods = settingsRef.current.selectedMods;
+      let isWU = false;
+      let isWD = false;
+      let isAS = false;
+      if (activeMods) {
+        for (let i = 0; i < activeMods.length; i++) {
+          const m = activeMods[i];
+          if (m === 'WU') isWU = true;
+          else if (m === 'WD') isWD = true;
+          else if (m === 'AS') isAS = true;
+          if (isWU && isWD && isAS) break;
+        }
+      }
 
       if ((isWU || isWD) && isPlayingRef.current && !isPausedRef.current) {
         const totalDuration = Math.max(1, (beatmap.duration || 10) * 1000);
@@ -2393,37 +2439,58 @@ export default function GameplayCanvas({
           }
 
           // Progress bar (replay scrubber input and HUD div share the ref).
+          // Quantized so the gradient/width strings stay stable between flushes.
           if (progressBarRef.current) {
             const totalDurationMs = beatmap.duration * 1000;
-            const progressPercent = totalDurationMs > 0 ? Math.min(100, Math.max(0, (songTime / totalDurationMs) * 100)) : 0;
-            if (progressBarRef.current.tagName === 'INPUT') {
-              const inputEl = progressBarRef.current as HTMLInputElement;
-              if (!isScrubbingRef.current) {
-                inputEl.value = (Math.max(0, songTime)).toString();
-                inputEl.style.background = `linear-gradient(to right, #06b6d4 ${progressPercent}%, rgba(255,255,255,0.15) ${progressPercent}%)`;
+            const rawPercent = totalDurationMs > 0 ? Math.min(100, Math.max(0, (songTime / totalDurationMs) * 100)) : 0;
+            const progressPercent = Math.round(rawPercent * 10) / 10;
+            if (progressPercent !== lastProgressPercentRef.current) {
+              lastProgressPercentRef.current = progressPercent;
+              if (progressBarRef.current.tagName === 'INPUT') {
+                const inputEl = progressBarRef.current as HTMLInputElement;
+                if (!isScrubbingRef.current) {
+                  inputEl.value = (Math.max(0, songTime)).toString();
+                  const bg = `linear-gradient(to right, #06b6d4 ${progressPercent}%, rgba(255,255,255,0.15) ${progressPercent}%)`;
+                  if (bg !== lastScrubberBgRef.current) {
+                    lastScrubberBgRef.current = bg;
+                    inputEl.style.background = bg;
+                  }
+                }
+              } else {
+                const nextWidth = `${progressPercent}%`;
+                if ((progressBarRef.current as HTMLElement).style.width !== nextWidth) {
+                  (progressBarRef.current as HTMLElement).style.width = nextWidth;
+                }
               }
-            } else {
-              const nextWidth = `${progressPercent}%`;
-              if ((progressBarRef.current as HTMLElement).style.width !== nextWidth) {
-                (progressBarRef.current as HTMLElement).style.width = nextWidth;
-              }
+            } else if (progressBarRef.current.tagName === 'INPUT' && !isScrubbingRef.current) {
+              // Percent bucket unchanged but songTime moved: keep scrubber
+              // position live without rebuilding the gradient string.
+              (progressBarRef.current as HTMLInputElement).value = (Math.max(0, songTime)).toString();
             }
           }
 
           if (timeLabelRef.current && !isScrubbingRef.current) {
             const totalMs = beatmap.duration * 1000;
-            const nextText = `${formatMsToMinSec(songTime)} / ${formatMsToMinSec(totalMs)}`;
-            if (timeLabelRef.current.innerText !== nextText) {
-              timeLabelRef.current.innerText = nextText;
+            const elapsedSec = Math.floor(Math.max(0, songTime) / 1000);
+            if (elapsedSec !== lastElapsedSecRef.current) {
+              lastElapsedSecRef.current = elapsedSec;
+              const nextText = `${formatMsToMinSec(songTime)} / ${formatMsToMinSec(totalMs)}`;
+              if (timeLabelRef.current.innerText !== nextText) {
+                timeLabelRef.current.innerText = nextText;
+              }
             }
           }
           if (timeLeftLabelRef.current && !isScrubbingRef.current) {
             if (isReplayMode || (!isAutoplay && !isPrePlay)) {
               const totalMs = beatmap.duration * 1000;
               const remainMs = Math.max(0, totalMs - Math.max(0, songTime));
-              const nextText = `-${formatMsToMinSec(remainMs)}`;
-              if (timeLeftLabelRef.current.innerText !== nextText) {
-                timeLeftLabelRef.current.innerText = nextText;
+              const remainSec = Math.floor(remainMs / 1000);
+              if (remainSec !== lastRemainSecRef.current) {
+                lastRemainSecRef.current = remainSec;
+                const nextText = `-${formatMsToMinSec(remainMs)}`;
+                if (timeLeftLabelRef.current.innerText !== nextText) {
+                  timeLeftLabelRef.current.innerText = nextText;
+                }
               }
               if (timeLeftLabelRef.current.style.display !== '') {
                 timeLeftLabelRef.current.style.display = '';
@@ -2472,7 +2539,7 @@ export default function GameplayCanvas({
             badCount: live.badCount,
             missCount: live.missCount,
             maxCombo: live.maxCombo,
-            mods: settingsRef.current.selectedMods || [],
+            mods: settingsRef.current.selectedMods,
           });
           const flushedPenar = scoreStateRef.current.penar ?? null;
           setUiPenar((prev) => (prev === flushedPenar ? prev : flushedPenar));
@@ -2605,7 +2672,7 @@ export default function GameplayCanvas({
                 recordHitErrorSample(0);
 
                 hitErrorTicksRef.current.push({
-                  id: Math.random().toString(36).substring(2, 9),
+                  id: `tick-${++hitErrorTickIdRef.current}`,
                   error: 0,
                   timestamp: Date.now(),
                   color: '#3b82f6'
@@ -2771,13 +2838,15 @@ export default function GameplayCanvas({
           if (expired > 0) ticks.splice(0, expired);
         }
 
-        // Map key bindings for labels (reuse buffer, no per-frame array).
+        // Map key bindings for labels (reuse buffer, no per-frame array;
+        // pre-uppercased once here so the renderer never calls toUpperCase).
         const layoutKeys = currentSettings.bindings[keyCount] || [];
         const keyLabelsMapped = keyLabelsBufferRef.current;
         keyLabelsMapped.length = layoutKeys.length;
         for (let i = 0; i < layoutKeys.length; i++) {
           const hasPressed = hasKeyPressedOnceRef.current && hasKeyPressedOnceRef.current[i];
-          keyLabelsMapped[i] = !hasPressed ? layoutKeys[i] : '';
+          const raw = !hasPressed ? layoutKeys[i] : '';
+          keyLabelsMapped[i] = raw ? raw.toUpperCase() : '';
         }
 
         // Execute drawing call (playfield-only; HUD meters are drawn below
@@ -3129,7 +3198,7 @@ export default function GameplayCanvas({
             note.isHit = true;
             note.hitTime = frameTime;
             note.isHeadHit = true;
-            const resolvedJudg = judgementWindows.find(w => w.type === action.judgement) || marvelousJudg;
+            const resolvedJudg = judgementByType.get(action.judgement) || marvelousJudg;
             simApplyJudgement(resolvedJudg, colIndex, 'hold_head');
             recordHitErrorSample(action.errorMs);
           } else if (action.kind === 'head_miss') {
@@ -3264,7 +3333,7 @@ export default function GameplayCanvas({
           holdNote.releaseTime = frameTime;
           holdNote.isReleaseHit = true;
           holdNote.isReleaseMissed = false;
-          const tailJudg = judgementWindows.find(w => w.type === action.judgement) || missJudg;
+          const tailJudg = judgementByType.get(action.judgement) || missJudg;
           simApplyJudgement(tailJudg, colIndex, 'hold_tail');
           recordHitErrorSample(action.effectiveErrorMs);
           return;

@@ -123,7 +123,7 @@ export function getVisibleNotes(
   const paddingLimit = 100;
   const up = settings.upsurfaceNoteMode;
   const noteOpacityVal = settings.noteOpacity ?? 1.0;
-  const coverState = computeCoverRatio(settings.selectedMods || [], combo, visualTime, breaks);
+  const coverState = computeCoverRatio(settings.selectedMods, combo, visualTime, breaks);
   const sorted = isSortedByTime(notes);
   const orderedNotes: readonly HitObject[] = sorted
     ? notes
