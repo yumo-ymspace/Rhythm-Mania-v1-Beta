@@ -3,11 +3,11 @@ import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyC
 
 /**
  * Version tag for locally computed lazer-strain star ratings.
- * The legacy density-heuristic estimator (src/utils/chartStarRating.ts) was
- * version 1; stored `chart-content` v1 values measurably diverge from
- * official lazer ratings and must NOT feed the PP curve. Fresh strain-based
- * values are stored with this version so the resolver can trust them without
- * recomputing the strain pass on every render.
+ * Stored `chart-content` v1 values (from the removed density-heuristic
+ * estimator) measurably diverged from official lazer ratings and must NOT
+ * feed the PP curve. Fresh strain-based values are stored with this version
+ * so the resolver can trust them without recomputing the strain pass on
+ * every render.
  */
 export const STRAIN_STAR_RATING_VERSION = 2;
 
