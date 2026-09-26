@@ -65,10 +65,32 @@ export interface UnpackOptions {
    * A later full unpack fills in the remaining channels.
    */
   backgroundOnly?: boolean;
+  /**
+   * Skip video extraction entirely. Used when `settings.disableVideo` is on
+   * so a disabled video costs no ZIP inflate, Blob URL, or cache memory —
+   * the render layer already refuses to mount `<video>`, but without this
+   * flag the bytes were still unpacked on every load.
+   */
+  skipVideo?: boolean;
+}
+
+/**
+ * Pure decision helper shared by the unpacker and its callers (Song Select
+ * readiness, gameplay load): video bytes are only needed when the map
+ * declares a browser-playable video file and the user has not disabled
+ * background video.
+ */
+export function shouldUnpackVideo(
+  videoFilename: string | undefined | null,
+  opts?: { skipVideo?: boolean },
+): boolean {
+  if (opts?.skipVideo === true) return false;
+  return isBrowserPlayableVideoFilename(videoFilename || '');
 }
 
 export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOptions): Promise<void> {
   const backgroundOnly = opts?.backgroundOnly === true;
+  const skipVideo = opts?.skipVideo === true;
   const mapWithPkg = map as SavedBeatmap;
   if (mapWithPkg.isServerMap && !mapWithPkg.isCached && !mapWithPkg.packageId && !mapWithPkg.parentPackageId) {
     return;
@@ -105,11 +127,16 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
     return;
   }
 
-  const wantsVideo = !!(mapWithPkg.videoFilename && isBrowserPlayableVideoFilename(mapWithPkg.videoFilename));
+  const wantsVideo = shouldUnpackVideo(mapWithPkg.videoFilename, { skipVideo });
   if (backgroundOnly && cached?.bgUrl) {
-    // Background already preloaded — keep any existing audio/video entries.
+    // Background already preloaded — keep any existing audio/video entries,
+    // except in skipVideo mode where the map object must not retain video.
     map.audioUrl = cached.audioUrl || map.audioUrl;
-    map.videoUrl = cached.videoUrl || map.videoUrl;
+    if (skipVideo) {
+      map.videoUrl = '';
+    } else {
+      map.videoUrl = cached.videoUrl || map.videoUrl;
+    }
     map.bgUrl = cached.bgUrl || map.bgUrl;
     map.hitSoundUrls = cached.hitSoundUrls;
     return;
@@ -122,6 +149,18 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
     (!wantsVideo || !!cached?.videoUrl);
 
   if (cacheComplete) {
+    if (skipVideo && cached?.videoUrl) {
+      // Everything else is cached but video is disabled: release the retained
+      // video blob so disabled mode holds no video memory. put() revokes the
+      // replaced URL via AssetLifecycleManager.
+      storageManager.lruMediaCache.put(map.id, {
+        audioUrl: cached.audioUrl,
+        videoUrl: '',
+        bgUrl: cached.bgUrl,
+        hitSoundUrls: cached.hitSoundUrls,
+      });
+      map.videoUrl = '';
+    }
     return;
   }
 
@@ -133,7 +172,7 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
   }
 
   let parsedAudioUrl = (!force && cached?.audioUrl) || '';
-  let parsedVideoUrl = (!force && cached?.videoUrl) || '';
+  let parsedVideoUrl = (!skipVideo && !force && cached?.videoUrl) || '';
   let parsedBgUrl = (!force && (cached?.bgUrl || persistedBgUrl)) || '';
   const parsedHitSoundUrls: Record<string, string> = (!force && cached?.hitSoundUrls) ? { ...cached.hitSoundUrls } : {};
   const createdUrls: string[] = [];
@@ -141,7 +180,9 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
 
   if (backgroundOnly && parsedBgUrl) {
     // Art resolved without touching the zip: merge into the memory cache
-    // (preserving any audio/video already there) and return.
+    // (preserving any audio/video already there) and return. In skipVideo
+    // mode the map object drops video, but the cache entry is left alone —
+    // the later full unpack (or gameplay load) performs the release.
     storageManager.lruMediaCache.put(map.id, {
       audioUrl: cached?.audioUrl || '',
       videoUrl: cached?.videoUrl || '',
@@ -149,7 +190,7 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
       hitSoundUrls: cached?.hitSoundUrls ? { ...cached.hitSoundUrls } : {},
     });
     map.audioUrl = cached?.audioUrl || map.audioUrl;
-    map.videoUrl = cached?.videoUrl || map.videoUrl;
+    map.videoUrl = skipVideo ? '' : (cached?.videoUrl || map.videoUrl);
     map.bgUrl = parsedBgUrl;
     return;
   }
@@ -197,7 +238,7 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
         const file = resolver.findFile(audioFilename);
         if (file) parsedAudioUrl = await register(file, audioFilename);
       }
-      if (videoFilename && isBrowserPlayableVideoFilename(videoFilename) && !parsedVideoUrl) {
+      if (!skipVideo && videoFilename && isBrowserPlayableVideoFilename(videoFilename) && !parsedVideoUrl) {
         const file = resolver.findFile(videoFilename);
         if (file) parsedVideoUrl = await register(file, videoFilename);
       }
@@ -210,7 +251,7 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
           parsedAudioUrl = await register(fallbackObj, fallbackObj.name);
         }
       }
-      if (!parsedVideoUrl) {
+      if (!skipVideo && !parsedVideoUrl) {
         const fallbackObj =
           (await resolver.findLargestFileByExtensions(['.mp4', '.m4v', '.webm', '.ogv'])) ||
           resolver.findFallbackByExtensions(['.mp4', '.m4v', '.webm', '.ogv'])?.file;
@@ -254,7 +295,13 @@ export async function unpackBeatmap(map: Beatmap, force = false, opts?: UnpackOp
     });
 
   if (parsedAudioUrl) map.audioUrl = parsedAudioUrl;
-  if (parsedVideoUrl) map.videoUrl = parsedVideoUrl;
+  if (parsedVideoUrl) {
+    map.videoUrl = parsedVideoUrl;
+  } else if (skipVideo) {
+    // Disabled mode never leaves a video URL on the map object: the cache
+    // put above already revoked any retained blob.
+    map.videoUrl = '';
+  }
   if (parsedBgUrl) map.bgUrl = parsedBgUrl;
     if (!backgroundOnly) {
       if (map.hitSoundUrls) {

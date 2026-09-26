@@ -24,10 +24,10 @@ import {
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
-import { isBrowserPlayableVideoFilename } from '../utils/assetLifecycle';
+import { AssetLifecycleManager } from '../utils/assetLifecycle';
 import { MAX_COMPRESSED_SIZE_BYTES, validateZipLimits, sanitizeCssUrl, decodeBoundedUtf8, createZipExtractionBudget } from '../utils/securityLimits';
 import { storageManager } from '../utils/storageManager';
-import { preloadBeatmapBackgrounds, unpackBeatmap } from '../utils/unpackHelper';
+import { preloadBeatmapBackgrounds, shouldUnpackVideo, unpackBeatmap } from '../utils/unpackHelper';
 import { computeBeatmapHash } from '../utils/replayManager';
 import { extractZipEntry } from '../utils/zipResolver';
 import { previewPlayer } from '../utils/previewPlayer';
@@ -852,23 +852,32 @@ export default function SongSelect({
     if (fullUnpackTimerRef.current) clearTimeout(fullUnpackTimerRef.current);
   }, []);
 
-  const applyCachedMediaToMap = (map: Beatmap) => {
+  const applyCachedMediaToMap = (map: Beatmap, skipVideo: boolean) => {
     const cached = storageManager.lruMediaCache.get(map.id);
     if (cached) {
       if (cached.audioUrl) map.audioUrl = cached.audioUrl;
       if (cached.bgUrl) map.bgUrl = cached.bgUrl;
-      if (cached.videoUrl) map.videoUrl = cached.videoUrl;
+      if (skipVideo) {
+        if (map.videoUrl && map.videoUrl !== cached.videoUrl && map.videoUrl.startsWith('blob:')) {
+          AssetLifecycleManager.releaseSpecific(map.videoUrl);
+        }
+        map.videoUrl = '';
+      } else if (cached.videoUrl) map.videoUrl = cached.videoUrl;
+    } else if (skipVideo && map.videoUrl?.startsWith('blob:')) {
+      AssetLifecycleManager.releaseSpecific(map.videoUrl);
+      map.videoUrl = '';
     }
     return cached;
   };
 
   const handleSelectCustomMap = useCallback(async (map: Beatmap, forceUnpack = false) => {
-    const wantsVideo = isBrowserPlayableVideoFilename((map as any).videoFilename || '');
+    const skipVideo = settings.disableVideo === true;
+    const wantsVideo = shouldUnpackVideo((map as any).videoFilename || '', { skipVideo });
     const cacheReady = (c: { audioUrl: string; videoUrl: string; bgUrl: string } | null) =>
       !!(c?.audioUrl && c?.bgUrl && (!wantsVideo || c.videoUrl));
 
     if (map.id === selectedCustomMapIdRef.current) {
-      const cached = applyCachedMediaToMap(map);
+      const cached = applyCachedMediaToMap(map, skipVideo);
       if (!forceUnpack && cacheReady(cached)) return;
     }
 
@@ -886,9 +895,9 @@ export default function SongSelect({
         fullUnpackTimerRef.current = null;
       }
       try {
-        await unpackBeatmap(map, true);
+        await unpackBeatmap(map, true, { skipVideo });
         if (isStale()) return;
-        applyCachedMediaToMap(map);
+        applyCachedMediaToMap(map, skipVideo);
         setUnpackTrigger(prev => prev + 1);
       } catch (err) {
         if (!isStale()) console.warn('Unpacker encountered an issue resolving map media channels:', err);
@@ -900,7 +909,7 @@ export default function SongSelect({
     try {
       await unpackBeatmap(map, false, { backgroundOnly: true });
       if (isStale()) return;
-      applyCachedMediaToMap(map);
+      applyCachedMediaToMap(map, skipVideo);
       setUnpackTrigger(prev => prev + 1);
     } catch {
       // Best-effort; the full unpack below retries.
@@ -912,22 +921,22 @@ export default function SongSelect({
 
     // Tier 2: full audio/video unpack, debounced so rapid navigation
     // coalesces into a single decompress for the settled selection.
+    // skipVideo avoids inflating video bytes when background video is disabled.
     if (fullUnpackTimerRef.current) clearTimeout(fullUnpackTimerRef.current);
     fullUnpackTimerRef.current = setTimeout(() => {
       fullUnpackTimerRef.current = null;
       void (async () => {
         try {
-          await unpackBeatmap(map, false);
+          await unpackBeatmap(map, false, { skipVideo });
           if (isStale()) return;
-          applyCachedMediaToMap(map);
+          applyCachedMediaToMap(map, skipVideo);
           setUnpackTrigger(prev => prev + 1);
         } catch (err) {
           if (!isStale()) console.warn('Unpacker encountered an issue resolving map media channels:', err);
         }
       })();
     }, 350);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [settings.disableVideo]);
 
   // Refs keep carousel callbacks stable so memoized cards don't re-render
   // on every selection — only the groups whose active/expanded state

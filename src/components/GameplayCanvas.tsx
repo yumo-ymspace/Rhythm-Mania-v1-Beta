@@ -60,7 +60,7 @@ import { UnstableRateAccumulator } from '../utils/unstableRateAccumulator';
 import { TouchInputAdapter } from '../utils/touchInputAdapter';
 import { FullscreenManager } from '../utils/fullscreenManager';
 import { GameplayMediaRegistry } from '../utils/mediaRegistry';
-import { getMimeTypeFromFilename, getVideoFormatLabel, isBrowserPlayableVideoFilename } from '../utils/assetLifecycle';
+import { AssetLifecycleManager, getMimeTypeFromFilename, getVideoFormatLabel, isBrowserPlayableVideoFilename } from '../utils/assetLifecycle';
 import { storageManager } from '../utils/storageManager';
 import type { SavedBeatmap } from '../utils/storageManager';
 import { unpackBeatmap } from '../utils/unpackHelper';
@@ -1220,9 +1220,12 @@ export default function GameplayCanvas({
 
     const loadBgAudio = async () => {
       const mapWithPkg = beatmap as SavedBeatmap;
+      const skipVideoOnLoad = settings.disableVideo === true;
       try {
-        // Prefer shared unpacker (typed blobs + video fallback + package id cache key)
-        await unpackBeatmap(mapWithPkg, false);
+        // Prefer shared unpacker (typed blobs + video fallback + package id cache key).
+        // skipVideo avoids inflating video bytes at all when disabled — the
+        // render layer would refuse to mount <video> anyway.
+        await unpackBeatmap(mapWithPkg, false, { skipVideo: skipVideoOnLoad });
       } catch (mediaErr) {
         console.error('Failed to resolve beatmap media from package:', mediaErr);
       }
@@ -1232,7 +1235,7 @@ export default function GameplayCanvas({
       const cached = storageManager.lruMediaCache.get(beatmap.id);
       const resolved = {
         audioUrl: cached?.audioUrl || beatmap.audioUrl || '',
-        videoUrl: cached?.videoUrl || beatmap.videoUrl || '',
+        videoUrl: skipVideoOnLoad ? '' : (cached?.videoUrl || beatmap.videoUrl || ''),
         bgUrl: cached?.bgUrl || beatmap.bgUrl || '',
       };
       beatmap.audioUrl = resolved.audioUrl;
@@ -1261,7 +1264,7 @@ export default function GameplayCanvas({
       }
 
       const declaredVideo = mapWithPkg.videoFilename as string | undefined;
-      if (declaredVideo && !resolved.videoUrl) {
+      if (!skipVideoOnLoad && declaredVideo && !resolved.videoUrl) {
         if (!isBrowserPlayableVideoFilename(declaredVideo)) {
           const fmt = getVideoFormatLabel(declaredVideo);
           setVideoFormatWarning(fmt);
@@ -1287,6 +1290,64 @@ export default function GameplayCanvas({
       }
     };
   }, [beatmap]);
+
+  // Apply Disable-background-video flips immediately, mid-song. Disabling
+  // tears down and releases the video blob; re-enabling re-unpacks just the
+  // missing video channel (audio/bg/hitsounds are reused from cache).
+  useEffect(() => {
+    if (!isAudioLoaded) return;
+    const disabled = settings.disableVideo === true;
+    if (disabled) {
+      if (!mediaUrls.videoUrl) return;
+      try { videoRef.current?.pause(); } catch (e) {}
+      syncControllerRef.current?.destroy();
+      syncControllerRef.current = null;
+      GameplayMediaRegistry.setVideo(null);
+      const cached = storageManager.lruMediaCache.get(beatmap.id);
+      const stateUrl = mediaUrls.videoUrl;
+      if (stateUrl && stateUrl !== cached?.videoUrl && stateUrl.startsWith('blob:')) {
+        AssetLifecycleManager.releaseSpecific(stateUrl);
+      }
+      if (cached) {
+        // put() revokes the retained cached video blob (replaced by '').
+        storageManager.lruMediaCache.put(beatmap.id, {
+          audioUrl: cached.audioUrl,
+          videoUrl: '',
+          bgUrl: cached.bgUrl,
+          hitSoundUrls: cached.hitSoundUrls,
+        });
+      } else if (stateUrl.startsWith('blob:')) {
+        AssetLifecycleManager.releaseSpecific(stateUrl);
+      }
+      beatmap.videoUrl = '';
+      setMediaUrls((prev) => (prev.videoUrl ? { ...prev, videoUrl: '' } : prev));
+      return;
+    }
+    if (mediaUrls.videoUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await unpackBeatmap(beatmap as SavedBeatmap, false);
+      } catch (mediaErr) {
+        console.error('Failed to restore beatmap video after re-enable:', mediaErr);
+      }
+      if (cancelled || settingsRef.current.disableVideo === true) return;
+      const cached = storageManager.lruMediaCache.get(beatmap.id);
+      const videoUrl = cached?.videoUrl || beatmap.videoUrl || '';
+      if (!videoUrl) {
+        const declared = (beatmap as SavedBeatmap).videoFilename as string | undefined;
+        if (declared && isBrowserPlayableVideoFilename(declared)) setIsVideoMissing(true);
+        return;
+      }
+      beatmap.videoUrl = videoUrl;
+      setIsVideoError(false);
+      setIsVideoMissing(false);
+      setMediaUrls((prev) => ({ ...prev, videoUrl }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.disableVideo, isAudioLoaded, mediaUrls.videoUrl, beatmap]);
 
   // Handle immediate sync of volume and offset values
   useEffect(() => {
