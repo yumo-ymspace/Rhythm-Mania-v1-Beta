@@ -34,7 +34,7 @@ html[data-ui="lazer"] {
   --lazer-back: rgb(51, 58, 94);
   --lazer-settings: rgb(85, 85, 85);
   --lazer-bar-gray: rgb(50, 50, 50);
-  --lazer-back-footer: #e91e8a;
+  --lazer-back-footer: #DF31AD;
   --lazer-menu-field: #0d1520;
 
   --lazer-dur-menu-button: 500ms;
@@ -284,7 +284,7 @@ html[data-ui="lazer"] {
   align-items: stretch;
   width: 100%;
   height: 100%;
-  background: var(--lazer-back-footer, #e91e8a);
+  background: var(--lazer-back-footer, #DF31AD);
   border-radius: 4px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
 }
@@ -721,17 +721,18 @@ html[data-ui="lazer"] {
   top: 0;
   left: 0;
   right: 0;
-  height: 50px;
-  background: rgba(32, 34, 38, 0.96);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  height: 40px;
+  background: #191919;
+  opacity: 1;
+  border-bottom: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
+  padding: 0 10px;
   z-index: 50;
   user-select: none;
+  font-family: "Nunito", Inter, sans-serif;
+  font-weight: 300;
   transition: opacity var(--lazer-dur-overlay, 200ms) var(--lazer-ease-out-quint, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
@@ -759,17 +760,17 @@ html[data-ui="lazer"] {
 }
 
 .lazer-toolbar-left {
-  gap: 6px;
+  gap: 14px;
 }
 
 .lazer-toolbar-right {
-  gap: 8px;
+  gap: 12px;
 }
 
 .lazer-toolbar-aux-tools {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 /* Toolbar button baseline */
@@ -778,12 +779,12 @@ html[data-ui="lazer"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 40px;
+  width: 32px;
+  height: 27px;
   border-radius: 6px;
   background: transparent;
   border: none;
-  color: #cfd8dc;
+  color: #ffffff;
   cursor: pointer;
   outline: none;
   transition: color 150ms ease, background 150ms ease;
@@ -796,17 +797,23 @@ html[data-ui="lazer"] {
 }
 
 .lazer-toolbar-btn.is-stub {
-  color: #8395a7;
+  color: #ffffff;
 }
 
 .lazer-toolbar-btn.is-stub:hover {
-  color: #c8d6e5;
+  color: #ffffff;
 }
 
 /* Active pink state for beatmap listing / now-playing */
 .lazer-toolbar-btn.is-active-pink,
 .lazer-toolbar-btn.is-active-pink:hover {
   color: var(--lazer-pink, #e967a1);
+}
+
+/* Now Playing button: extra breathing room on both sides */
+#toolbar-btn-now-playing {
+  margin-left: 4px;
+  margin-right: 4px;
 }
 
 .lazer-toolbar-icon {
@@ -822,7 +829,7 @@ html[data-ui="lazer"] {
   margin-left: 8px;
   padding-left: 8px;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
-  height: 30px;
+  height: 22px;
 }
 
 .lazer-toolbar-ruleset-btn {
@@ -830,8 +837,8 @@ html[data-ui="lazer"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 27px;
   border-radius: 4px;
   background: transparent;
   border: none;
@@ -937,8 +944,9 @@ html[data-ui="lazer"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
-  padding: 0 10px 0 12px;
+  height: 34px;
+  margin-left: 8px;
+  padding: 0 8px 0 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 150ms ease;
@@ -949,14 +957,15 @@ html[data-ui="lazer"] {
 }
 
 .lazer-toolbar-username {
+  font-family: "Nunito", Inter, sans-serif;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 300;
   color: #ecf0f1;
 }
 
 .lazer-toolbar-avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 4px;
   object-fit: cover;
   background: #2c3e50;
@@ -967,25 +976,27 @@ html[data-ui="lazer"] {
 .lazer-toolbar-clock-container {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: center;
-  padding: 0 10px;
-  line-height: 1.25;
-  font-family: Inter, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 0 8px;
+  line-height: 1.2;
+  text-align: left;
+  font-family: "Nunito", Inter, sans-serif;
+  font-weight: 300;
   font-feature-settings: "tnum" 1, "zero" 1;
   font-variant-numeric: tabular-nums;
 }
 
 .lazer-toolbar-clock-time {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 300;
   color: #f1f2f6;
   letter-spacing: 0.02em;
 }
 
 .lazer-toolbar-clock-running {
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 9px;
+  font-weight: 300;
   color: #a4b0be;
   letter-spacing: 0.03em;
 }
@@ -993,20 +1004,22 @@ html[data-ui="lazer"] {
 /* Bell & Badge */
 .lazer-toolbar-bell {
   position: relative;
+  margin-left: 6px;
 }
 
 .lazer-toolbar-badge {
   position: absolute;
-  top: 3px;
-  right: 3px;
-  min-width: 14px;
-  height: 14px;
+  top: 1px;
+  right: 1px;
+  min-width: 13px;
+  height: 13px;
   padding: 0 3px;
   border-radius: 7px;
   background: #ff4757;
   color: #ffffff;
-  font-size: 9px;
-  font-weight: 800;
+  font-family: "Nunito", Inter, sans-serif;
+  font-size: 8px;
+  font-weight: 300;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1038,15 +1051,17 @@ html[data-ui="lazer"] {
 }
 
 .lazer-toolbar-tooltip-title {
-  font-size: 13.5px;
-  font-weight: 700;
+  font-family: "Nunito", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 300;
   color: #ffffff;
   text-transform: lowercase;
 }
 
 .lazer-toolbar-tooltip-shortcut {
+  font-family: "Nunito", Inter, sans-serif;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 300;
   color: #ffd32a;
   background: rgba(255, 211, 42, 0.12);
   padding: 1px 5px;
@@ -1055,7 +1070,9 @@ html[data-ui="lazer"] {
 }
 
 .lazer-toolbar-tooltip-subtitle {
-  font-size: 12.5px;
+  font-family: "Nunito", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 300;
   color: #a4b0be;
   text-transform: lowercase;
 }
@@ -1088,7 +1105,7 @@ html[data-ui="lazer"] {
 /* Expanded Notifications Drawer / Panel (beneath top right toolbar) */
 .lazer-notifications-panel {
   position: fixed;
-  top: 56px;
+  top: 46px;
   right: 14px;
   width: 360px;
   max-width: calc(100vw - 28px);
@@ -1257,9 +1274,8 @@ html[data-ui="lazer"] {
   left: 0;
   right: 0;
   height: 48px;
-  background: rgba(32, 34, 38, 0.96);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #22272A;
+  opacity: 1;
   border-top: 1px solid rgba(255, 255, 255, 0.10);
   display: flex;
   align-items: stretch;
@@ -1733,6 +1749,10 @@ html[data-ui="lazer"] {
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+.lazer-listing-topbar {
+  background: #20292E;
+}
+
 .lazer-listing-title {
   font-family: Inter, "Space Grotesk", sans-serif;
   font-size: 20px;
@@ -1954,7 +1974,7 @@ html[data-ui="lazer"] {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: rgba(22, 24, 30, 0.88);
+  background: #22272A;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: none;
   border-left: none;
@@ -2041,7 +2061,8 @@ html[data-ui="lazer"] {
   font-size: 11.5px;
   font-weight: 700;
   color: #fff;
-  background: rgba(0, 0, 0, 0.5);
+  background: #0F0F0F;
+  opacity: 1;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   white-space: nowrap;
@@ -2227,15 +2248,16 @@ html[data-ui="lazer"] {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  /* Bleed to the right screen edge (cancels the column pr-2 / lg:pr-3). */
+  /* Bleed to the right screen edge (cancels the column pr-2 / lg:pr-3,
+     touching the right wall). */
   margin-right: -8px;
-  /* Small left overlap stays inside the column's visible padding box —
-     anything further left would be cut off by the column's overflow clip
-     (which is what swallowed the slant). The extra length comes from the
-     wider right column instead. Left padding clears the 33px slant cut so
-     no row content sits over background art. */
-  margin-left: -20px;
-  padding: 4px 20px 6px 50px;
+  /* Small left overlap stays inside the column's visible padding box so the
+     slanted left edge and its rounded top joint are never clipped by the
+     column's overflow clip. Left padding clears the 32px slant cut so no
+     row content sits over background art. */
+  margin-left: -8px;
+  padding: 8px 14px 8px 48px;
+  gap: 6px;
 }
 
 @media (min-width: 1024px) {
@@ -2244,34 +2266,43 @@ html[data-ui="lazer"] {
   }
 }
 
-/* Single shell: slanted left edge only, mirrored against the song info
-   wedge. The slant is deliberately shallow (~10px offset: top inset
-   minus bottom inset), much less steep than the wedge's faces;
-   rectangular on the right and bled flush to the right screen edge. The
-   bottom-left slant joint carries a small rounded curve in the same style
-   as the info wedge's bottom-right joint, sized to this shorter shell.
-   Every inset stays clear of the ~4px strip hidden under the column's
-   overflow clip, so the whole slant is visible end to end. */
+/* Single shell: parallelogram slanted on the LEFT edge only, mirrored
+   against the song info wedge (20px slant: 32px top inset, 12px bottom
+   inset; left edge rises to the right). The top-left corner is sharp and
+   follows the slant straight up, tucking behind the top bar. The right
+   side stays straight and square, bled all but 2px to the right screen
+   edge. The bottom-left slant joint carries a small rounded curve in the
+   same style as the info wedge's bottom-right joint. The shell stays
+   fully inside the column's padding box so no corner is clipped. */
 .lazer-song-filter-stack::before {
   content: "";
   position: absolute;
   inset: 0;
+  top: -8px;
   z-index: -1;
-  background: rgba(22, 24, 30, 0.92);
+  background: #22272A;
+  opacity: 1;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  clip-path: polygon(22px 0, 100% 0, 100% 100%, 12px 100%, 7px calc(100% - 3px), 6px calc(100% - 10px), 6px calc(100% - 20px));
+  clip-path: polygon(32px 0, 100% 0, 100% 100%, 12px 100%, 7px calc(100% - 3px), 6px calc(100% - 10px), 6px calc(100% - 20px));
 }
 
-/* --- Search row: flat segment with a divider, thinner than before. --- */
+/* --- Search row: inset parallelogram field (slants right, like the shell). --- */
 .lazer-song-filter-stack .lazer-song-search {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+.lazer-song-filter-stack .lazer-song-search:focus-within {
+  border-color: rgba(233, 103, 161, 0.6);
 }
 
 .lazer-song-filter-stack .lazer-song-search-input {
-  padding: 6px 34px 6px 2px;
-  font-size: 13px;
+  padding: 7px 38px 15px 10px;
+  font-size: 14px;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -2284,37 +2315,46 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-stack .lazer-song-search-matches {
-  left: 2px;
-  bottom: 1px;
+  left: 10px;
+  bottom: 3px;
   font-size: 9px;
 }
 
 .lazer-song-filter-stack .lazer-song-search-icon {
-  right: 2px;
-  width: 15px;
-  height: 15px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.8);
 }
 
-/* --- Star row: flat segment with a divider; label/bar/tabs read as one. --- */
+/* --- Star row: parallelogram label pill + parallelogram gradient bar. --- */
 .lazer-song-filter-star {
   gap: 6px;
-  padding: 4px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 0;
+  border-bottom: none;
 }
 
 .lazer-song-filter-star .lazer-filter-tab {
-  padding: 2px 6px 2px 0;
+  padding: 4px 12px;
   font-size: 11px;
-  background: transparent;
-  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
   box-shadow: none;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
 
 .lazer-song-filter-star .lazer-starbar {
-  padding: 2px 4px;
-  background: transparent;
-  border: none;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
   box-shadow: none;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+}
+
+.lazer-song-filter-star .lazer-starbar-value {
+  clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
 }
 
 .lazer-song-filter-star .lazer-starbar-value {
@@ -2332,27 +2372,30 @@ html[data-ui="lazer"] {
   height: 12px;
 }
 
-/* --- Sort/group/collection row: flat label + subtle segment dropdowns. --- */
+/* --- Sort/group/collection row: parallelogram labels + dropdowns. --- */
 .lazer-song-filter-row {
   background: transparent;
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .lazer-song-filter-row .lazer-filter-tab {
-  padding: 3px 4px 3px 0;
+  padding: 4px 12px;
   font-size: 11px;
-  background: transparent;
-  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
   box-shadow: none;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
 
 .lazer-song-filter-row .lazer-filter-select {
-  padding: 3px 8px;
+  padding: 4px 12px;
   font-size: 11px;
   min-width: 84px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  border-radius: 6px;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
 
 @media (max-width: 768px) {
@@ -2362,5 +2405,6 @@ html[data-ui="lazer"] {
   }
   .lazer-song-filter-stack::before {
     clip-path: none;
+    border-radius: 8px;
   }
 }

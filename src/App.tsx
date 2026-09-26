@@ -1345,7 +1345,7 @@ export default function App() {
 
   // Lazer toolbar is position:fixed (out of flow), so the main viewport must
   // reserve its height — otherwise page tops (e.g. Song Select search/filters)
-  // render underneath it. All skins (Argon + legacy) use the lazer top bar.
+  // render underneath it. All skins use the Argon top bar (single implementation).
   const showLazerToolbar = !(currentScreen === 'menu' && menuPhase === 'idle') && currentScreen !== 'play';
 
   return (
@@ -1383,7 +1383,7 @@ export default function App() {
         <div className="absolute bottom-[-100px] right-10 w-[500px] h-[500px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none" />
       </div>
 
-      {/* 1. LAZER TOP BAR (all skins) */}
+      {/* 1. ARGON TOP BAR (all skins, single implementation) */}
       {/* Hidden on menu idle cookie and during live play. */}
       <LazerToolbar
         visible={showLazerToolbar}
@@ -1406,7 +1406,7 @@ export default function App() {
           (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results' || currentScreen === 'skins')
             ? 'w-full h-full'
             : 'py-6 md:py-12 px-4 md:px-6 z-10'
-        }${showLazerToolbar ? ' pt-[50px] max-[480px]:pt-[38px]' : ''}`}
+        }${showLazerToolbar ? ' pt-[40px]' : ''}`}
       >
         <AnimatePresence mode="wait">
           {currentScreen === 'menu' && (

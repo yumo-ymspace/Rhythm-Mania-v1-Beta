@@ -608,14 +608,14 @@ export default function OnlineBeatmapCatalog({
             data-beatmap-listing
             role="dialog"
             aria-label="beatmap listing"
-            className="lazer-listing-panel fixed z-[110] top-[38px] min-[481px]:top-[50px] bottom-0 inset-x-2 lg:left-[102px] lg:right-[102px] flex flex-col overflow-hidden font-sans text-slate-200"
+            className="lazer-listing-panel fixed z-[110] top-[40px] bottom-0 inset-x-2 lg:left-[102px] lg:right-[102px] flex flex-col overflow-hidden font-sans text-slate-200"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             style={{ willChange: 'opacity' }}
           >
-            <div className="relative flex-none px-4 md:px-8 pt-4 pb-3 flex items-center justify-between">
+            <div className="lazer-listing-topbar relative flex-none px-4 md:px-8 pt-4 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="text-slate-300" aria-hidden="true">
                   <ListMusic className="h-6 w-6" />
