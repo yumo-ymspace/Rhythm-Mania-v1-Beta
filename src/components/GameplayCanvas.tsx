@@ -123,9 +123,19 @@ export function checkNotesAutonomousMisses(
   keysPressed?: boolean[],
   isNoRelease: boolean = false,
   judgementWindows?: JudgementWindow[],
-  onTailHit?: (n: HitObject, judgement: JudgementType, errorMs: number) => void
+  onTailHit?: (n: HitObject, judgement: JudgementType, errorMs: number) => void,
+  startIndex: number = 0,
+  assumeSorted: boolean = false,
 ) {
-  notes.forEach((n) => {
+  const begin = Number.isFinite(startIndex) && startIndex > 0 ? Math.min(startIndex, notes.length) : 0;
+  for (let idx = begin; idx < notes.length; idx++) {
+    const n = notes[idx];
+    // Sorted fast path: heads (and therefore tails, since endTime >= time)
+    // only move further into the future, so nothing past this point can miss.
+    if (assumeSorted && n.time - currentTime > missBound) {
+      const endFuture = n.type !== 'hold' || n.endTime === undefined || currentTime - n.endTime <= missBound;
+      if (endFuture) break;
+    }
     // 0. Lazer hold rules (version 3)
     if (n.holdRulesVersion === LAZER_HOLD_RULES_VERSION || (n.holdRulesVersion === undefined && n.holdState)) {
       if (n.type === 'hold' && n.holdState) {
@@ -159,7 +169,7 @@ export function checkNotesAutonomousMisses(
             onMiss(n, false);
           }
         }
-        return;
+        continue;
       }
     }
 
@@ -169,7 +179,7 @@ export function checkNotesAutonomousMisses(
       n.isMissed = true;
       if (n.type === 'hold') {
         onMiss(n, false);
-        if (usesTailTicks) return;
+        if (usesTailTicks) continue;
         // Head miss only — body/tail remain active
         // If the lane is already held when the head times out, engage the LN for tail scoring
         if (keysPressed && keysPressed[n.column]) {
@@ -231,7 +241,7 @@ export function checkNotesAutonomousMisses(
         onMiss(n, false);
       }
     }
-  });
+  }
 }
 
 const formatMsToMinSec = (timeMs: number) => {
@@ -633,6 +643,23 @@ export default function GameplayCanvas({
   const audioStartPendingRef = useRef<boolean>(false);
   const audioTimeRef = useRef<number>(0);
   const smoothOffsetRef = useRef<number>(settings.audioOffset);
+  // Anti-teleport song-time filter: the audio clock is truth for judgement,
+  // but a single jumped frame (GC, video seek, rate switch, start edge)
+  // must not teleport notes. Visual songTime chases the audio target with a
+  // slew limit derived from wall dt, so hitches become quick glides.
+  const lastSongTimeRef = useRef<number>(0);
+  const lastFrameWallRef = useRef<number>(0);
+  // Set before intentional jumps (start/seek/skip/restart) so the next frame
+  // accepts the target instead of slewing from the old timeline.
+  const songTimeJumpRef = useRef<boolean>(true);
+  // Cursors that shrink the per-frame O(n) scans to the active window.
+  // Notes are time-sorted at initialize; cursors only skip fully-resolved
+  // prefixes and reset on any backwards timeline move.
+  const missCursorRef = useRef<number>(0);
+  const autoplayCursorRef = useRef<number>(0);
+  // Holds that actually own v2 tail ticks. Rebuilt on initialize; the hot
+  // tick advance then iterates hundreds of holds instead of all notes.
+  const tickHoldsRef = useRef<HitObject[]>([]);
   const readGameplayTime = () => {
     const currentTime = mainAudio.getCurrentTimeMs();
     if (Number.isFinite(currentTime)) audioTimeRef.current = currentTime;
@@ -1074,6 +1101,28 @@ export default function GameplayCanvas({
       }
       return playNote;
     });
+    // Time-sort once so per-frame scans can early-break on future notes and
+    // cursors can skip fully-resolved prefixes. Parser output is usually
+    // sorted, but imports/replays may not be.
+    notesRef.current.sort((a, b) => a.time - b.time);
+    missCursorRef.current = 0;
+    autoplayCursorRef.current = 0;
+    tickHoldsRef.current = notesRef.current.filter(
+      (n) => n.type === 'hold' && n.nextTailTickTime !== undefined,
+    );
+    // Park the timeline at the lead-in start so the pre-play render and the
+    // first audio frames agree. Previously audioTime stayed at 0 (stopped
+    // clock) until playAsync resolved, then jumped to -startDelay in one
+    // frame — the start-of-song note teleport.
+    {
+      const startOffset = settingsRef.current.audioOffset || 0;
+      const parked = -startDelayMs - startOffset;
+      audioTimeRef.current = parked;
+      lastSongTimeRef.current = parked;
+      smoothOffsetRef.current = startOffset;
+    }
+    songTimeJumpRef.current = true;
+    lastFrameWallRef.current = 0;
     
     // Reset key arrays
     keysPressedRef.current = new Array(beatmap.keyCount).fill(false);
@@ -1401,6 +1450,8 @@ export default function GameplayCanvas({
     const targetMs = skipTargetMs;
     mainAudio.seekGameplayTimeMs(targetMs);
     audioTimeRef.current = targetMs;
+    lastSongTimeRef.current = targetMs;
+    songTimeJumpRef.current = true;
     smoothOffsetRef.current = settingsRef.current.audioOffset;
     laneGlowRef.current.fill(0);
     screenShakeRef.current = 0;
@@ -1413,8 +1464,11 @@ export default function GameplayCanvas({
       void mainAudio.playAsync(beatmap.bpm, settingsRef.current.audioOffset).then(() => {
         audioStartPendingRef.current = false;
         isPlayingRef.current = true;
-        audioTimeRef.current = mainAudio.getCurrentTimeMs();
-        snapVideoToAudio(audioTimeRef.current, true);
+        const now = mainAudio.getCurrentTimeMs();
+        audioTimeRef.current = now;
+        lastSongTimeRef.current = now;
+        songTimeJumpRef.current = true;
+        snapVideoToAudio(now, true);
       }).catch(() => {
         audioStartPendingRef.current = false;
       });
@@ -1452,8 +1506,11 @@ export default function GameplayCanvas({
             isPausedRef.current = false;
             isPlayingRef.current = true;
             void mainAudio.playAsync(beatmap.bpm, settings.audioOffset).then(() => {
-              audioTimeRef.current = mainAudio.getCurrentTimeMs();
-              snapVideoToAudio(audioTimeRef.current, true);
+              const now = mainAudio.getCurrentTimeMs();
+              audioTimeRef.current = now;
+              lastSongTimeRef.current = now;
+              songTimeJumpRef.current = true;
+              snapVideoToAudio(now, true);
             });
           }
           return prev - 1;
@@ -1490,7 +1547,9 @@ export default function GameplayCanvas({
 
       const freshTime = readGameplayTime();
       const inputTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime) ? explicitTime : freshTime;
-      advanceHoldTailTicks(notesRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
+        advanceHoldTailTicks(tickHoldsRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      }
       keysPressedRef.current[colIndex] = true;
       activeColumnsRef.current[colIndex] = true;
       laneGlowRef.current[colIndex] = 1.0;
@@ -1498,7 +1557,9 @@ export default function GameplayCanvas({
         hasKeyPressedOnceRef.current[colIndex] = true;
       }
       triggerHitEvent(colIndex, inputTime);
-      advanceHoldTailTicks(notesRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
+        advanceHoldTailTicks(tickHoldsRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      }
 
       if (!isReplayMode) {
         replayFramesRef.current.push({
@@ -1521,10 +1582,14 @@ export default function GameplayCanvas({
 
       const freshTime = readGameplayTime();
       const inputTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime) ? explicitTime : freshTime;
-      advanceHoldTailTicks(notesRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
+        advanceHoldTailTicks(tickHoldsRef.current, inputTime - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      }
       keysPressedRef.current[colIndex] = false;
       activeColumnsRef.current[colIndex] = false;
-      advanceHoldTailTicks(notesRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
+        advanceHoldTailTicks(tickHoldsRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      }
       
       triggerReleaseEvent(colIndex, inputTime);
 
@@ -2377,9 +2442,43 @@ export default function GameplayCanvas({
       if (sizeObserver && canvas) sizeObserver.observe(canvas);
     } catch { /* ResizeObserver unavailable */ }
 
-    // Track notes elapsed to trigger automatic Miss judgments
+    // Track notes elapsed to trigger automatic Miss judgments.
+    // Notes are time-sorted: advance a cursor past fully-settled prefixes so
+    // each frame scans only the active window instead of the whole chart.
+    // v2 tail ticks iterate only holds that own ticks (usually hundreds, not
+    // tens of thousands). Skipped work is judgement-neutral: settled notes
+    // can never auto-miss again, and future notes break early by sort order.
+    const isSettledForMissCursor = (n: HitObject): boolean => {
+      if (n.type !== 'hold') return n.isHit || n.isMissed;
+      if (n.holdRulesVersion === LAZER_HOLD_RULES_VERSION && n.holdState) {
+        return n.holdState.isHeadJudged && n.holdState.isTailJudged;
+      }
+      if (n.holdRulesVersion === HOLD_TICK_RULES_VERSION) {
+        if (!n.isReleased) return false;
+        return true;
+      }
+      // v1 continuous holds settle once released/failed.
+      return (n.isReleased || n.isHoldFailed) && (n.isHit || n.isMissed);
+    };
+    const advanceMissCursor = () => {
+      const all = notesRef.current;
+      let cursor = missCursorRef.current;
+      if (cursor < 0) cursor = 0;
+      if (cursor > all.length) cursor = all.length;
+      while (cursor < all.length && isSettledForMissCursor(all[cursor])) {
+        cursor++;
+      }
+      missCursorRef.current = cursor;
+      return cursor;
+    };
     const checkAutonomousMisses = (currentTime: number) => {
-      advanceHoldTailTicks(notesRef.current, currentTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+      if (holdRulesVersion === HOLD_TICK_RULES_VERSION && activeHoldTickIntervalMs !== undefined) {
+        const ticks = tickHoldsRef.current;
+        if (ticks.length > 0) {
+          advanceHoldTailTicks(ticks, currentTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+        }
+      }
+      const startIndex = advanceMissCursor();
       checkNotesAutonomousMisses(
         notesRef.current,
         currentTime,
@@ -2400,7 +2499,9 @@ export default function GameplayCanvas({
           applyJudgement(tailJudg, n.column, 'hold_tail');
           recordHitErrorSample(errorMs);
           mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
-        }
+        },
+        startIndex,
+        true,
       );
     };
 
@@ -2415,17 +2516,75 @@ export default function GameplayCanvas({
       const width = cached.width || activeCanvas.clientWidth || activeCanvas.width / dpr;
       const height = cached.height || activeCanvas.clientHeight || activeCanvas.height / dpr;
 
-      // Smoothly slide the rendering offset towards the actual audioOffset to prevent note visual teleportations mid-flight:
-      smoothOffsetRef.current += (currentSettings.audioOffset - smoothOffsetRef.current) * 0.08;
+      const frameWallNow = performance.now();
+      const lastWall = lastFrameWallRef.current;
+      const wallDtMs = lastWall > 0 ? Math.max(0, Math.min(100, frameWallNow - lastWall)) : 16.7;
+      lastFrameWallRef.current = frameWallNow;
+
+      // Frame-rate independent offset smoothing (tau ~125ms). The old fixed
+      // 0.08 factor converged faster on high-refresh displays, making offset
+      // touches teleport notes further per second on 120Hz+ screens.
+      {
+        const target = currentSettings.audioOffset || 0;
+        const alpha = 1 - Math.exp(-wallDtMs / 125);
+        smoothOffsetRef.current += (target - smoothOffsetRef.current) * alpha;
+      }
 
       let songTime;
+      let judgeTime;
       if (isScrubbingRef.current) {
         songTime = audioTimeRef.current;
+        judgeTime = songTime;
+        lastSongTimeRef.current = songTime;
+        songTimeJumpRef.current = true;
+      } else if (audioStartPendingRef.current) {
+        // AudioContext still resuming: hold the parked lead-in value instead
+        // of reading the stopped clock (0), which previously caused a full
+        // startDelay teleport on the first armed frame.
+        songTime = lastSongTimeRef.current;
+        judgeTime = songTime;
+        audioTimeRef.current = judgeTime;
       } else {
-        const offsetDiff = currentSettings.audioOffset - smoothOffsetRef.current;
+        const offsetDiff = (currentSettings.audioOffset || 0) - smoothOffsetRef.current;
         const rawSongTime = mainAudio.getCurrentTimeMs();
-        songTime = rawSongTime + offsetDiff;
-        audioTimeRef.current = songTime;
+        const targetSongTime = rawSongTime + offsetDiff;
+        if (!Number.isFinite(targetSongTime)) {
+          songTime = lastSongTimeRef.current;
+          judgeTime = songTime;
+        } else {
+          judgeTime = targetSongTime;
+          if (songTimeJumpRef.current) {
+            songTime = targetSongTime;
+            songTimeJumpRef.current = false;
+          } else {
+            const last = lastSongTimeRef.current;
+            let delta = targetSongTime - last;
+            // Intentional seeks/skips/rate edges set the jump flag upstream,
+            // so anything reaching here should be continuous. Clamp hitches
+            // (GC, video seek, audio quant) to a quick glide instead of a
+            // one-frame teleport. Judgement below uses judgeTime (audio
+            // truth); only visuals use the slewed songTime.
+            const liveRate = mainAudio.playbackRate;
+            const rate = Number.isFinite(liveRate) && liveRate > 0 ? liveRate : 1;
+            const maxForward = wallDtMs * rate + 40;
+            const maxBackward = 25;
+            if (delta > maxForward) {
+              delta = maxForward + (delta - maxForward) * 0.15;
+            } else if (delta < -maxBackward) {
+              delta = -maxBackward + (delta + maxBackward) * 0.15;
+            }
+            // Never run ahead of the audio truth by more than the slack, and
+            // never fall more than ~250ms behind even under sustained hitches.
+            const hardAhead = 60;
+            const hardBehind = 250;
+            let next = last + delta;
+            if (next > targetSongTime + hardAhead) next = targetSongTime + hardAhead;
+            if (next < targetSongTime - hardBehind) next = targetSongTime - hardBehind;
+            songTime = next;
+          }
+        }
+        lastSongTimeRef.current = songTime;
+        audioTimeRef.current = judgeTime;
       }
 
       // Dynamic playback rate updates for WU (Wind Up), WD (Wind Down), and AS (Adaptive Speed)
@@ -2446,7 +2605,7 @@ export default function GameplayCanvas({
 
       if ((isWU || isWD) && isPlayingRef.current && !isPausedRef.current) {
         const totalDuration = Math.max(1, (beatmap.duration || 10) * 1000);
-        const progress = Math.max(0, Math.min(1, (songTime - firstNoteTime) / totalDuration));
+        const progress = Math.max(0, Math.min(1, (judgeTime - firstNoteTime) / totalDuration));
         const targetRate = isWU ? (1.0 + 0.5 * progress) : (1.0 - 0.25 * progress);
         if (Math.abs(mainAudio.playbackRate - targetRate) > 0.01) {
           mainAudio.setPlaybackRate(targetRate);
@@ -2477,7 +2636,7 @@ export default function GameplayCanvas({
             let inBreak = false;
             for (let i = 0; i < songBreaks.length; i++) {
               const section = songBreaks[i];
-              if (songTime >= section.startTime && songTime < section.endTime) {
+              if (judgeTime >= section.startTime && judgeTime < section.endTime) {
                 inBreak = true;
                 break;
               }
@@ -2489,7 +2648,7 @@ export default function GameplayCanvas({
           }
 
           if (introSkippable && !hasSkippedIntroRef.current && !isPrePlayRef.current) {
-            const shouldShow = !isPausedRef.current && !scoreStateRef.current.failed && isSkipWindowActive(songTime, firstNoteTime, false, INTRO_SKIP_THRESHOLD_MS);
+            const shouldShow = !isPausedRef.current && !scoreStateRef.current.failed && isSkipWindowActive(judgeTime, firstNoteTime, false, INTRO_SKIP_THRESHOLD_MS);
             if (shouldShow !== skipVisibleRef.current) {
               skipVisibleRef.current = shouldShow;
               setIsSkipVisible(shouldShow);
@@ -2503,14 +2662,14 @@ export default function GameplayCanvas({
           // Quantized so the gradient/width strings stay stable between flushes.
           if (progressBarRef.current) {
             const totalDurationMs = beatmap.duration * 1000;
-            const rawPercent = totalDurationMs > 0 ? Math.min(100, Math.max(0, (songTime / totalDurationMs) * 100)) : 0;
+            const rawPercent = totalDurationMs > 0 ? Math.min(100, Math.max(0, (judgeTime / totalDurationMs) * 100)) : 0;
             const progressPercent = Math.round(rawPercent * 10) / 10;
             if (progressPercent !== lastProgressPercentRef.current) {
               lastProgressPercentRef.current = progressPercent;
               if (progressBarRef.current.tagName === 'INPUT') {
                 const inputEl = progressBarRef.current as HTMLInputElement;
                 if (!isScrubbingRef.current) {
-                  inputEl.value = (Math.max(0, songTime)).toString();
+                  inputEl.value = (Math.max(0, judgeTime)).toString();
                   const bg = `linear-gradient(to right, #06b6d4 ${progressPercent}%, rgba(255,255,255,0.15) ${progressPercent}%)`;
                   if (bg !== lastScrubberBgRef.current) {
                     lastScrubberBgRef.current = bg;
@@ -2524,18 +2683,18 @@ export default function GameplayCanvas({
                 }
               }
             } else if (progressBarRef.current.tagName === 'INPUT' && !isScrubbingRef.current) {
-              // Percent bucket unchanged but songTime moved: keep scrubber
+              // Percent bucket unchanged but judgeTime moved: keep scrubber
               // position live without rebuilding the gradient string.
-              (progressBarRef.current as HTMLInputElement).value = (Math.max(0, songTime)).toString();
+              (progressBarRef.current as HTMLInputElement).value = (Math.max(0, judgeTime)).toString();
             }
           }
 
           if (timeLabelRef.current && !isScrubbingRef.current) {
             const totalMs = beatmap.duration * 1000;
-            const elapsedSec = Math.floor(Math.max(0, songTime) / 1000);
+            const elapsedSec = Math.floor(Math.max(0, judgeTime) / 1000);
             if (elapsedSec !== lastElapsedSecRef.current) {
               lastElapsedSecRef.current = elapsedSec;
-              const nextText = `${formatMsToMinSec(songTime)} / ${formatMsToMinSec(totalMs)}`;
+              const nextText = `${formatMsToMinSec(judgeTime)} / ${formatMsToMinSec(totalMs)}`;
               if (timeLabelRef.current.innerText !== nextText) {
                 timeLabelRef.current.innerText = nextText;
               }
@@ -2544,7 +2703,7 @@ export default function GameplayCanvas({
           if (timeLeftLabelRef.current && !isScrubbingRef.current) {
             if (isReplayMode || (!isAutoplay && !isPrePlay)) {
               const totalMs = beatmap.duration * 1000;
-              const remainMs = Math.max(0, totalMs - Math.max(0, songTime));
+              const remainMs = Math.max(0, totalMs - Math.max(0, judgeTime));
               const remainSec = Math.floor(remainMs / 1000);
               if (remainSec !== lastRemainSecRef.current) {
                 lastRemainSecRef.current = remainSec;
@@ -2591,7 +2750,7 @@ export default function GameplayCanvas({
           const difficulty = penarDifficultyRef.current;
           live.penar = computeLivePenar({
             timedAttributes: timedPenarRef.current,
-            progressTime: songTime,
+            progressTime: judgeTime,
             fallbackStarRating: difficulty ? difficulty.starRating : null,
             marvelousCount: live.marvelousCount,
             perfectCount: live.perfectCount,
@@ -2647,17 +2806,22 @@ export default function GameplayCanvas({
 
       // Replay simulation playback
       if (replayData && replayData.length > 0 && isPlayingRef.current && !isPaused) {
-        consumeReplayFrames(replayData, replayCursorRef.current, songTime, frame => {
+        consumeReplayFrames(replayData, replayCursorRef.current, judgeTime, frame => {
           audioTimeRef.current = frame.time;
-          if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
-            advanceHoldTailTicks(notesRef.current, frame.time - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+          if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
+            advanceHoldTailTicks(tickHoldsRef.current, frame.time - TICK_BOUNDARY_EPSILON_MS, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
           }
           checkNotesAutonomousMisses(
             notesRef.current,
             frame.time,
             missJudg.windowMs,
             (note) => applyJudgement(missJudg, note.column),
-            keysPressedRef.current
+            keysPressedRef.current,
+            isNoRelease,
+            judgementWindows,
+            undefined,
+            0,
+            false,
           );
           for (let col = 0; col < beatmap.keyCount; col++) {
             const wasPressed = keysPressedRef.current[col];
@@ -2676,41 +2840,74 @@ export default function GameplayCanvas({
               triggerReleaseEvent(col, frame.time);
             }
           }
-          if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
-            advanceHoldTailTicks(notesRef.current, frame.time, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+          if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
+            advanceHoldTailTicks(tickHoldsRef.current, frame.time, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
           }
         });
-        audioTimeRef.current = songTime;
+        audioTimeRef.current = judgeTime;
         checkNotesAutonomousMisses(
           notesRef.current,
-          songTime,
+          judgeTime,
           missJudg.windowMs,
           (note) => applyJudgement(missJudg, note.column),
-          keysPressedRef.current
+          keysPressedRef.current,
+          isNoRelease,
+          judgementWindows,
+          undefined,
+          missCursorRef.current,
+          true,
         );
-        if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
-          advanceHoldTailTicks(notesRef.current, songTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+        if (holdRulesVersion === HOLD_TICK_RULES_VERSION && activeHoldTickIntervalMs !== undefined) {
+          const ticks = tickHoldsRef.current;
+          if (ticks.length > 0) {
+            advanceHoldTailTicks(ticks, judgeTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
+          }
         }
       }
 
       if (isPlayingRef.current && !isPaused && unpauseCountdown === 0) {
         if (isAutoplay) {
+          // Cursor-accelerated autoplay: notes are time-sorted, so advance a
+          // pointer instead of scanning the whole chart every frame. Backwards
+          // seeks reset the cursor via songTimeJump handling in handleSeek.
+          const allAutoNotes = notesRef.current;
+          let autoCursor = autoplayCursorRef.current;
+          if (autoCursor < 0) autoCursor = 0;
+          if (autoCursor > allAutoNotes.length) autoCursor = allAutoNotes.length;
+          // Rewind the cursor only as far as needed when judgeTime moved
+          // backwards (smoothing never moves logic time backwards except on
+          // jumps, which reset the cursor upstream).
+          if (autoCursor > 0 && autoCursor <= allAutoNotes.length) {
+            const probe = allAutoNotes[autoCursor - 1];
+            const probeEnd = probe.type === 'hold' && probe.endTime !== undefined ? probe.endTime : probe.time;
+            if (probeEnd > judgeTime + missJudg.windowMs + 1) {
+              autoCursor = 0;
+            }
+          }
           const dueEvents: { type: 'head' | 'tail'; note: HitObject; eventTime: number }[] = [];
 
-          for (const note of notesRef.current) {
-            if (!note.isHit && !note.isMissed && note.time <= songTime) {
+          for (let ai = autoCursor; ai < allAutoNotes.length; ai++) {
+            const note = allAutoNotes[ai];
+            if (note.time > judgeTime && (note.endTime === undefined || note.endTime > judgeTime)) {
+              // Heads and tails are both future beyond this point (sorted).
+              autoCursor = ai;
+              break;
+            }
+            if (ai === allAutoNotes.length - 1) autoCursor = allAutoNotes.length;
+            if (!note.isHit && !note.isMissed && note.time <= judgeTime) {
               dueEvents.push({ type: 'head', note, eventTime: note.time });
             }
             if (
               note.type === 'hold' &&
               !note.isReleased &&
               note.endTime !== undefined &&
-              note.endTime <= songTime &&
+              note.endTime <= judgeTime &&
               (note.holdRulesVersion === LAZER_HOLD_RULES_VERSION || note.holdRulesVersion === HOLD_TICK_RULES_VERSION || (note.isHit && !note.isHoldFailed))
             ) {
               dueEvents.push({ type: 'tail', note, eventTime: note.endTime });
             }
           }
+          autoplayCursorRef.current = autoCursor;
 
           if (dueEvents.length > 0) {
             dueEvents.sort((a, b) => a.eventTime - b.eventTime);
@@ -2776,12 +2973,22 @@ export default function GameplayCanvas({
             } else {
               holdKeys.fill(true);
             }
-            advanceHoldTailTicks(
-              notesRef.current,
-              songTime,
-              holdKeys,
-              note => applyJudgement(missJudg, note.column),
-            );
+            const autoTicks = tickHoldsRef.current;
+            if (autoTicks.length > 0) {
+              advanceHoldTailTicks(
+                autoTicks,
+                judgeTime,
+                holdKeys,
+                note => applyJudgement(missJudg, note.column),
+              );
+            } else {
+              advanceHoldTailTicks(
+                notesRef.current,
+                judgeTime,
+                holdKeys,
+                note => applyJudgement(missJudg, note.column),
+              );
+            }
           }
 
           // Maintain active receptor/lane state for holds, including chords.
@@ -2808,7 +3015,7 @@ export default function GameplayCanvas({
           }
         }
 
-        if (!isReplayMode) checkAutonomousMisses(songTime);
+        if (!isReplayMode) checkAutonomousMisses(judgeTime);
         
         // Continuous Video-Audio phase lock (PI PLL + transport snaps elsewhere)
         if (videoRef.current) {
@@ -2937,9 +3144,10 @@ export default function GameplayCanvas({
         // Hit-error meters draw in the 6Hz HUD flush above, never per-frame.
       }
 
-      // Check if song completed naturally or run loops
+      // Check if song completed naturally or run loops (audio truth, not the
+      // slewed visual clock, so completion never lags a catch-up glide).
       const songDurationMs = beatmap.duration * 1000;
-      if (songTime >= songDurationMs && !scoreStateRef.current.completed && isPlayingRef.current) {
+      if (judgeTime >= songDurationMs && !scoreStateRef.current.completed && isPlayingRef.current) {
         scoreStateRef.current.completed = true;
         isPlayingRef.current = false;
         mainAudio.stop();
@@ -3041,8 +3249,11 @@ export default function GameplayCanvas({
         isPausedRef.current = false;
         isPlayingRef.current = true;
         void mainAudio.playAsync(beatmap.bpm, settingsRef.current.audioOffset).then(() => {
-          audioTimeRef.current = mainAudio.getCurrentTimeMs();
-          snapVideoToAudio(audioTimeRef.current, true);
+          const now = mainAudio.getCurrentTimeMs();
+          audioTimeRef.current = now;
+          lastSongTimeRef.current = now;
+          songTimeJumpRef.current = true;
+          snapVideoToAudio(now, true);
         });
       } else {
         setUnpauseCountdown(3);
@@ -3098,6 +3309,12 @@ export default function GameplayCanvas({
       }
       return playNote;
     });
+    notesRef.current.sort((a, b) => a.time - b.time);
+    tickHoldsRef.current = notesRef.current.filter(
+      (n) => n.type === 'hold' && n.nextTailTickTime !== undefined,
+    );
+    missCursorRef.current = 0;
+    autoplayCursorRef.current = 0;
 
     // 2. Reset keyboard arrays
     keysPressedRef.current = new Array(beatmap.keyCount).fill(false);
@@ -3572,6 +3789,8 @@ export default function GameplayCanvas({
     }
 
     audioTimeRef.current = boundedTime;
+    lastSongTimeRef.current = boundedTime;
+    songTimeJumpRef.current = true;
     isPlayingRef.current = wasPlayingRef.current;
     hudPendingRef.current.score = scoreStateRef.current.score;
     hudPendingRef.current.combo = scoreStateRef.current.combo;
@@ -3587,6 +3806,10 @@ export default function GameplayCanvas({
   const handleSeek = (newTimeMs: number) => {
     mainAudio.seekGameplayTimeMs(newTimeMs);
     audioTimeRef.current = newTimeMs;
+    lastSongTimeRef.current = newTimeMs;
+    songTimeJumpRef.current = true;
+    missCursorRef.current = 0;
+    autoplayCursorRef.current = 0;
     smoothOffsetRef.current = settings.audioOffset;
     snapVideoToAudio(newTimeMs, false);
     
@@ -3663,12 +3886,31 @@ export default function GameplayCanvas({
     setIsPaused(false);
     isPausedRef.current = false;
     setIsPrePlay(false);
+    // Hold the visual timeline at the lead-in start while the AudioContext
+    // resumes. The render loop freezes here until playAsync arms the clock
+    // at the same value, so there is no 0 -> -delay teleport.
+    {
+      const startOffset = settingsRef.current.audioOffset || 0;
+      const parked = -startDelayMs - startOffset;
+      audioTimeRef.current = parked;
+      lastSongTimeRef.current = parked;
+      smoothOffsetRef.current = startOffset;
+    }
+    songTimeJumpRef.current = true;
+    lastFrameWallRef.current = 0;
+    missCursorRef.current = 0;
+    autoplayCursorRef.current = 0;
     audioStartPendingRef.current = true;
     void mainAudio.playAsync(beatmap.bpm, settings.audioOffset, startDelayMs).then(() => {
       audioStartPendingRef.current = false;
       isPlayingRef.current = true;
-      audioTimeRef.current = mainAudio.getCurrentTimeMs();
-      snapVideoToAudio(audioTimeRef.current, true);
+      const now = mainAudio.getCurrentTimeMs();
+      // Accept the freshly armed clock without slewing: it should already
+      // equal the parked lead-in value.
+      audioTimeRef.current = now;
+      lastSongTimeRef.current = now;
+      songTimeJumpRef.current = true;
+      snapVideoToAudio(now, true);
     }).catch(() => {
       audioStartPendingRef.current = false;
     });
@@ -4294,6 +4536,10 @@ export default function GameplayCanvas({
                                 handleSeek(newTime);
                                 if (wasPlayingRef.current) {
                                     void mainAudio.playAsync(beatmap.bpm, settings.audioOffset).then(() => {
+                                      const now = mainAudio.getCurrentTimeMs();
+                                      audioTimeRef.current = now;
+                                      lastSongTimeRef.current = now;
+                                      songTimeJumpRef.current = true;
                                       snapVideoToAudio(newTime, true);
                                     });
                                 }
@@ -4313,6 +4559,10 @@ export default function GameplayCanvas({
                                 }
                                 simulateGameToTime(newTime);
                                 audioTimeRef.current = newTime;
+                                lastSongTimeRef.current = newTime;
+                                songTimeJumpRef.current = true;
+                                missCursorRef.current = 0;
+                                autoplayCursorRef.current = 0;
                                 const now = performance.now();
                                 if (now - lastVideoSeekTimeRef.current > 80) {
                                     snapVideoToAudio(newTime, false);
