@@ -24,9 +24,19 @@ import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { HOLD_TICK_RULES_VERSION } from '../utils/holdTickRules';
 import { LAZER_HOLD_RULES_VERSION } from '../ruleset/mania/holdNote';
 
+const EMPTY_TAIL_INTERVALS: Array<{ startTime: number; endTime: number }> = [];
+
 function mergeTailIntervals(
   intervals: Array<{ startTime: number; endTime: number }>,
 ): Array<{ startTime: number; endTime: number }> {
+  if (intervals.length === 0) return EMPTY_TAIL_INTERVALS;
+  if (intervals.length === 1) {
+    const only = intervals[0];
+    if (!Number.isFinite(only.startTime) || !Number.isFinite(only.endTime) || only.endTime <= only.startTime) {
+      return [];
+    }
+    return [{ startTime: only.startTime, endTime: only.endTime }];
+  }
   const merged: Array<{ startTime: number; endTime: number }> = [];
   const ordered = [...intervals]
     .filter(interval => Number.isFinite(interval.startTime) && Number.isFinite(interval.endTime) && interval.endTime > interval.startTime)
@@ -36,7 +46,7 @@ function mergeTailIntervals(
     if (previous && interval.startTime <= previous.endTime + 0.001) {
       previous.endTime = Math.max(previous.endTime, interval.endTime);
     } else {
-      merged.push({ ...interval });
+      merged.push({ startTime: interval.startTime, endTime: interval.endTime });
     }
   }
   return merged;
@@ -106,8 +116,10 @@ export function getVisibleNotes(
   scrollModel?: ScrollModel | null,
   combo: number = 0,
   breaks: Array<{ startTime: number; endTime: number }> = [],
+  out?: VisibleNote[],
 ): VisibleNote[] {
-  const visible: VisibleNote[] = [];
+  const visible: VisibleNote[] = out ?? [];
+  if (out) out.length = 0;
   const paddingLimit = 100;
   const up = settings.upsurfaceNoteMode;
   const noteOpacityVal = settings.noteOpacity ?? 1.0;
@@ -299,9 +311,9 @@ export function getVisibleNotes(
     const baseBodyEndTime = endpointTailStartTime !== undefined
       ? Math.min(bodyEndTime ?? endpointTailStartTime, endpointTailStartTime)
       : bodyEndTime;
-    const visualMissedIntervals = usesTailTicks
-      ? mergeTailIntervals(n.missedTailIntervals || [])
-      : [];
+    const visualMissedIntervals = usesTailTicks && n.missedTailIntervals && n.missedTailIntervals.length > 0
+      ? mergeTailIntervals(n.missedTailIntervals)
+      : EMPTY_TAIL_INTERVALS;
 
     // When a late-start player begins holding immediately after a missed run,
     // bridge only that small visual handoff gap. This keeps the missed run as
@@ -343,9 +355,9 @@ export function getVisibleNotes(
             ? visualPrefixEndTime
             : Math.min(baseBodyEndTime, visualPrefixEndTime);
           if (prefixEndTime > n.time) {
-            const clearedIntervals = isEarlyReleased
-              ? mergeTailIntervals(n.clearedTailIntervals || [])
-              : [];
+            const clearedIntervals = isEarlyReleased && n.clearedTailIntervals && n.clearedTailIntervals.length > 0
+              ? mergeTailIntervals(n.clearedTailIntervals)
+              : EMPTY_TAIL_INTERVALS;
             let prefixCursor = n.time;
             for (const cleared of clearedIntervals) {
               const clearedStart = Math.max(prefixCursor, cleared.startTime);
@@ -380,10 +392,15 @@ export function getVisibleNotes(
         // once the head is engaged. Subtracting them again would create a
         // visible gap at every tick. Missed intervals remain explicit holes so
         // their unhit texture can stay on-screen until it scrolls away.
-        const consumedIntervals = mergeTailIntervals([
-          ...(tailEngaged ? [] : (n.clearedTailIntervals || [])),
-          ...visualMissedIntervals,
-        ]);
+        const clearedForConsume = tailEngaged ? undefined : n.clearedTailIntervals;
+        const hasClearedForConsume = !!clearedForConsume && clearedForConsume.length > 0;
+        const hasMissedForConsume = visualMissedIntervals.length > 0;
+        const consumedIntervals = (!hasClearedForConsume && !hasMissedForConsume)
+          ? EMPTY_TAIL_INTERVALS
+          : mergeTailIntervals([
+              ...(hasClearedForConsume ? clearedForConsume! : []),
+              ...visualMissedIntervals,
+            ]);
         for (const consumed of consumedIntervals) {
           const consumedStart = Math.max(bodyStartTime, consumed.startTime);
           const consumedEnd = baseBodyEndTime === undefined
@@ -407,7 +424,7 @@ export function getVisibleNotes(
         return segments;
       })()
       : undefined;
-    const missedTailSegments = usesTailTicks
+    const missedTailSegments = usesTailTicks && visualMissedIntervals.length > 0
       ? visualMissedIntervals.map(segment => ({
         startY: getScrollYPosition(segment.startTime, visualTime, receptorY, speedFactor, up, scrollModel),
         endY: getScrollYPosition(segment.endTime, visualTime, receptorY, speedFactor, up, scrollModel),

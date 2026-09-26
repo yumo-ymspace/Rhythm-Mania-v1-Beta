@@ -10,13 +10,11 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import { hexToRgba } from './color';
+import { cachedDarkenRgba, cachedHexToRgba, cachedLightenRgba } from './colorCache';
 import {
   ARGON_COLUMN_GAP,
   ARGON_CORNER_RADIUS,
   ARGON_NOTE_ACCENT_RATIO,
-  argonDarken,
-  argonLighten,
   getArgonNoteHeight,
 } from './argonSkin';
 import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
@@ -84,20 +82,20 @@ function drawArgonNotePiece(
   const accentY = topY + height - accentH;
 
   if (variant === 'holdTail') {
-    ctx.fillStyle = argonDarken(color, 0.6);
+    ctx.fillStyle = cachedDarkenRgba(color, 0.6, 1);
     ctx.beginPath();
     ctx.roundRect(x, accentY, width, accentH, ARGON_CORNER_RADIUS);
     ctx.fill();
     const additive = ctx.createLinearGradient(x, accentY, x, accentY + accentH * 0.5);
-    additive.addColorStop(0, hexToRgba(color, 0.4));
-    additive.addColorStop(1, hexToRgba(color, 0));
+    additive.addColorStop(0, cachedHexToRgba(color, 0.4));
+    additive.addColorStop(1, cachedHexToRgba(color, 0));
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = additive;
     ctx.fillRect(x, accentY, width, accentH * 0.5);
     ctx.globalCompositeOperation = 'source-over';
   } else {
     const accent = ctx.createLinearGradient(x, accentY, x, topY + height);
-    accent.addColorStop(0, argonLighten(color, 0.1));
+    accent.addColorStop(0, cachedLightenRgba(color, 0.1, 1));
     accent.addColorStop(1, color);
     ctx.fillStyle = accent;
     ctx.beginPath();
@@ -151,12 +149,12 @@ function drawArgonHoldBody(
   } else {
     ctx.roundRect(x, y, width, height, ARGON_CORNER_RADIUS);
   }
-  ctx.fillStyle = isFailed ? 'rgb(48,52,64)' : argonDarken(color, 0.6);
+  ctx.fillStyle = isFailed ? 'rgb(48,52,64)' : cachedDarkenRgba(color, 0.6, 1);
   ctx.fill();
   if (isHitting && !isFailed) {
     ctx.globalCompositeOperation = 'lighter';
     const pulse = 0.75 + 0.25 * Math.sin((visualTime / 160) * Math.PI * 2);
-    ctx.fillStyle = hexToRgba(argonLighten(color, 0.2), 0.3 * pulse);
+    ctx.fillStyle = cachedLightenRgba(color, 0.2, 0.3 * pulse);
     ctx.fill();
   }
   ctx.restore();
@@ -183,7 +181,7 @@ export function renderArgonPlayfield(
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(inset.x, 0, inset.width, height, ARGON_CORNER_RADIUS);
-    ctx.fillStyle = hexToRgba(argonDarken(color, 3), 0.8);
+    ctx.fillStyle = cachedDarkenRgba(color, 3, 0.8);
     ctx.fill();
 
     const press = Math.max(col.glow, col.pressed ? 1 : 0);
@@ -194,8 +192,8 @@ export function renderArgonPlayfield(
         inset.x,
         upscroll ? receptorY : height,
       );
-      overlay.addColorStop(0, hexToRgba(color, 0));
-      overlay.addColorStop(1, hexToRgba(color, 0.6 * press));
+      overlay.addColorStop(0, cachedHexToRgba(color, 0));
+      overlay.addColorStop(1, cachedHexToRgba(color, 0.6 * press));
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = overlay;
       if (upscroll) {
@@ -352,7 +350,7 @@ export function renderArgonPlayfield(
     // Cheap outer glow (no shadowBlur: shadow forces a software raster pass).
     if (pressed) {
       ctx.save();
-      ctx.fillStyle = hexToRgba(color, 0.28);
+      ctx.fillStyle = cachedHexToRgba(color, 0.28);
       ctx.beginPath();
       ctx.roundRect(inset.x + (inset.width - ovalW) / 2 - 6, ovalY - 6, ovalW + 12, ovalH + 12, (ovalH + 12) / 2);
       ctx.fill();
@@ -363,7 +361,7 @@ export function renderArgonPlayfield(
     ctx.lineWidth = 4;
     ctx.strokeStyle = '#ffffff';
     if (pressed) {
-      ctx.fillStyle = hexToRgba(color, 0.85);
+      ctx.fillStyle = cachedHexToRgba(color, 0.85);
       ctx.fill();
     }
     ctx.stroke();

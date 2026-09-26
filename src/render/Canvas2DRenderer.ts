@@ -13,14 +13,14 @@
 import { IPlayfieldRenderer, PlayfieldFrame, InitOpts, VisibleNote } from './types';
 import { renderArgonPlayfield } from './argonPlayfield';
 import { isArgonSkin } from './argonSkin';
-import { hexToRgba } from './color';
+import { cachedHexToRgba } from './colorCache';
 import { getLaneColors } from './skinTheme';
 import { getNoteVisualY } from './playfieldLayout';
 import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { mergeVisibleTailSegments } from './tailSegments';
 
 function applyFade(colorStr: string, stopOpacity: number) {
-  return hexToRgba(colorStr, stopOpacity);
+  return cachedHexToRgba(colorStr, stopOpacity);
 }
 
 /**
@@ -176,7 +176,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         // Cheap glow: translucent under-fill instead of shadowBlur.
         ctx.beginPath();
         ctx.arc(cx, cy, r * 0.5 + 5, 0, Math.PI * 2);
-        ctx.fillStyle = hexToRgba(noteColor, 0.30);
+        ctx.fillStyle = cachedHexToRgba(noteColor, 0.30);
         ctx.fill();
         ctx.beginPath();
         ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
@@ -186,7 +186,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         const dynamicColor = noteObj.isHoldFailed ? '#64748b' : noteColorFor(noteObj.column);
         const barHeight = 8 * noteScale;
         if (!noteObj.isHoldFailed) {
-          ctx.strokeStyle = hexToRgba(dynamicColor, 0.35);
+          ctx.strokeStyle = cachedHexToRgba(dynamicColor, 0.35);
           ctx.lineWidth = 5;
           ctx.beginPath();
           ctx.roundRect(rx, ey - barHeight / 2, rw, barHeight, 2);
@@ -210,7 +210,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         ctx.globalAlpha = currentOpacity * 0.55;
         ctx.fill();
 
-        ctx.strokeStyle = hexToRgba(noteColor, 0.85);
+        ctx.strokeStyle = cachedHexToRgba(noteColor, 0.85);
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
@@ -270,26 +270,26 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
           } else if (settingsSlice.playfieldStyle !== 'circle') {
              const rmColor = noteColorFor(n.column);
              if (n.isHit && !n.isReleased) {
-               holdGrad.addColorStop(0, applyFade(hexToRgba(rmColor, 0.8), fadeStart));
-               holdGrad.addColorStop(1, applyFade(hexToRgba(rmColor, 0.3), fadeEnd));
+               holdGrad.addColorStop(0, applyFade(cachedHexToRgba(rmColor, 0.8), fadeStart));
+               holdGrad.addColorStop(1, applyFade(cachedHexToRgba(rmColor, 0.3), fadeEnd));
             } else if (n.isHoldFailed) {
               holdGrad.addColorStop(0, applyFade('rgba(100,116,139,0.3)', fadeStart));
               holdGrad.addColorStop(1, applyFade('rgba(71,85,105,0.1)', fadeEnd));
             } else {
-              holdGrad.addColorStop(0, applyFade(hexToRgba(rmColor, 0.6), fadeStart));
-              holdGrad.addColorStop(1, applyFade(hexToRgba(rmColor, 0.2), fadeEnd));
+              holdGrad.addColorStop(0, applyFade(cachedHexToRgba(rmColor, 0.6), fadeStart));
+              holdGrad.addColorStop(1, applyFade(cachedHexToRgba(rmColor, 0.2), fadeEnd));
             }
           } else {
              const noteColor = noteColorFor(n.column);
              if (n.isHit && !n.isReleased) {
-               holdGrad.addColorStop(0, applyFade(hexToRgba(noteColor, 0.8), fadeStart));
-               holdGrad.addColorStop(1, applyFade(hexToRgba(noteColor, 0.3), fadeEnd));
+               holdGrad.addColorStop(0, applyFade(cachedHexToRgba(noteColor, 0.8), fadeStart));
+               holdGrad.addColorStop(1, applyFade(cachedHexToRgba(noteColor, 0.3), fadeEnd));
             } else if (n.isHoldFailed) {
               holdGrad.addColorStop(0, applyFade('rgba(100,116,139,0.3)', fadeStart));
               holdGrad.addColorStop(1, applyFade('rgba(71,85,105,0.1)', fadeEnd));
             } else {
-                holdGrad.addColorStop(0, applyFade(hexToRgba(noteColor, 0.6), fadeStart));
-                holdGrad.addColorStop(1, applyFade(hexToRgba(noteColor, 0.2), fadeEnd));
+                holdGrad.addColorStop(0, applyFade(cachedHexToRgba(noteColor, 0.6), fadeStart));
+                holdGrad.addColorStop(1, applyFade(cachedHexToRgba(noteColor, 0.2), fadeEnd));
             }
           }
 
@@ -647,7 +647,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
             // Cheap glow underlay instead of shadowBlur.
             ctx.beginPath();
             ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
-            ctx.fillStyle = hexToRgba(noteColor, 0.30);
+            ctx.fillStyle = cachedHexToRgba(noteColor, 0.30);
             ctx.fill();
             ctx.beginPath();
             ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -690,7 +690,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
             ctx.stroke();
 
             // Second pass replaces the shadowBlur glow with a cheap alpha stroke.
-            ctx.strokeStyle = hexToRgba(noteStroke, 0.35);
+            ctx.strokeStyle = cachedHexToRgba(noteStroke, 0.35);
             ctx.lineWidth = 5;
             ctx.stroke();
           } else {
@@ -756,7 +756,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
           ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          ctx.strokeStyle = hexToRgba(rcColor, 0.85);
+          ctx.strokeStyle = cachedHexToRgba(rcColor, 0.85);
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -764,7 +764,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
           ctx.stroke();
           ctx.setLineDash([]);
 
-          ctx.fillStyle = hexToRgba(rcColor, 0.22);
+          ctx.fillStyle = cachedHexToRgba(rcColor, 0.22);
           ctx.beginPath();
           ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
           ctx.fill();
@@ -780,7 +780,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         const ry = receptorY - rh / 2;
 
         if (isPressed) {
-          ctx.fillStyle = hexToRgba(rcColor, 0.45);
+          ctx.fillStyle = cachedHexToRgba(rcColor, 0.45);
           ctx.fillRect(rx, ry - 3, rw, rh + 6);
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(rx, ry, rw, rh);
@@ -792,8 +792,8 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
             xPos,
             receptorY
           );
-          flashGrad.addColorStop(0, hexToRgba(rcColor, 0.35));
-          flashGrad.addColorStop(1, hexToRgba(rcColor, 0));
+          flashGrad.addColorStop(0, cachedHexToRgba(rcColor, 0.35));
+          flashGrad.addColorStop(1, cachedHexToRgba(rcColor, 0));
           ctx.fillStyle = flashGrad;
           ctx.fillRect(
             xPos,
@@ -812,9 +812,9 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
         const rx = xPos + (colW - rw) / 2;
         const ry = receptorY - rh / 2;
 
-        ctx.strokeStyle = isPressed ? '#ffffff' : hexToRgba(rcColor, 0.85);
+        ctx.strokeStyle = isPressed ? '#ffffff' : cachedHexToRgba(rcColor, 0.85);
         ctx.lineWidth = isPressed ? 3.5 : 2;
-        ctx.fillStyle = isPressed ? hexToRgba(rcColor, 0.45) : 'rgba(15, 23, 42, 0.85)';
+        ctx.fillStyle = isPressed ? cachedHexToRgba(rcColor, 0.45) : 'rgba(15, 23, 42, 0.85)';
 
         ctx.beginPath();
         ctx.roundRect(rx, ry, rw, rh, 6);

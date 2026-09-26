@@ -297,7 +297,7 @@ export interface GameSettings {
   disableVideo?: boolean; // whether background video playback is completely disabled
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
   disableComboBurst?: boolean; // hide the combo milestone burst popup
-  limitDprToOne?: boolean; // cap canvas device pixel ratio to 1x to save GPU rendering cost
+  renderDpr?: number; // user-selectable canvas device pixel ratio: 1, 1.5, or 2
   skinId?: string; // 'argon' (default Canvas2D reference) | 'custom' | legacy ids
   customSkinColors?: string[]; // user parsed custom colors: [blueKeyColor, whiteKeyColor, accentKeyColor, cyanKeyColor, holdNoteColor]
   customSkinName?: string;

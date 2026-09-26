@@ -221,6 +221,24 @@ export function validateStringColor(color: unknown, defaultColor: string): strin
   return defaultColor;
 }
 
+function sanitizeRenderDprSetting(
+  settings: Record<string, unknown>,
+  defaultSettings: GameSettings,
+): number {
+  const fallback = Number.isFinite(Number(defaultSettings.renderDpr)) ? Number(defaultSettings.renderDpr) : 1.5;
+  const raw = (settings as { renderDpr?: unknown }).renderDpr;
+  const num = typeof raw === 'string' ? Number(raw) : (raw as number);
+  if (Number.isFinite(num)) {
+    for (const allowed of [1, 1.5, 2]) {
+      if (Math.abs(num - allowed) < 0.001) return allowed;
+    }
+  }
+  // Legacy migration: the removed boolean always rendered at 1x when true.
+  const legacy = (settings as { limitDprToOne?: unknown }).limitDprToOne;
+  if (legacy === true || String(legacy) === 'true') return 1;
+  return [1, 1.5, 2].includes(fallback) ? fallback : 1.5;
+}
+
 /**
  * Whitelist/clamp validate critical settings fields.
  * Safe fallback is returned on validation failure.
@@ -316,7 +334,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     videoOffset: clamp(settings.videoOffset, -10000, 10000, defaultSettings.videoOffset || 0),
     disableComboBurst: Boolean(settings.disableComboBurst),
     disableLaneShake: Boolean(settings.disableLaneShake),
-    limitDprToOne: false,
+    renderDpr: sanitizeRenderDprSetting(settings, defaultSettings),
     skinId: (() => {
       const cleaned = sanitizeString(settings.skinId, defaultSettings.skinId || 'argon');
       return cleaned === 'rhythmmania-3d' ? (defaultSettings.skinId || 'argon') : cleaned;

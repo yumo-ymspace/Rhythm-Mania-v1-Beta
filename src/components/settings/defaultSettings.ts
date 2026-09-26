@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   disableVideo: false,
   videoOffset: 0,
   disableComboBurst: false,
-  limitDprToOne: false,
+  renderDpr: 1.5,
   skinId: 'argon',
   squareRenderStyle: 'rhythmmania',
   receptorColorsByKeyCount: {

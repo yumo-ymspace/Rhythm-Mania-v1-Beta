@@ -1146,7 +1146,11 @@ export default function App() {
         disableVideo: Boolean(updated.disableVideo),
         videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
         disableComboBurst: Boolean(updated.disableComboBurst),
-        limitDprToOne: false,
+        renderDpr: (() => {
+          const num = Number(updated.renderDpr);
+          if (num === 1 || num === 1.5 || num === 2) return num;
+          return 1.5;
+        })(),
         skinId: updated.skinId === 'rhythmmania-3d' ? 'argon' : (updated.skinId || 'argon'),
         customSkinColors: updated.customSkinColors,
         customSkinName: updated.customSkinName,

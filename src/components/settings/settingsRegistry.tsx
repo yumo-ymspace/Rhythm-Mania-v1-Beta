@@ -204,6 +204,17 @@ export const ROWS: RowDef[] = [
     showWhen: (s) => s.renderEngine === 'webgl',
     keywords: ['fallback', 'canvas', 'webgl', 'testing', 'error'],
   },
+  {
+    id: 'renderDpr', section: 'graphics', label: 'Render resolution',
+    description: 'Canvas pixel ratio. 1 is fastest, 1.5 is balanced, 2 is sharpest with the highest GPU cost.',
+    control: { kind: 'select', options: [
+      { value: '1', label: '1x (performance)' },
+      { value: '1.5', label: '1.5x (balanced)' },
+      { value: '2', label: '2x (sharp)' },
+    ]},
+    defaultValue: DEFAULT_SETTINGS.renderDpr,
+    keywords: ['dpr', 'resolution', 'pixel', 'ratio', 'retina', 'performance', 'gpu', 'sharp'],
+  },
   // ── GAMEPLAY ──────────────────────────────────────────────────────────
   {
     id: 'scrollSpeed', section: 'gameplay', label: 'Scroll speed',

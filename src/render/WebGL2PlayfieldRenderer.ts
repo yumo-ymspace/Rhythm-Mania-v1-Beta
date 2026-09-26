@@ -15,11 +15,9 @@ import {
   ARGON_COLUMN_GAP,
   ARGON_CORNER_RADIUS,
   ARGON_NOTE_ACCENT_RATIO,
-  argonDarken,
-  argonLighten,
   getArgonNoteHeight,
 } from './argonSkin';
-import { parseCssColor, NormalizedColor } from './color';
+import { darkenCached, getCachedRgb01, lightenCached, tupleWithAlpha } from './colorCache';
 import { getNoteVisualY } from './playfieldLayout';
 import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { mergeVisibleTailSegments } from './tailSegments';
@@ -94,14 +92,7 @@ const VERTS_PER_QUAD = 6;
 const MAX_QUADS = 4096;
 const BUFFER_FLOATS = MAX_QUADS * VERTS_PER_QUAD * FLOATS_PER_VERT;
 
-function toNormalized(color: string, alpha: number): NormalizedColor {
-  const c = parseCssColor(color);
-  return { r: c.r, g: c.g, b: c.b, alpha: Math.max(0, Math.min(1, c.alpha * alpha)) };
-}
 
-function rgba01(c: NormalizedColor): [number, number, number, number] {
-  return [c.r / 255, c.g / 255, c.b / 255, c.alpha];
-}
 
 export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
   private canvas: HTMLCanvasElement | null = null;
@@ -243,14 +234,14 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.quadCount++;
   }
 
-  private quad(
+  private quadRgb(
     x: number, y: number, w: number, h: number,
-    color: string, alpha: number, radius = 0,
-    gradientTo?: string, gradientAlpha?: number,
+    rgb: readonly [number, number, number], alpha: number, radius = 0,
+    gradientRgb?: readonly [number, number, number], gradientAlpha?: number,
   ): void {
-    const top = rgba01(toNormalized(color, alpha));
-    const bottom = gradientTo !== undefined
-      ? rgba01(toNormalized(gradientTo, gradientAlpha ?? alpha))
+    const top = tupleWithAlpha(rgb, alpha);
+    const bottom = gradientRgb !== undefined
+      ? tupleWithAlpha(gradientRgb, gradientAlpha ?? alpha)
       : top;
     this.pushQuad(x, y, w, h, top, bottom, radius);
   }
@@ -280,21 +271,45 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     const noteHeight = getArgonNoteHeight(settingsSlice);
     const keyCount = this.keyCount;
 
+    // Per-column RGB resolved once per frame (no CSS parsing per note).
+    const laneBase: Array<readonly [number, number, number] | null> = new Array(keyCount);
+    const laneDarkLane: Array<readonly [number, number, number] | null> = new Array(keyCount);
+    const laneDarkBody: Array<readonly [number, number, number] | null> = new Array(keyCount);
+    const laneLightHead: Array<readonly [number, number, number] | null> = new Array(keyCount);
+    const laneLightPulse: Array<readonly [number, number, number] | null> = new Array(keyCount);
+    for (let i = 0; i < keyCount; i++) {
+      const col = columns[i];
+      if (!col) continue;
+      const base = getCachedRgb01(col.color);
+      laneBase[i] = base;
+      laneDarkLane[i] = darkenCached(col.color, 3);
+      laneDarkBody[i] = darkenCached(col.color, 0.6);
+      laneLightHead[i] = lightenCached(col.color, 0.1);
+      laneLightPulse[i] = lightenCached(col.color, 0.2);
+    }
+    const failedRgb = getCachedRgb01('rgb(48,52,64)');
+    const whiteRgb = getCachedRgb01('#ffffff');
+    const grayRgb = getCachedRgb01('rgb(196,196,196)');
+
     // Lanes (argon inset columns, darkened base + pressed overlay).
     for (let i = 0; i < keyCount; i++) {
       const col = columns[i];
       if (!col) continue;
       const ix = col.x + ARGON_COLUMN_GAP / 2;
       const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
-      this.quad(X(ix), Y(0), iw, height, argonDarken(col.color, 3), 0.8, ARGON_CORNER_RADIUS);
+      const dark = laneDarkLane[i];
+      if (dark) this.quadRgb(X(ix), Y(0), iw, height, dark, 0.8, ARGON_CORNER_RADIUS);
       const press = Math.max(col.glow, col.pressed ? 1 : 0);
       if (press > 0) {
         // Approximate the Canvas2D 'lighter' pressed gradient with a
         // bottom-weighted alpha gradient in normal blending.
-        const top = rgba01(toNormalized(col.color, 0));
-        const bottom = rgba01(toNormalized(col.color, 0.6 * press));
-        if (upscroll) this.pushQuad(X(ix), Y(0), iw, receptorY, top, bottom, 0);
-        else this.pushQuad(X(ix), Y(receptorY), iw, height - receptorY, top, bottom, 0);
+        const base = laneBase[i];
+        if (base) {
+          const top = tupleWithAlpha(base, 0);
+          const bottom = tupleWithAlpha(base, 0.6 * press);
+          if (upscroll) this.pushQuad(X(ix), Y(0), iw, receptorY, top, bottom, 0);
+          else this.pushQuad(X(ix), Y(receptorY), iw, height - receptorY, top, bottom, 0);
+        }
       }
     }
 
@@ -317,8 +332,11 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const bodySegments = n.tailSegments !== undefined
         ? n.tailSegments
         : [{ startY: visualStartY, endY: visualEndY }];
+      const missed = n.missedTailSegments;
       const renderSegments = n.holdRulesVersion === 2
-        ? mergeVisibleTailSegments([...bodySegments, ...(n.missedTailSegments || [])])
+        ? (missed && missed.length > 0
+            ? mergeVisibleTailSegments(bodySegments.concat(missed))
+            : bodySegments)
         : bodySegments;
       const failed = !!n.isHoldFailed;
       const hitting = n.isHolding !== undefined
@@ -328,16 +346,18 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       if (hitting && !failed) {
         pulse = 0.75 + 0.25 * Math.sin((frame.timeMs / 160) * Math.PI * 2);
       }
+      const bodyRgb = failed ? failedRgb : laneDarkBody[n.column];
+      const pulseRgb = laneLightPulse[n.column];
+      const baseRgb = laneBase[n.column];
       for (const seg of renderSegments) {
         const topY = Math.min(seg.startY, seg.endY);
         const h = Math.abs(seg.endY - seg.startY);
         if (h <= 0.5) continue;
         if (topY > height + 100 || topY + h < -100) continue;
-        const baseColor = failed ? 'rgb(48,52,64)' : argonDarken(col.color, 0.6);
         const alpha = n.opacity * (failed ? 0.45 : 1);
-        this.quad(X(rx), Y(topY), rw, h, baseColor, alpha, ARGON_CORNER_RADIUS);
-        if (pulse > 0) {
-          const glow = rgba01(toNormalized(argonLighten(col.color, 0.2), 0.3 * pulse * n.opacity));
+        if (bodyRgb) this.quadRgb(X(rx), Y(topY), rw, h, bodyRgb, alpha, ARGON_CORNER_RADIUS);
+        if (pulse > 0 && pulseRgb) {
+          const glow = tupleWithAlpha(pulseRgb, 0.3 * pulse * n.opacity);
           const transparent: [number, number, number, number] = [glow[0], glow[1], glow[2], 0];
           this.pushQuad(X(rx), Y(topY), rw, h, glow, transparent, 0);
         }
@@ -345,24 +365,30 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       if (n.hitSegmentStartY !== undefined && n.hitSegmentEndY !== undefined) {
         const hs = getNoteVisualY(n.hitSegmentStartY, col.width, settingsSlice);
         const he = getNoteVisualY(n.hitSegmentEndY, col.width, settingsSlice);
-        this.quad(X(rx), Y(Math.min(hs, he)), rw, Math.abs(he - hs), col.color, n.opacity, ARGON_CORNER_RADIUS);
+        if (baseRgb) this.quadRgb(X(rx), Y(Math.min(hs, he)), rw, Math.abs(he - hs), baseRgb, n.opacity, ARGON_CORNER_RADIUS);
       }
     }
 
     // Note heads + tails. Base + accent + white lip approximate
     // drawArgonNotePiece (chevron/bar glyphs are MVP-simplified to a lip).
-    const drawNotePiece = (rx: number, topY: number, rw: number, color: string, opacity: number, isTail: boolean) => {
+    const drawNotePiece = (rx: number, topY: number, rw: number, column: number, opacity: number, isTail: boolean) => {
       if (topY > height + 100 || topY + noteHeight < -100) return;
-      let o = opacity;
+      const o = opacity;
       if (!isTail && o <= 0) return;
+      const dark = laneDarkBody[column];
+      const base = laneBase[column];
+      const light = laneLightHead[column];
+      if (!dark || !base) return;
       // Base shade (dark overlay gradient approximated as solid darkened).
-      this.quad(X(rx), Y(topY), rw, noteHeight, argonDarken(color, 0.6), o, ARGON_CORNER_RADIUS);
+      this.quadRgb(X(rx), Y(topY), rw, noteHeight, dark, o, ARGON_CORNER_RADIUS);
       const accentH = noteHeight * ARGON_NOTE_ACCENT_RATIO;
       const accentY = topY + noteHeight - accentH;
-      const accentColor = isTail ? argonDarken(color, 0.6) : argonLighten(color, 0.1);
-      this.quad(X(rx), Y(accentY), rw, accentH, accentColor, o, ARGON_CORNER_RADIUS, color, o);
+      const accentRgb = isTail ? dark : (light ?? base);
+      const top = tupleWithAlpha(accentRgb, o);
+      const bottom = tupleWithAlpha(base, o);
+      this.pushQuad(X(rx), Y(accentY), rw, accentH, top, bottom, ARGON_CORNER_RADIUS);
       const lipH = ARGON_CORNER_RADIUS * 2;
-      this.quad(X(rx), Y(topY + noteHeight - lipH), rw, lipH, '#ffffff', o, lipH / 2);
+      this.quadRgb(X(rx), Y(topY + noteHeight - lipH), rw, lipH, whiteRgb, o, lipH / 2);
     };
 
     for (const n of notes) {
@@ -380,7 +406,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const centerY = getNoteVisualY(n.y, col.width, settingsSlice);
         let opacity = n.opacity;
         if (n.type === 'hold' && n.isHoldFailed) opacity *= 0.35;
-        drawNotePiece(rx, centerY - noteHeight / 2, rw, col.color, opacity, false);
+        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, false);
       }
       if (n.type === 'hold' && n.endY !== undefined) {
         const releaseDone = n.holdRulesVersion !== 2
@@ -390,7 +416,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const centerY = getNoteVisualY(n.endY, col.width, settingsSlice);
         let opacity = n.endOpacity ?? n.opacity;
         if (n.isHoldFailed) opacity *= 0.35;
-        drawNotePiece(rx, centerY - noteHeight / 2, rw, col.color, opacity, true);
+        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, true);
       }
     }
 
@@ -404,22 +430,25 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
       const pressed = col.pressed;
       const targetY = upscroll ? receptorY : receptorY - hitTargetH;
-      this.quad(
+      this.quadRgb(
         X(ix), Y(targetY), iw, hitTargetH,
-        '#ffffff', (pressed ? 0.55 : 0.3) * receptorOpacity, ARGON_CORNER_RADIUS,
+        whiteRgb, (pressed ? 0.55 : 0.3) * receptorOpacity, ARGON_CORNER_RADIUS,
       );
-      this.quad(
+      this.quadRgb(
         X(ix), Y(receptorY - lipH / 2), iw, lipH,
-        pressed ? '#ffffff' : 'rgb(196,196,196)', receptorOpacity, lipH / 2,
+        pressed ? whiteRgb : grayRgb, receptorOpacity, lipH / 2,
       );
       if (pressed) {
-        const glow = rgba01(toNormalized(col.color, 0.28 * receptorOpacity));
-        const transparent: [number, number, number, number] = [glow[0], glow[1], glow[2], 0];
-        const ovalW = Math.min(22, iw * 0.42);
-        const ovalH = 14;
-        const ovalY = upscroll ? receptorY - 30 - ovalH / 2 : receptorY + 30 - ovalH / 2;
-        const ox = ix + (iw - ovalW) / 2 - 6;
-        this.pushQuad(X(ox), Y(ovalY - 6), ovalW + 12, ovalH + 12, glow, transparent, (ovalH + 12) / 2);
+        const base = laneBase[i];
+        if (base) {
+          const glow = tupleWithAlpha(base, 0.28 * receptorOpacity);
+          const transparent: [number, number, number, number] = [glow[0], glow[1], glow[2], 0];
+          const ovalW = Math.min(22, iw * 0.42);
+          const ovalH = 14;
+          const ovalY = upscroll ? receptorY - 30 - ovalH / 2 : receptorY + 30 - ovalH / 2;
+          const ox = ix + (iw - ovalW) / 2 - 6;
+          this.pushQuad(X(ox), Y(ovalY - 6), ovalW + 12, ovalH + 12, glow, transparent, (ovalH + 12) / 2);
+        }
       }
     }
 

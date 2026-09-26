@@ -136,7 +136,6 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
       videoOffset: 0,
       disableVideo: false,
       disableComboBurst: false,
-      limitDprToOne: false,
     });
   };
 
