@@ -321,7 +321,6 @@ export interface GameSettings {
   bindSkipIntro?: string; // gameplay skip-intro keybind
   compensateOutputLatency?: boolean; // subtract measured baseLatency+outputLatency from the judgement clock
   enableMapSV?: boolean;
-  disableLaneShake?: boolean;
   enableSongPreview?: boolean; // play an audio preview of the selected map on Song Select
   showFpsCounter?: boolean; // render a small performance readout (FPS, frame time, input latency) on every screen
   uncappedMenuMotion?: boolean; // render the menu background at full display rate instead of the ~30fps eco throttle

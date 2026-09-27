@@ -360,19 +360,11 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao || !this.vbo) return;
     if (gl.isContextLost()) return;
-    const { width, height, columns, notes, shake, settingsSlice } = frame;
+    const { width, height, columns, notes, settingsSlice } = frame;
     const receptorY = frame.receptorY;
     if (width <= 0 || height <= 0) return;
 
     this.quadCount = 0;
-    let shakeX = 0;
-    let shakeY = 0;
-    if (shake > 0 && !settingsSlice.disableLaneShake) {
-      shakeX = (Math.random() - 0.5) * shake;
-      shakeY = (Math.random() - 0.5) * shake;
-    }
-    const X = (x: number) => x + shakeX;
-    const Y = (y: number) => y + shakeY;
 
     const upscroll = !!settingsSlice.upsurfaceNoteMode;
     const noteScale = settingsSlice.noteSizeMultiplier ?? 1;
@@ -409,7 +401,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const ix = col.x + ARGON_COLUMN_GAP / 2;
       const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
       const dark = laneDarkLane[i];
-      if (dark) this.quadRgb(X(ix), Y(0), iw, height, dark, 0.8, ARGON_CORNER_RADIUS);
+      if (dark) this.quadRgb(ix, 0, iw, height, dark, 0.8, ARGON_CORNER_RADIUS);
       const press = Math.max(col.glow, col.pressed ? 1 : 0);
       if (press > 0) {
         // Approximate the Canvas2D 'lighter' pressed gradient with a
@@ -417,8 +409,8 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const base = laneBase[i];
         if (base) {
           const bottomAlpha = 0.6 * press;
-          if (upscroll) this.pushQuadNumbers(X(ix), Y(0), iw, receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
-          else this.pushQuadNumbers(X(ix), Y(receptorY), iw, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+          if (upscroll) this.pushQuadNumbers(ix, 0, iw, receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+          else this.pushQuadNumbers(ix, receptorY, iw, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
         }
       }
     }
@@ -468,16 +460,16 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         if (h <= 0.5) continue;
         if (topY > height + 100 || topY + h < -100) continue;
         const alpha = n.opacity * (failed ? 0.45 : 1);
-        if (bodyRgb) this.quadRgb(X(rx), Y(topY), rw, h, bodyRgb, alpha, ARGON_CORNER_RADIUS);
+        if (bodyRgb) this.quadRgb(rx, topY, rw, h, bodyRgb, alpha, ARGON_CORNER_RADIUS);
         if (pulse > 0 && pulseRgb) {
           const glowAlpha = 0.3 * pulse * n.opacity;
-          this.pushQuadNumbers(X(rx), Y(topY), rw, h, pulseRgb[0], pulseRgb[1], pulseRgb[2], glowAlpha, pulseRgb[0], pulseRgb[1], pulseRgb[2], 0, 0);
+          this.pushQuadNumbers(rx, topY, rw, h, pulseRgb[0], pulseRgb[1], pulseRgb[2], glowAlpha, pulseRgb[0], pulseRgb[1], pulseRgb[2], 0, 0);
         }
       }
       if (n.hitSegmentStartY !== undefined && n.hitSegmentEndY !== undefined) {
         const hs = getNoteVisualY(n.hitSegmentStartY, col.width, settingsSlice);
         const he = getNoteVisualY(n.hitSegmentEndY, col.width, settingsSlice);
-        if (baseRgb) this.quadRgb(X(rx), Y(Math.min(hs, he)), rw, Math.abs(he - hs), baseRgb, n.opacity, ARGON_CORNER_RADIUS);
+        if (baseRgb) this.quadRgb(rx, Math.min(hs, he), rw, Math.abs(he - hs), baseRgb, n.opacity, ARGON_CORNER_RADIUS);
       }
     }
 
@@ -504,23 +496,23 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const shadowAlpha = 0.45 * o;
       if (shadowAlpha > 0.01) {
         if (upscroll) {
-          this.pushQuadNumbers(X(rx), Y(topY + noteHeight), rw, SHADOW_H, dark[0], dark[1], dark[2], shadowAlpha, dark[0], dark[1], dark[2], 0, 0);
+          this.pushQuadNumbers(rx, topY + noteHeight, rw, SHADOW_H, dark[0], dark[1], dark[2], shadowAlpha, dark[0], dark[1], dark[2], 0, 0);
         } else {
-          this.pushQuadNumbers(X(rx), Y(topY - SHADOW_H), rw, SHADOW_H, dark[0], dark[1], dark[2], 0, dark[0], dark[1], dark[2], shadowAlpha, 0);
+          this.pushQuadNumbers(rx, topY - SHADOW_H, rw, SHADOW_H, dark[0], dark[1], dark[2], 0, dark[0], dark[1], dark[2], shadowAlpha, 0);
         }
       }
       // Base shade (dark overlay gradient approximated as solid darkened).
-      this.quadRgb(X(rx), Y(topY), rw, noteHeight, dark, o, ARGON_CORNER_RADIUS);
+      this.quadRgb(rx, topY, rw, noteHeight, dark, o, ARGON_CORNER_RADIUS);
       if (variant === 'tail') {
         // Canvas2D holdTail: darkened base with a lighter additive wash on
         // the far half of the accent zone. No lip, no glyph.
         const hl = light ?? base;
         const hlAlpha = 0.4 * o;
         if (upscroll) {
-          this.pushQuadNumbers(X(rx), Y(topY + accentH / 2), rw, accentH / 2, hl[0], hl[1], hl[2], 0, hl[0], hl[1], hl[2], hlAlpha, 0);
+          this.pushQuadNumbers(rx, topY + accentH / 2, rw, accentH / 2, hl[0], hl[1], hl[2], 0, hl[0], hl[1], hl[2], hlAlpha, 0);
         } else {
           const accentY = topY + noteHeight - accentH;
-          this.pushQuadNumbers(X(rx), Y(accentY), rw, accentH / 2, hl[0], hl[1], hl[2], hlAlpha, hl[0], hl[1], hl[2], 0, 0);
+          this.pushQuadNumbers(rx, accentY, rw, accentH / 2, hl[0], hl[1], hl[2], hlAlpha, hl[0], hl[1], hl[2], 0, 0);
         }
         return;
       }
@@ -530,7 +522,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const accentRgb = light ?? base;
       const glyph = variant === 'rice' ? GLYPH_CHEVRON : GLYPH_BAR;
       this.pushQuad(
-        X(rx), Y(accentY), rw, accentH,
+        rx, accentY, rw, accentH,
         [accentRgb[0], accentRgb[1], accentRgb[2], o],
         [base[0], base[1], base[2], o],
         ARGON_CORNER_RADIUS,
@@ -538,7 +530,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       );
       const lipH = ARGON_CORNER_RADIUS * 2;
       const lipY = upscroll ? topY : topY + noteHeight - lipH;
-      this.quadRgb(X(rx), Y(lipY), rw, lipH, whiteRgb, o, lipH / 2);
+      this.quadRgb(rx, lipY, rw, lipH, whiteRgb, o, lipH / 2);
     };
 
     for (const n of notes) {
@@ -589,18 +581,18 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         // White-hot core hugging the judgement line, fading into the lane.
         const coreAlpha = 0.3 * receptorOpacity;
         if (upscroll) {
-          this.pushQuadNumbers(X(ix), Y(receptorY), iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
+          this.pushQuadNumbers(ix, receptorY, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
         } else {
-          this.pushQuadNumbers(X(ix), Y(receptorY - CORE_H), iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, 0);
+          this.pushQuadNumbers(ix, receptorY - CORE_H, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, 0);
         }
       }
       const targetY = upscroll ? receptorY : receptorY - hitTargetH;
       this.quadRgb(
-        X(ix), Y(targetY), iw, hitTargetH,
+        ix, targetY, iw, hitTargetH,
         whiteRgb, (pressed ? 0.55 : 0.3) * receptorOpacity, ARGON_CORNER_RADIUS,
       );
       this.quadRgb(
-        X(ix), Y(receptorY - lipH / 2), iw, lipH,
+        ix, receptorY - lipH / 2, iw, lipH,
         pressed ? whiteRgb : grayRgb, receptorOpacity, lipH / 2,
       );
       const base = laneBase[i];
@@ -613,17 +605,17 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         if (pressed) {
           const glowAlpha = 0.28 * receptorOpacity;
           const ox = cx - (ovalW + 12) / 2;
-          this.pushQuadNumbers(X(ox), Y(ovalCY - (ovalH + 12) / 2), ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
+          this.pushQuadNumbers(ox, ovalCY - (ovalH + 12) / 2, ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
         }
         // Outer white ring.
         const outerW = ovalW + 4;
         const outerH = ovalH + 4;
-        this.quadRgb(X(cx - outerW / 2), Y(ovalCY - outerH / 2), outerW, outerH, whiteRgb, (pressed ? 0.95 : 0.7) * receptorOpacity, outerH / 2);
+        this.quadRgb(cx - outerW / 2, ovalCY - outerH / 2, outerW, outerH, whiteRgb, (pressed ? 0.95 : 0.7) * receptorOpacity, outerH / 2);
         // Inner fill: lane color when pressed, lane background when idle.
         if (pressed) {
-          this.quadRgb(X(cx - ovalW / 2), Y(ovalCY - ovalH / 2), ovalW, ovalH, base, 0.85 * receptorOpacity, ovalH / 2);
+          this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, base, 0.85 * receptorOpacity, ovalH / 2);
         } else {
-          this.quadRgb(X(cx - ovalW / 2), Y(ovalCY - ovalH / 2), ovalW, ovalH, darkLane, 0.8 * receptorOpacity, ovalH / 2);
+          this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, darkLane, 0.8 * receptorOpacity, ovalH / 2);
         }
       }
     }

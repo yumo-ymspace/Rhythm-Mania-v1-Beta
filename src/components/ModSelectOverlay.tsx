@@ -19,6 +19,7 @@ import {
   Zap, FlipHorizontal, Shuffle, Gauge, ArrowUpDown, Ban,
   Clock, TrendingUp, TrendingDown, Activity, VolumeX, Film,
   Keyboard, MousePointerClick, Sparkles, Sliders, ArrowLeftRight,
+  Sun, Columns2,
 } from 'lucide-react';
 import { GameSettings } from '../types';
 import { computeModMultiplier } from '../ruleset/mania/scoreProcessor';
@@ -36,6 +37,8 @@ export interface ModItem {
   icon: React.ComponentType<{ className?: string }>;
   description: string;
   exclusiveWith?: readonly string[];
+  /** Greyed visual chrome for stills we do not own yet (Daycore, Dual Stages). Never toggles. */
+  comingSoon?: boolean;
 }
 
 /**
@@ -98,18 +101,7 @@ export const MOD_CATEGORIES: { id: ModCategory; name: string; description: strin
 export const PRESET_COLUMN_COLOR = '#e9d44a';
 
 export const ALL_MODS: ModItem[] = [
-  // Difficulty Reduction
-  {
-    id: 'NF',
-    name: 'No Fail',
-    acronym: 'NF',
-    title: 'No Fail (NF)',
-    category: 'reduction',
-    multiplier: '0.50x',
-    icon: InfinityIcon,
-    description: "You can't fail, no matter what.",
-    exclusiveWith: ['SD', 'PF', 'AC'],
-  },
+  // Difficulty Reduction (lazer still order: EZ, NF, HT, DC, NR)
   {
     id: 'EZ',
     name: 'Easy',
@@ -120,6 +112,17 @@ export const ALL_MODS: ModItem[] = [
     icon: Sparkles,
     description: 'Larger hit windows, more forgiving health recovery.',
     exclusiveWith: ['HR', 'SD', 'PF', 'AC', 'DA'],
+  },
+  {
+    id: 'NF',
+    name: 'No Fail',
+    acronym: 'NF',
+    title: 'No Fail (NF)',
+    category: 'reduction',
+    multiplier: '0.50x',
+    icon: InfinityIcon,
+    description: "You can't fail, no matter what.",
+    exclusiveWith: ['SD', 'PF', 'AC'],
   },
   {
     id: 'HT',
@@ -133,6 +136,18 @@ export const ALL_MODS: ModItem[] = [
     exclusiveWith: ['DT', 'NC', 'WU', 'WD', 'AS'],
   },
   {
+    id: 'DC',
+    name: 'Daycore',
+    acronym: 'DC',
+    title: 'Daycore (DC)',
+    category: 'reduction',
+    multiplier: '0.30x',
+    icon: Sun,
+    description: 'Dreamy slowed-down playback. Coming soon.',
+    exclusiveWith: ['DT', 'NC', 'WU', 'WD', 'AS'],
+    comingSoon: true,
+  },
+  {
     id: 'NR',
     name: 'No Release',
     acronym: 'NR',
@@ -144,7 +159,7 @@ export const ALL_MODS: ModItem[] = [
     exclusiveWith: ['HO'],
   },
 
-  // Difficulty Increase
+  // Difficulty Increase (lazer still order: HR, SD, PF, DT, NC, FI, HD, Cover, FL, AC)
   {
     id: 'HR',
     name: 'Hard Rock',
@@ -179,26 +194,26 @@ export const ALL_MODS: ModItem[] = [
     exclusiveWith: ['NF', 'SD', 'AC', 'EZ'],
   },
   {
-    id: 'AC',
-    name: 'Accuracy Challenge',
-    acronym: 'AC',
-    title: 'Accuracy Challenge (AC)',
+    id: 'DT',
+    name: 'Double Time',
+    acronym: 'DT',
+    title: 'Double Time (DT)',
     category: 'increase',
     multiplier: '1.00x',
-    icon: Target,
-    description: 'Fail if your accuracy drops below threshold.',
-    exclusiveWith: ['NF', 'SD', 'PF', 'EZ'],
+    icon: FastForward,
+    description: 'Speeds up song playback to 1.50x speed.',
+    exclusiveWith: ['HT', 'NC', 'WU', 'WD', 'AS'],
   },
   {
-    id: 'HD',
-    name: 'Hidden',
-    acronym: 'HD',
-    title: 'Hidden (HD)',
+    id: 'NC',
+    name: 'Nightcore',
+    acronym: 'NC',
+    title: 'Nightcore (NC)',
     category: 'increase',
     multiplier: '1.00x',
-    icon: SquareSlash,
-    description: 'Notes fade out before reaching the receptor.',
-    exclusiveWith: ['FI', 'Cover', 'CO', 'FL'],
+    icon: Zap,
+    description: 'Double Time speed with high-pitched audio.',
+    exclusiveWith: ['HT', 'DT', 'WU', 'WD', 'AS'],
   },
   {
     id: 'FI',
@@ -210,6 +225,17 @@ export const ALL_MODS: ModItem[] = [
     icon: Eye,
     description: 'Notes appear out of nowhere as they approach receptor.',
     exclusiveWith: ['HD', 'Cover', 'CO', 'FL'],
+  },
+  {
+    id: 'HD',
+    name: 'Hidden',
+    acronym: 'HD',
+    title: 'Hidden (HD)',
+    category: 'increase',
+    multiplier: '1.00x',
+    icon: SquareSlash,
+    description: 'Notes fade out before reaching the receptor.',
+    exclusiveWith: ['FI', 'Cover', 'CO', 'FL'],
   },
   {
     id: 'Cover',
@@ -234,26 +260,15 @@ export const ALL_MODS: ModItem[] = [
     exclusiveWith: ['HD', 'FI', 'Cover', 'CO'],
   },
   {
-    id: 'DT',
-    name: 'Double Time',
-    acronym: 'DT',
-    title: 'Double Time (DT)',
+    id: 'AC',
+    name: 'Accuracy Challenge',
+    acronym: 'AC',
+    title: 'Accuracy Challenge (AC)',
     category: 'increase',
     multiplier: '1.00x',
-    icon: FastForward,
-    description: 'Speeds up song playback to 1.50x speed.',
-    exclusiveWith: ['HT', 'NC', 'WU', 'WD', 'AS'],
-  },
-  {
-    id: 'NC',
-    name: 'Nightcore',
-    acronym: 'NC',
-    title: 'Nightcore (NC)',
-    category: 'increase',
-    multiplier: '1.00x',
-    icon: Zap,
-    description: 'Double Time speed with high-pitched audio.',
-    exclusiveWith: ['HT', 'DT', 'WU', 'WD', 'AS'],
+    icon: Target,
+    description: 'Fail if your accuracy drops below threshold.',
+    exclusiveWith: ['NF', 'SD', 'PF', 'EZ'],
   },
 
   // Automation
@@ -280,18 +295,7 @@ export const ALL_MODS: ModItem[] = [
     exclusiveWith: ['AT'],
   },
 
-  // Conversion
-  {
-    id: 'MR',
-    name: 'Mirror',
-    acronym: 'MR',
-    title: 'Mirror (MR)',
-    category: 'conversion',
-    multiplier: '1.00x',
-    icon: FlipHorizontal,
-    description: 'Reverses the playfield column order horizontally.',
-    exclusiveWith: ['RD'],
-  },
+  // Conversion (lazer still order: RD, Dual Stages, MR, DA, Classic, Invert, CS, Hold Off)
   {
     id: 'RD',
     name: 'Random',
@@ -300,50 +304,30 @@ export const ALL_MODS: ModItem[] = [
     category: 'conversion',
     multiplier: '1.00x',
     icon: Shuffle,
-    description: 'Deterministically shuffles columns.',
+    description: 'Shuffle around the keys!',
     exclusiveWith: ['MR'],
   },
   {
-    id: 'CS',
-    name: 'Constant Speed',
-    acronym: 'CS',
-    title: 'Constant Speed (CS)',
-    category: 'conversion',
-    multiplier: '0.90x',
-    icon: Gauge,
-    description: 'Disables all scroll velocity (SV) variations.',
-  },
-  {
-    id: 'IN',
-    name: 'Invert',
-    acronym: 'IN',
-    title: 'Invert (IN)',
+    id: 'DS',
+    name: 'Dual Stages',
+    acronym: 'DS',
+    title: 'Dual Stages (DS)',
     category: 'conversion',
     multiplier: '1.00x',
-    icon: ArrowUpDown,
-    description: 'Turns rice notes into holds, and holds into rice notes.',
-    exclusiveWith: ['HO'],
+    icon: Columns2,
+    description: 'Double the stages, double the fun! Coming soon.',
+    comingSoon: true,
   },
   {
-    id: 'HO',
-    name: 'Hold Off',
-    acronym: 'HO',
-    title: 'Hold Off (HO)',
-    category: 'conversion',
-    multiplier: '0.90x',
-    icon: Ban,
-    description: 'Converts all hold notes to regular rice notes.',
-    exclusiveWith: ['IN', 'NR'],
-  },
-  {
-    id: 'CL',
-    name: 'Classic',
-    acronym: 'CL',
-    title: 'Classic (CL)',
+    id: 'MR',
+    name: 'Mirror',
+    acronym: 'MR',
+    title: 'Mirror (MR)',
     category: 'conversion',
     multiplier: '1.00x',
-    icon: Clock,
-    description: 'Restores legacy stable mania hit windows.',
+    icon: FlipHorizontal,
+    description: 'Notes are flipped horizontally.',
+    exclusiveWith: ['RD'],
   },
   {
     id: 'DA',
@@ -353,11 +337,53 @@ export const ALL_MODS: ModItem[] = [
     category: 'conversion',
     multiplier: '0.50x',
     icon: Sliders,
-    description: 'Customize Overall Difficulty and HP Drain Rate.',
+    description: "Override a beatmap's difficulty settings.",
     exclusiveWith: ['EZ', 'HR'],
   },
+  {
+    id: 'CL',
+    name: 'Classic',
+    acronym: 'CL',
+    title: 'Classic (CL)',
+    category: 'conversion',
+    multiplier: '1.00x',
+    icon: Clock,
+    description: 'Feeling nostalgic?',
+  },
+  {
+    id: 'IN',
+    name: 'Invert',
+    acronym: 'IN',
+    title: 'Invert (IN)',
+    category: 'conversion',
+    multiplier: '1.00x',
+    icon: ArrowUpDown,
+    description: 'Hold the keys. To the end.',
+    exclusiveWith: ['HO'],
+  },
+  {
+    id: 'CS',
+    name: 'Constant Speed',
+    acronym: 'CS',
+    title: 'Constant Speed (CS)',
+    category: 'conversion',
+    multiplier: '0.90x',
+    icon: Gauge,
+    description: 'No more tricky speed changes!',
+  },
+  {
+    id: 'HO',
+    name: 'Hold Off',
+    acronym: 'HO',
+    title: 'Hold Off (HO)',
+    category: 'conversion',
+    multiplier: '0.90x',
+    icon: Ban,
+    description: 'Replaces all hold notes with normal notes.',
+    exclusiveWith: ['IN', 'NR'],
+  },
 
-  // Fun
+  // Fun (lazer still order: WU, WD, MU, AS)
   {
     id: 'WU',
     name: 'Wind Up',
@@ -366,7 +392,7 @@ export const ALL_MODS: ModItem[] = [
     category: 'fun',
     multiplier: '0.50x',
     icon: TrendingUp,
-    description: 'Song speed gradually accelerates as the map progresses.',
+    description: 'Can you keep up?',
     exclusiveWith: ['HT', 'DT', 'NC', 'WD', 'AS'],
   },
   {
@@ -377,19 +403,8 @@ export const ALL_MODS: ModItem[] = [
     category: 'fun',
     multiplier: '0.50x',
     icon: TrendingDown,
-    description: 'Song speed gradually decelerates as the map progresses.',
+    description: 'Sloooow doooown...',
     exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'AS'],
-  },
-  {
-    id: 'AS',
-    name: 'Adaptive Speed',
-    acronym: 'AS',
-    title: 'Adaptive Speed (AS)',
-    category: 'fun',
-    multiplier: '0.50x',
-    icon: Activity,
-    description: 'Playback speed adapts dynamically to your performance.',
-    exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'WD'],
   },
   {
     id: 'MU',
@@ -399,7 +414,18 @@ export const ALL_MODS: ModItem[] = [
     category: 'fun',
     multiplier: '1.00x',
     icon: VolumeX,
-    description: 'Mutes audio track when accuracy falls below target.',
+    description: 'Can you still feel the rhythm without music?',
+  },
+  {
+    id: 'AS',
+    name: 'Adaptive Speed',
+    acronym: 'AS',
+    title: 'Adaptive Speed (AS)',
+    category: 'fun',
+    multiplier: '0.50x',
+    icon: Activity,
+    description: 'Let track speed adapt to you.',
+    exclusiveWith: ['HT', 'DT', 'NC', 'WU', 'WD'],
   },
 ];
 
@@ -454,7 +480,8 @@ const HEX_CLIP = 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)';
 /**
  * osu!lazer-style mod row: hex icon on the left, bold name plus
  * single-line description on the right. Selected rows fill with the
- * category colour; incompatible rows dim until hovered.
+ * category colour; incompatible rows dim until hovered; coming-soon
+ * rows render greyed and never toggle.
  */
 export const LazerModCard: React.FC<LazerModCardProps> = ({
   mod,
@@ -464,10 +491,45 @@ export const LazerModCard: React.FC<LazerModCardProps> = ({
   onClick,
 }) => {
   const Icon = mod.icon;
-  const isConflicting = conflictingMods.length > 0 && !isActive;
-  const tooltipText = isConflicting
-    ? `${mod.description} Incompatible with: ${conflictingMods.join(', ')} (click to swap)`
-    : `${mod.title} - ${mod.description} (${mod.multiplier})`;
+  const isComingSoon = mod.comingSoon === true;
+  const isConflicting = conflictingMods.length > 0 && !isActive && !isComingSoon;
+  const tooltipText = isComingSoon
+    ? `${mod.title} - Coming soon`
+    : isConflicting
+      ? `${mod.description} Incompatible with: ${conflictingMods.join(', ')} (click to swap)`
+      : `${mod.title} - ${mod.description} (${mod.multiplier})`;
+
+  if (isComingSoon) {
+    return (
+      <div className="group relative">
+        <div
+          title={tooltipText}
+          aria-label={tooltipText}
+          aria-disabled="true"
+          className="w-full flex items-center gap-3 rounded-lg pl-2 pr-3 py-[7px] text-left border opacity-45 saturate-50 cursor-not-allowed select-none"
+          style={{ backgroundColor: 'rgba(52, 64, 51, 0.75)', borderColor: 'rgba(255,255,255,0.06)', color: '#cfd6cd' }}
+        >
+          <span
+            className="w-9 h-9 shrink-0 grid place-items-center"
+            style={{ clipPath: HEX_CLIP, backgroundColor: '#1c231c' }}
+          >
+            <Icon className="w-4 h-4 opacity-70" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-bold leading-tight truncate">{mod.name}</span>
+            <span className="block text-[11px] leading-tight truncate text-white/40">
+              Coming soon
+            </span>
+          </span>
+        </div>
+        <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-30 hidden group-hover:block w-[248px] rounded-lg bg-black/95 border border-white/15 px-3 py-2 shadow-2xl">
+          <span className="block text-[12px] font-bold text-white leading-snug">{mod.name}</span>
+          <span className="block text-[11px] text-white/70 leading-snug mt-0.5">{mod.description}</span>
+          <span className="block mt-1.5 text-[10px] uppercase tracking-wider text-white/50 font-bold">Coming soon</span>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="group relative">
@@ -510,7 +572,7 @@ export const LazerModCard: React.FC<LazerModCardProps> = ({
       <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-30 hidden group-hover:block w-[248px] rounded-lg bg-black/95 border border-white/15 px-3 py-2 shadow-2xl">
         <span className="block text-[12px] font-bold text-white leading-snug">{mod.name}</span>
         <span className="block text-[11px] text-white/70 leading-snug mt-0.5">{mod.description}</span>
-        {isConflicting && (
+        {isConflicting ? (
           <span className="block mt-1.5">
             <span className="block text-[10px] uppercase tracking-wider text-white/50 font-bold">Incompatible with:</span>
             <span className="flex flex-wrap gap-1 mt-1">
@@ -521,6 +583,8 @@ export const LazerModCard: React.FC<LazerModCardProps> = ({
               ))}
             </span>
           </span>
+        ) : (
+          <span className="block mt-1.5 text-[10px] uppercase tracking-wider text-white/50 font-bold">Compatible with all mods</span>
         )}
       </span>
     </div>
@@ -677,8 +741,9 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
     return selectedMods.includes('AT') || selectedMods.includes('CN');
   }, [selectedMods]);
 
-  // Handle clicking a regular mod
+  // Handle clicking a regular mod (coming-soon rows never toggle)
   const handleToggleMod = (mod: ModItem) => {
+    if (mod.comingSoon) return;
     if (selectedMods.includes(mod.id)) {
       // Remove mod
       const nextMods = selectedMods.filter(m => m !== mod.id);
@@ -899,16 +964,33 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
               </div>
             </div>
 
-            {/* Columns */}
-            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
-              <div className="flex gap-4 lg:gap-5 px-2 sm:px-6 lg:px-10 py-4 items-stretch min-h-full w-max min-w-full">
+            {/* Columns: sheared lazer panels with independent vertical scroll per column.
+                The slanted background is a clipped paint-only layer (pointer-events-none).
+                Row content lives in an unclipped overlay inset by ~30px so the
+                per-column scrollbar is never cut by the slant. The row itself is
+                h-full (not min-h-full) so tall columns scroll instead of growing
+                and getting clipped by the outer overflow-y-hidden. */}
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden lazer-columns-scroll">
+              <div className="flex gap-4 lg:gap-5 px-2 sm:px-6 lg:px-10 py-4 items-stretch h-full w-max min-w-full">
                 {/* Personal Presets column */}
-                <section aria-label="Personal Presets" className="w-[270px] lg:w-[290px] shrink-0 flex flex-col min-h-0 max-h-full">
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ clipPath: COLUMN_CLIP, backgroundColor: '#2c3a2d' }}>
-                    <header className="flex-none px-9 pt-2.5 pb-2 text-[13px] font-bold" style={{ backgroundColor: PRESET_COLUMN_COLOR, color: '#141a10' }}>
+                <section aria-label="Personal Presets" className="relative w-[270px] lg:w-[290px] shrink-0 h-full min-h-0 flex flex-col">
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 overflow-hidden pointer-events-none"
+                    style={{ clipPath: COLUMN_CLIP, backgroundColor: '#2c3a2d' }}
+                  >
+                    <div className="h-[40px] w-full" style={{ backgroundColor: PRESET_COLUMN_COLOR }} />
+                  </div>
+                  <div className="relative flex-1 min-h-0 h-full flex flex-col px-[30px]">
+                    <header className="flex-none h-[40px] flex items-center text-[13px] font-bold truncate" style={{ color: '#141a10' }}>
                       Personal Presets
                     </header>
-                    <div className="flex-1 min-h-0 overflow-y-auto px-7 py-3 flex flex-col gap-2 lazer-scroll">
+                    <div
+                      role="region"
+                      aria-label="Personal presets list"
+                      tabIndex={0}
+                      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 pr-1 flex flex-col gap-2 lazer-column-scroll outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded"
+                    >
                       <button
                         type="button"
                         onClick={handleSavePreset}
@@ -957,12 +1039,24 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                     cat.id === 'conversion' && (!query || 'key conversion 1k 2k 3k 4k 5k 6k 7k 8k 9k 10k keys'.includes(query));
                   if (catMods.length === 0 && !showKeySection) return null;
                   return (
-                    <section key={cat.id} aria-label={cat.name} className="w-[290px] lg:w-[310px] shrink-0 flex flex-col min-h-0 max-h-full">
-                      <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ clipPath: COLUMN_CLIP, backgroundColor: '#2c3a2d' }}>
-                        <header className="flex-none px-9 pt-2.5 pb-2 text-[13px] font-bold truncate" style={{ backgroundColor: cat.color, color: '#141a10' }}>
+                    <section key={cat.id} aria-label={cat.name} className="relative w-[290px] lg:w-[310px] shrink-0 h-full min-h-0 flex flex-col">
+                      <div
+                        aria-hidden
+                        className="absolute inset-0 overflow-hidden pointer-events-none"
+                        style={{ clipPath: COLUMN_CLIP, backgroundColor: '#2c3a2d' }}
+                      >
+                        <div className="h-[40px] w-full" style={{ backgroundColor: cat.color }} />
+                      </div>
+                      <div className="relative flex-1 min-h-0 h-full flex flex-col px-[30px]">
+                        <header className="flex-none h-[40px] flex items-center text-[13px] font-bold truncate" style={{ color: '#141a10' }}>
                           {cat.name}
                         </header>
-                        <div className="flex-1 min-h-0 overflow-y-auto px-7 py-3 flex flex-col gap-2 lazer-scroll">
+                        <div
+                          role="region"
+                          aria-label={`${cat.name} mods list`}
+                          tabIndex={0}
+                          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 pr-1 flex flex-col gap-2 lazer-column-scroll outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded"
+                        >
                           {catMods.map(mod => (
                             <LazerModCard
                               key={mod.id}
@@ -1113,6 +1207,27 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
           </div>
 
           <style>{`
+            .lazer-columns-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.35) transparent; }
+            .lazer-columns-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+            .lazer-columns-scroll::-webkit-scrollbar-track { background: transparent; }
+            .lazer-columns-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 9999px; }
+            /* Per-column vertical scroll: lazer white rail, always visible when overflowing. */
+            .lazer-column-scroll {
+              scrollbar-width: thin;
+              scrollbar-color: rgba(255,255,255,0.7) transparent;
+              scrollbar-gutter: stable;
+              overscroll-behavior-y: contain;
+              overscroll-behavior-x: none;
+            }
+            .lazer-column-scroll::-webkit-scrollbar { width: 8px; }
+            .lazer-column-scroll::-webkit-scrollbar-track { background: transparent; }
+            .lazer-column-scroll::-webkit-scrollbar-thumb {
+              background: rgba(255,255,255,0.7);
+              border-radius: 9999px;
+              border: 2px solid transparent;
+              background-clip: content-box;
+            }
+            .lazer-column-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.9); background-clip: content-box; }
             .lazer-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.55) transparent; }
             .lazer-scroll::-webkit-scrollbar { width: 5px; }
             .lazer-scroll::-webkit-scrollbar-track { background: transparent; }

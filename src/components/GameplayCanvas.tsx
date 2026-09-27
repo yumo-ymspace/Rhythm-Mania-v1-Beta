@@ -835,7 +835,6 @@ export default function GameplayCanvas({
   }, []);
   
   // Dynamic visual visualizers
-  const screenShakeRef = useRef<number>(0);
   const laneGlowRef = useRef<number[]>([]);
   
   // Judgement popup tracker
@@ -1454,7 +1453,6 @@ export default function GameplayCanvas({
     songTimeJumpRef.current = true;
     smoothOffsetRef.current = settingsRef.current.audioOffset;
     laneGlowRef.current.fill(0);
-    screenShakeRef.current = 0;
     hitErrorTicksRef.current = [];
     currentJudgementRef.current = null;
 
@@ -1929,10 +1927,6 @@ export default function GameplayCanvas({
             timestamp: Date.now(),
             color: tickColor
           });
-
-          if (action.judgement === 'marvelous' && !settingsRef.current.disableLaneShake) {
-            screenShakeRef.current = 4;
-          }
         } else if (action.kind === 'head_miss') {
           note.isMissed = true;
           note.hitTime = playTime;
@@ -1968,10 +1962,6 @@ export default function GameplayCanvas({
           timestamp: Date.now(),
           color: tickColor
         });
-
-        if (resolvedJudgement.type === 'marvelous' && !settingsRef.current.disableLaneShake) {
-          screenShakeRef.current = 4;
-        }
       } else {
         note.isMissed = true;
         applyJudgement(resolvedJudgement, colIndex);
@@ -2081,11 +2071,6 @@ export default function GameplayCanvas({
         timestamp: Date.now(),
         color: tickColor
       });
-      
-      // Screen shake for excellent accuracy
-      if (resolvedJudgement.type === 'marvelous' && !settingsRef.current.disableLaneShake) {
-        screenShakeRef.current = 4;
-      }
     } else {
       // Tap in miss band (bad < |err| <= miss): head miss only; holds stay alive for tail salvage
       note.isMissed = true;
@@ -2133,9 +2118,6 @@ export default function GameplayCanvas({
         lastHudFlushRef.current = 0;
         if ((settings.selectedMods || []).includes('MU') && isPlayingRef.current && !isPausedRef.current) {
           mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
-        }
-        if (!settingsRef.current.disableLaneShake) {
-          screenShakeRef.current = 4;
         }
         const justFailed = applyHealthJudgement(
           healthStateRef.current,
@@ -2200,9 +2182,6 @@ export default function GameplayCanvas({
         holdNote.isReleaseMissed = true;
         holdNote.isHoldFailed = true;
         applyJudgement(missJudg, colIndex, 'hold_tail');
-        if (!settingsRef.current.disableLaneShake) {
-          screenShakeRef.current = 6;
-        }
         return;
       }
 
@@ -2259,9 +2238,6 @@ export default function GameplayCanvas({
       mainAudio.playBeatmapHitsound(holdNote.hitSound, holdNote.hitSample?.filename);
     } else {
       holdNote.isHoldFailed = true;
-      if (!settingsRef.current.disableLaneShake) {
-        screenShakeRef.current = 6;
-      }
     }
   };
 
@@ -2885,15 +2861,22 @@ export default function GameplayCanvas({
             }
           }
           const dueEvents: { type: 'head' | 'tail'; note: HitObject; eventTime: number }[] = [];
+          // Notes are sorted by head time, but hold tails can end long after
+          // later notes begin. The cursor must not advance past a hold whose
+          // tail is still in the future, or its sliderend is never visited.
+          let firstPendingHoldIndex = -1;
 
           for (let ai = autoCursor; ai < allAutoNotes.length; ai++) {
             const note = allAutoNotes[ai];
             if (note.time > judgeTime && (note.endTime === undefined || note.endTime > judgeTime)) {
-              // Heads and tails are both future beyond this point (sorted).
-              autoCursor = ai;
+              // Heads beyond this point are all future (sorted), but an
+              // earlier hold tail may still be pending — resume from it.
+              autoCursor = firstPendingHoldIndex !== -1 ? firstPendingHoldIndex : ai;
               break;
             }
-            if (ai === allAutoNotes.length - 1) autoCursor = allAutoNotes.length;
+            if (ai === allAutoNotes.length - 1) {
+              autoCursor = firstPendingHoldIndex !== -1 ? firstPendingHoldIndex : allAutoNotes.length;
+            }
             if (!note.isHit && !note.isMissed && note.time <= judgeTime) {
               dueEvents.push({ type: 'head', note, eventTime: note.time });
             }
@@ -2906,6 +2889,22 @@ export default function GameplayCanvas({
             ) {
               dueEvents.push({ type: 'tail', note, eventTime: note.endTime });
             }
+            if (
+              firstPendingHoldIndex === -1 &&
+              note.type === 'hold' &&
+              !note.isReleased &&
+              !note.isHoldFailed &&
+              note.endTime !== undefined &&
+              note.endTime > judgeTime &&
+              (note.isHit || (!note.isMissed && note.time <= judgeTime))
+            ) {
+              firstPendingHoldIndex = ai;
+            }
+          }
+          // The scan above may have found a pending tail after the break
+          // point was already assigned (tail due later in the same pass).
+          if (firstPendingHoldIndex !== -1 && autoCursor > firstPendingHoldIndex) {
+            autoCursor = firstPendingHoldIndex;
           }
           autoplayCursorRef.current = autoCursor;
 
@@ -2942,9 +2941,6 @@ export default function GameplayCanvas({
                 }
                 mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
                 laneGlowRef.current[n.column] = 1.0;
-                if (!settingsRef.current.disableLaneShake) {
-                  screenShakeRef.current = 4;
-                }
               } else if (evt.type === 'tail') {
                 updateKeyCounterUi(n.column, false, false);
                 if (n.isReleased || n.isHoldFailed) continue;
@@ -3126,7 +3122,6 @@ export default function GameplayCanvas({
           receptorY,
           columns: colsLayout,
           notes: visibleNotes,
-          shake: currentSettings.disableLaneShake ? 0 : screenShakeRef.current,
           settingsSlice: renderSettings,
           showKeyLabels: true,
           keyLabels: keyLabelsMapped,
@@ -3136,11 +3131,6 @@ export default function GameplayCanvas({
           breaks: songBreaks
         });
 
-        // Decay screen shake
-        if (screenShakeRef.current > 0) {
-          screenShakeRef.current *= 0.9;
-          if (screenShakeRef.current < 0.1) screenShakeRef.current = 0;
-        }
         // Hit-error meters draw in the 6Hz HUD flush above, never per-frame.
       }
 
@@ -3817,7 +3807,6 @@ export default function GameplayCanvas({
     hitErrorTicksRef.current = [];
     currentJudgementRef.current = null;
     laneGlowRef.current.fill(0);
-    screenShakeRef.current = 0;
     
     if (isReplayMode) {
       simulateGameToTime(newTimeMs);

@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Heart, Info, Loader2, Star } from 'lucide-react';
 import { Beatmap, PlayHistoryRecord } from '../../types';
 import { sanitizeCssUrl } from '../../utils/securityLimits';
-import { contrastTextOn, hexWithAlpha, sampleStarDifficultyColor } from '../../utils/starRating';
+import { contrastTextOn, hexWithAlpha, mixWithWhite, sampleStarDifficultyColor } from '../../utils/starRating';
 import { buildBackgroundCacheKey, storageManager } from '../../utils/storageManager';
 import { AssetLifecycleManager, isBrowserPlayableVideoFilename } from '../../utils/assetLifecycle';
 
@@ -238,7 +238,9 @@ export function getDiffTint(starRating: number): { bg: string; edge: string; pil
     edge: base,
     pill: {
       backgroundColor: base,
-      color: contrastTextOn(base),
+      // Grey text instead of pure white/black: light grey on dark pills,
+      // darker grey on light pills.
+      color: contrastTextOn(base) === '#ffffff' ? '#d3d7dd' : '#565d66',
       border: '1px solid rgba(255, 255, 255, 0.4)',
     },
   };
@@ -481,6 +483,8 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
               const rating = getStarRating(diff);
               const dotCount = getStarDotCount(rating);
               const tint = getDiffTint(rating);
+              // Pastel (white-softened) official colour for the earned stars.
+              const starFill = mixWithWhite(tint.edge, 0.45);
 
               return (
                 <div
@@ -546,9 +550,8 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
                                 key={i}
                                 size={9}
                                 className="shrink-0"
-                                color={tint.edge}
-                                fill={tint.edge}
-                                style={{ filter: `drop-shadow(0 0 2px ${tint.edge})` }}
+                                color={starFill}
+                                fill={starFill}
                               />
                             ) : (
                               <span

@@ -149,6 +149,13 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
+/** Mixes an '#rrggbb' colour towards white (amount 0 keeps it, 1 is white). */
+export function mixWithWhite(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const a = Math.max(0, Math.min(1, amount));
+  return rgbToHex(r + (255 - r) * a, g + (255 - g) * a, b + (255 - b) * a);
+}
+
 /**
  * Readable text colour to place on top of the given difficulty colour:
  * near-black on light colours, white on dark ones.

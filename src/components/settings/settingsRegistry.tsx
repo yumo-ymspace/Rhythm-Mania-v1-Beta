@@ -166,13 +166,6 @@ export const ROWS: RowDef[] = [
     keywords: ['combo', 'burst', 'milestone', 'popup', '50', 'celebration'],
   },
   {
-    id: 'disableLaneShake', section: 'graphics', label: 'Disable lane shake',
-    description: 'Turn off lane vibration when hitting perfect judgements.',
-    control: { kind: 'toggle' },
-    defaultValue: DEFAULT_SETTINGS.disableLaneShake,
-    keywords: ['shake', 'vibration', 'perfect', 'marvelous', 'lane', 'screen'],
-  },
-  {
     id: 'showFpsCounter', section: 'graphics', label: 'Show FPS counter',
     description: 'Display a small performance readout (FPS, frame time, input latency) in the corner on every screen.',
     control: { kind: 'toggle' },

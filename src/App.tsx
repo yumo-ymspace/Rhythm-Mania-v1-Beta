@@ -1173,7 +1173,6 @@ export default function App() {
         bindRetry: updated.bindRetry !== undefined ? String(updated.bindRetry) : 'r',
         bindSkipIntro: updated.bindSkipIntro !== undefined ? String(updated.bindSkipIntro) : 'enter',
         enableMapSV: updated.enableMapSV !== false,
-        disableLaneShake: Boolean(updated.disableLaneShake),
         enableSongPreview: updated.enableSongPreview !== false,
         showFpsCounter: Boolean(updated.showFpsCounter),
         uncappedMenuMotion: Boolean(updated.uncappedMenuMotion),

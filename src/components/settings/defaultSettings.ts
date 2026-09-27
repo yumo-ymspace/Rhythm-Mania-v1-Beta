@@ -84,7 +84,6 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   bindSkipIntro: 'enter',
   compensateOutputLatency: false,
   enableMapSV: true,
-  disableLaneShake: false,
   enableSongPreview: true,
   showFpsCounter: false,
   uncappedMenuMotion: false,

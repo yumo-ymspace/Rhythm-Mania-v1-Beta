@@ -71,7 +71,7 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     const { ctx } = this;
     if (!ctx) return;
 
-    const { width, height, columns, notes, shake, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
+    const { width, height, columns, notes, settingsSlice, showKeyLabels, keyLabels, isFocusMode } = frame;
     const receptorY = frame.receptorY;
 
     ctx.clearRect(0, 0, width, height);
@@ -80,13 +80,6 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
     const shieldDim = settingsSlice.backgroundDim !== undefined ? settingsSlice.backgroundDim : 0.60;
     ctx.fillStyle = `rgba(0, 0, 0, ${shieldDim})`;
     ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-    if (shake > 0) {
-      const shakeX = (Math.random() - 0.5) * shake;
-      const shakeY = (Math.random() - 0.5) * shake;
-      ctx.translate(shakeX, shakeY);
-    }
 
     const useArgon = isArgonSkin(settingsSlice);
     if (useArgon) {
@@ -932,7 +925,6 @@ export class Canvas2DRenderer implements IPlayfieldRenderer {
       ctx.restore();
     }
 
-    ctx.restore(); // POP screen shake translations
     // Playfield canvas is playfield-only. All hit-error meters live in the
     // ManiaHud overlay and are never drawn here.
   }

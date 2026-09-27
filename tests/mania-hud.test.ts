@@ -54,26 +54,35 @@ describe('ManiaHud and Argon HUD components (TASK-052)', () => {
   });
 
   it('ArgonScoreCounter displays 6 digits with wireframe template and no "Score" label', () => {
-    // Score 0: 5 wireframe zeros + 1 active zero
+    // Score 0: 5 wireframe zeros + 1 active zero, each digit in its own fixed slot
     const html0 = renderToStaticMarkup(
       React.createElement(ArgonScoreCounter, { score: 0 })
     );
-    expect(html0).toContain('00000');
     expect(html0).not.toContain('SCORE');
     expect(html0).not.toContain('>Score<');
+    // 6 fixed-width digit slots, 5 of them wireframe placeholders
+    expect(html0.match(/w-\[1ch\]/g)).toHaveLength(6);
+    expect(html0.match(/opacity-25/g)).toHaveLength(5);
+    expect(html0.match(/>0</g)).toHaveLength(6);
 
-    // Score 42702: 1 wireframe zero + 42702
+    // Score 42702: 1 wireframe zero + one slot per digit of 42702
     const html42k = renderToStaticMarkup(
       React.createElement(ArgonScoreCounter, { score: 42702 })
     );
     expect(html42k).toContain('>0<');
-    expect(html42k).toContain('>42702<');
+    expect(html42k).toContain('>4<');
+    expect(html42k).toContain('>2<');
+    expect(html42k).toContain('>7<');
+    expect(html42k.match(/w-\[1ch\]/g)).toHaveLength(6);
+    expect(html42k.match(/opacity-25/g)).toHaveLength(1);
 
-    // Score 1,000,000: no leading wireframe zeros
+    // Score 1,000,000: 7 slots, no leading wireframe zeros
     const html1m = renderToStaticMarkup(
       React.createElement(ArgonScoreCounter, { score: 1000000 })
     );
-    expect(html1m).toContain('>1000000<');
+    expect(html1m).toContain('>1<');
+    expect(html1m.match(/w-\[1ch\]/g)).toHaveLength(7);
+    expect(html1m).not.toContain('opacity-25');
   });
 
   it('ArgonWedgePieces renders stacked wedges with shear matrix and #66CCFF accent', () => {

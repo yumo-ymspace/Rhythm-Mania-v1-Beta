@@ -359,10 +359,10 @@ export default function SongSelect({
 
   // Difficulty pill/text colours: official osu!lazer star-difficulty colour
   // as a tinted chip (light colours read in their own colour, dark colours
-  // in white). Stable reference so the left panel does not re-render.
+  // in grey). Stable reference so the left panel does not re-render.
   const getDifficultyColor = useCallback((rating: number): React.CSSProperties => {
     const base = sampleStarDifficultyColor(rating);
-    const text = contrastTextOn(base) === '#ffffff' ? '#ffffff' : base;
+    const text = contrastTextOn(base) === '#ffffff' ? '#cfd3da' : base;
     return {
       color: text,
       backgroundColor: hexWithAlpha(base, 0.16),

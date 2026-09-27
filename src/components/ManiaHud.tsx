@@ -352,20 +352,34 @@ export const ArgonScoreCounter: React.FC<{ score: number; className?: string }> 
   const paddedZerosCount = Math.max(0, minDigits - scoreStr.length);
   const wireframeZeros = '0'.repeat(paddedZerosCount);
 
+  // Every digit (and every wireframe placeholder) gets its own fixed-width
+  // slot so Orbitron's proportional figures can't push neighbouring digits
+  // around as the score counts up. Each slot is 1ch wide with a centered
+  // glyph; a glyph wider than its slot overflows symmetrically without moving
+  // layout, and the whole counter stays right-anchored. Index keys keep the
+  // slot nodes stable across score updates instead of remounting them.
   return (
     <div
       id="argon-score-counter"
-      className={`font-mono font-black tracking-tight tabular-nums select-none flex items-baseline justify-end leading-none ${className}`}
+      className={`font-display font-black tracking-tight tabular-nums select-none flex items-baseline justify-end leading-none ${className}`}
       aria-label={`Score: ${safeScore}`}
     >
-      {wireframeZeros.length > 0 && (
-        <span className="opacity-25 text-white select-none">
-          {wireframeZeros}
+      {wireframeZeros.split('').map((z, i) => (
+        <span
+          key={`wireframe-${i}`}
+          className="opacity-25 text-white select-none w-[1ch] text-center shrink-0"
+        >
+          {z}
         </span>
-      )}
-      <span className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-        {scoreStr}
-      </span>
+      ))}
+      {scoreStr.split('').map((d, i) => (
+        <span
+          key={`digit-${i}`}
+          className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
+        >
+          {d}
+        </span>
+      ))}
     </div>
   );
 };
@@ -385,7 +399,7 @@ export const ArgonAccuracyCounter: React.FC<{ accuracy?: number; className?: str
   return (
     <div
       id="argon-accuracy-counter"
-      className={`font-mono font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white ${className}`}
+      className={`font-display font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white ${className}`}
       aria-label={`Accuracy: ${accStr}%`}
     >
       <span className="text-2xl sm:text-3xl md:text-4xl tracking-tight tabular-nums font-black">
@@ -412,7 +426,7 @@ export const ArgonPenarCounter: React.FC<{
     <div
       id="argon-penar-counter"
       title="Performance Evaluation & Numerical Achievement Rating"
-      className={`font-mono font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white/90 ${className}`}
+      className={`font-display font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white/90 ${className}`}
       aria-label={`PENAR: ${valueStr}`}
     >
       <span className="text-xl sm:text-2xl md:text-3xl tracking-tight tabular-nums font-black">
@@ -440,7 +454,7 @@ export const ArgonComboCounter: React.FC<{ combo?: number; className?: string }>
     <div
       id="argon-combo-counter"
       key={`argon-combo-${combo}`}
-      className={`flex flex-col items-start leading-none font-mono select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] drop-shadow-[0_4px_12px_rgba(0,0,0,0.95)] animate-combo-pop ${className}`}
+      className={`flex flex-col items-start leading-none font-display select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] drop-shadow-[0_4px_12px_rgba(0,0,0,0.95)] animate-combo-pop ${className}`}
       aria-label={`Combo: ${combo}`}
     >
       <div className="text-5xl sm:text-6xl font-[900] tracking-tighter text-white">
@@ -479,12 +493,12 @@ export const ArgonKeyCounter: React.FC<{
           id={`argon-key-box-${k.id}`}
           className="w-8 sm:w-9 h-11 sm:h-12 rounded-lg bg-slate-950/75 border border-white/15 backdrop-blur-sm flex flex-col items-center justify-between py-1 px-0.5 transition-all duration-75 shadow-sm"
         >
-          <span className="font-mono text-[10px] sm:text-[11px] font-bold uppercase text-slate-300 select-none">
+          <span className="font-display text-[10px] sm:text-[11px] font-bold uppercase text-slate-300 select-none">
             {k.label}
           </span>
           <span
             id={`argon-key-count-${k.id}`}
-            className="font-mono text-[10px] font-black text-white/90 tabular-nums select-none"
+            className="font-display text-[10px] font-black text-white/90 tabular-nums select-none"
           >
             0
           </span>
@@ -522,7 +536,7 @@ export const ArgonDualHitErrorMeters: React.FC<{
           right: `calc(50% + ${halfPercent}% + 12px)`,
         }}
       >
-        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Early</span>
+        <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Early</span>
         <canvas
           ref={leftCanvasRef}
           width={24}
@@ -530,7 +544,7 @@ export const ArgonDualHitErrorMeters: React.FC<{
           className="w-[24px] h-[200px]"
           aria-hidden="true"
         />
-        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Late</span>
+        <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Late</span>
       </div>
 
       {/* Right Hit Error Meter (X-Flipped canvas only; labels stay readable) */}
@@ -541,7 +555,7 @@ export const ArgonDualHitErrorMeters: React.FC<{
           left: `calc(50% + ${halfPercent}% + 12px)`,
         }}
       >
-        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Early</span>
+        <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Early</span>
         <canvas
           ref={rightCanvasRef}
           width={24}
@@ -549,7 +563,7 @@ export const ArgonDualHitErrorMeters: React.FC<{
           className="w-[24px] h-[200px] scale-x-[-1]"
           aria-hidden="true"
         />
-        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-slate-400/80">Late</span>
+        <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Late</span>
       </div>
     </div>
   );
@@ -617,7 +631,7 @@ export const ArgonSongProgress: React.FC<{
       {/* Current elapsed time label */}
       <span
         ref={timeLabelRef}
-        className="font-mono text-[11px] font-bold text-white/80 tabular-nums shrink-0 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+        className="font-display text-[11px] font-bold text-white/80 tabular-nums shrink-0 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
       >
         0:00
       </span>
@@ -644,7 +658,7 @@ export const ArgonSongProgress: React.FC<{
       {/* Remaining time label */}
       <span
         ref={timeLeftLabelRef}
-        className="font-mono text-[11px] font-bold text-white/80 tabular-nums shrink-0 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+        className="font-display text-[11px] font-bold text-white/80 tabular-nums shrink-0 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
       >
         -0:00
       </span>

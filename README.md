@@ -85,7 +85,7 @@ browser:
 - **Video offset** fine-tune for storyboard video sync
 - **Disable video** toggle
 - **Progress bar position** toggle (top or bottom) and an optional **FPS counter** overlay
-- **Disable particles** and **disable lane shake** toggles for performance and comfort
+- **Disable particles** toggle for performance and comfort
 - **Skins menu**: choose RhythmMania Style Rectangular, RhythmPlus Classic Style Rectangular, RhythmPlus Dynamic Style Rectangular, or Circular Style, then adjust per-lane colors, opacity sliders (notes, receptors, judgement text, lane separators), note and receptor size scaling, and the live skin preview
 
 ### Background Video Sync

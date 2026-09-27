@@ -1099,7 +1099,7 @@ Opens from toolbar gear and menu Settings. Keep `SettingsDrawer` behaviour and *
 | Section | Registry ids |
 |---|---|
 | General | `localDisplayName`, `progressBarTop`, `enableSongPreview` |
-| Graphics | `playfieldWidthPercent`, `backgroundDim`, `menuBackgroundDim`, `disableVideo`, `videoOffset`, `disableParticles`, `disableLaneShake`, `showFpsCounter`, `babylonFloor` |
+| Graphics | `playfieldWidthPercent`, `backgroundDim`, `menuBackgroundDim`, `disableVideo`, `videoOffset`, `disableParticles`, `showFpsCounter`, `babylonFloor` |
 | Gameplay | `scrollSpeed`, `lockScrollSpeedDuringPlay`, `showPenarDuringPlay`, `upsurfaceNoteMode`, `visualOffset`, `enableMapSV` |
 | Audio | `musicVolume`, `previewVolume`, `masterVolume`, `hitsoundVolume`, `audioOffset`, `offsetWizard` |
 | Input | `bindings` |

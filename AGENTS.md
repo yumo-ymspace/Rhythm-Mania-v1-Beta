@@ -347,7 +347,7 @@ lanes from key count and derives near-plane width from
 Babylon details that are directly implemented:
 
 - Notes are emissive slabs; hold bodies are tapered frustum-like slabs; lane separators converge toward the far end; the receptor is a glowing line.
-- The camera framing is fixed. Only the frame's on-hit shake changes camera position.
+- The camera framing is fixed.
 - The camera pipeline enables a fixed bloom configuration in `BabylonSceneFactory`; there is no user bloom setting.
 - The `babylonFloor` setting toggles the dark matte floor.
 - Particles are consumed from the shared frame and are capped to 80 in `ParticleLayer`; `disableParticles` gates them upstream and in the layer.

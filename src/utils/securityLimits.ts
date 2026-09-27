@@ -333,7 +333,6 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     disableVideo: Boolean(settings.disableVideo),
     videoOffset: clamp(settings.videoOffset, -10000, 10000, defaultSettings.videoOffset || 0),
     disableComboBurst: Boolean(settings.disableComboBurst),
-    disableLaneShake: Boolean(settings.disableLaneShake),
     renderDpr: sanitizeRenderDprSetting(settings, defaultSettings),
     skinId: (() => {
       const cleaned = sanitizeString(settings.skinId, defaultSettings.skinId || 'argon');

@@ -137,8 +137,10 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
             </div>
           </div>
 
+          {/* 2+3. INFO BOX SKELETON — same slanted shell, blank values */}
+          <div className="lazer-song-infobox">
           {/* 2. DIFFICULTY & MAPPER LINE */}
-          <div className="flex items-center gap-2 mt-2.5">
+          <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded text-[11px] font-mono font-black" style={getDifficultyColor(0)}>
               ★ -
             </span>
@@ -171,6 +173,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
               </div>
            ))}
           </div>
+        </div>
         </div>
       </div>
 
@@ -337,8 +340,11 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
           </div>
         </div>
 
+        {/* 2+3. INFO BOX — slanted shell holding the difficulty/mapper
+            line and the stats strip (same style as the wedge, 85% opaque). */}
+        <div className="lazer-song-infobox">
         {/* 2. DIFFICULTY & MAPPER LINE */}
-        <div className="flex items-center gap-2 mt-2.5">
+        <div className="flex items-center gap-2">
           <span className="px-2 py-0.5 rounded text-[11px] font-mono font-black" style={getDifficultyColor(currentStarRating)}>
             ★ {currentStarRating.toFixed(2)}
           </span>
@@ -373,6 +379,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
             </div>
           ))}
           </div>
+        </div>
         </div>
       </div>
 

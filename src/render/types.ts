@@ -79,7 +79,6 @@ export interface PlayfieldVisualSettings {
   laneSeparatorOpacity?: number;
   selectedMods?: string[];
   backgroundDim?: number;
-  disableLaneShake?: boolean;
   enableMapSV?: boolean;
   playfieldWidthPercent?: number;
 }
@@ -93,7 +92,6 @@ export interface PlayfieldFrame {
   notes: VisibleNote[];
   // NOTE: playfield frames carry no HUD state. Hit-error meters are drawn by
   // the ManiaHud overlay from its own tick data, never from this frame.
-  shake: number;
   settingsSlice: PlayfieldVisualSettings;
   showKeyLabels: boolean;
   keyLabels: string[];
