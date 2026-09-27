@@ -375,7 +375,7 @@ interface CarouselGroupCardProps {
   isFavorite: boolean;
   selectedMapId?: string;
   best: BestRecordIndex;
-  fallbackIndentPx: number;
+  fallbackIndentPx: number | string;
   fallbackExtendRightPx: number;
   fallbackMarginTopPx: number;
   onSelectGroup: (group: CarouselSongGroup) => void;
@@ -643,9 +643,10 @@ export function SongSelectCarousel({
   //
   // Length hierarchy (always true, even mid-scroll):
   //   selected group  >  centred non-selected  >  edge non-selected
-  // The selected group pins to full width regardless of viewport position;
-  // non-selected groups taper from a base indent at the centre out to the
-  // max indent at the edges.
+  // Banners render at ~75% of the carousel width, right-aligned: a base
+  // left inset of 25% of the container width applies to every group, and
+  // non-selected groups taper with an extra indent at the centre out to
+  // the max indent at the edges.
   //
   // Performance: indents are written directly to the DOM inside a
   // rAF-throttled scroll handler. No React state per scroll frame, so fast
@@ -657,22 +658,25 @@ export function SongSelectCarousel({
   const MAX_INDENT_PX = 32;
   const CENTER_INDENT_PX = 12;
   const RANGE_PX = 300;
-  // The native scrollbar is hidden (see tokens.css): every banner stays
-  // flush to the right screen edge (marginRight 0) while unselected banners
-  // sit only slightly shorter through their small left indent, so all
-  // banners read at nearly the same horizontal length. The custom overlay
-  // thumb floats on top of the banner art (no layout gap between banners
-  // and the screen edge).
-  const SELECTED_RIGHT_EXTEND_PX = 0;
-  const UNSELECTED_RIGHT_OVERLAP_PX = 0;
+  // Banner width fraction: banners occupy the right ~75% of the carousel.
+  // The complementary 25% left inset is resolved against the live container
+  // width in the taper (percent fallback pre-paint), so it holds on any
+  // viewport instead of a fixed pixel guess.
+  const BANNER_LEFT_FRACTION = 0.25;
+  // The native scrollbar is hidden (see tokens.css): banners keep a small
+  // right inset so they read slightly shorter than full width. The custom
+  // overlay thumb floats in that inset gap on top of the backdrop art
+  // (no layout gap between banners and the screen edge beyond the inset).
+  const SELECTED_RIGHT_EXTEND_PX = 12;
+  const UNSELECTED_RIGHT_OVERLAP_PX = 12;
   // Unselected song banners stack with a slight vertical overlap
   // (osu!lazer-style); the selected/expanded group keeps a normal gap.
   const UNSELECTED_OVERLAP_PX = 3;
   const SELECTED_GAP_PX = 6;
-  // Difficulty-row taper: every row sticks to the screen edge on the right
-  // (the -4 cancels the wrapper gutter); unselected rows read slightly
-  // shorter through their larger left indent, which still tapers with
-  // viewport position. The selected row pins near banner width above them all.
+  // Difficulty-row taper: rows keep a small right inset matching the
+  // banners; unselected rows read slightly shorter through their larger
+  // left indent, which still tapers with viewport position. The selected
+  // row pins near banner width above them all.
   const DIFF_BASE_ML_PX = 8;
   const DIFF_BASE_MR_PX = -4;
   const DIFF_SELECTED_ML_PX = -12;
@@ -716,8 +720,8 @@ export function SongSelectCarousel({
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
-  // Custom overlay scrollbar thumb (the native bar is hidden so banners stay
-  // flush). Written directly like the taper — no React state per scroll frame.
+  // Custom overlay scrollbar thumb (the native bar is hidden so nothing
+  // clips the banner art). Written directly like the taper — no React state per scroll frame.
   const scrollThumbRef = useRef<HTMLDivElement | null>(null);
   // No top spacer: the list starts flush at the top and selection snaps to
   // the top edge (not the viewport centre), so there is never an empty gap
@@ -746,6 +750,8 @@ export function SongSelectCarousel({
     const selectedKey = selectedKeyRef.current;
     const viewCenter = container.scrollTop + container.clientHeight / 2;
     const expandedKeyForStack = expandedKeyRef.current;
+    // Base left inset for the ~75% banner width, right-aligned.
+    const baseShrinkPx = Math.round(container.clientWidth * BANNER_LEFT_FRACTION);
     for (let gi = 0; gi < groupsRef.current.length; gi += 1) {
       const g = groupsRef.current[gi];
       const el = itemEls.current.get(g.songKey);
@@ -765,8 +771,9 @@ export function SongSelectCarousel({
       const targetZ = g.songKey === selectedKey ? '2' : '1';
       if (el.style.zIndex !== targetZ) el.style.zIndex = targetZ;
       if (g.songKey === selectedKey) {
-        // Selected: pinned full-width, always longer than the rest.
-        if (el.style.marginLeft !== '0px') el.style.marginLeft = '0px';
+        // Selected: pinned to the ~75% width, always longer than the rest.
+        const selectedLeft = `${baseShrinkPx}px`;
+        if (el.style.marginLeft !== selectedLeft) el.style.marginLeft = selectedLeft;
         if (el.style.marginRight !== `${SELECTED_RIGHT_EXTEND_PX}px`) el.style.marginRight = `${SELECTED_RIGHT_EXTEND_PX}px`;
         continue;
       }
@@ -777,10 +784,10 @@ export function SongSelectCarousel({
       }
       const t = Math.min(1, Math.abs(center - viewCenter) / RANGE_PX);
       const indent = Math.round(CENTER_INDENT_PX + (MAX_INDENT_PX - CENTER_INDENT_PX) * Math.pow(t, 0.85));
-      const left = `${indent}px`;
+      const left = `${baseShrinkPx + indent}px`;
       if (el.style.marginLeft !== left) el.style.marginLeft = left;
-      // Every banner stays flush to the right screen edge; the overlay
-      // scrollbar thumb floats on top of the art instead of taking a gap.
+      // Every banner keeps a small right inset; the overlay
+      // scrollbar thumb floats in that gap instead of taking a layout gap.
       if (el.style.marginRight !== `${UNSELECTED_RIGHT_OVERLAP_PX}px`) el.style.marginRight = `${UNSELECTED_RIGHT_OVERLAP_PX}px`;
     }
 
@@ -1051,10 +1058,11 @@ export function SongSelectCarousel({
   // scratch, which reads as a position glitch at the top of the list.
   // pl-4 reserves room for the hover slide (-4px) plus card glow on the left.
   // The wrapper bleeds through the column gutter (negative right margin) so
-  // banners attach flush to the screen edge; the search/filter rows above
-  // keep their own padding and stay inset. The overlay thumb floats over the
-  // art because the native bar is hidden (it would otherwise sit between the
-  // banners and the edge).
+  // the scroll area reaches the screen edge; banners themselves keep a
+  // small right inset via margin, and the search/filter rows above
+  // keep their own padding and stay inset. The overlay thumb floats in the
+  // banner inset gap because the native bar is hidden (it would otherwise
+  // sit between the banners and the edge).
   const carouselWrapClassName =
     'flex-1 relative min-h-0 flex flex-col mr-[-8px] lg:mr-[-12px]';
   const carouselClassName =
@@ -1116,13 +1124,18 @@ export function SongSelectCarousel({
         // banner toggles (closes) its diff list while keeping selection.
         const isExpanded = expandedSongKey === group.songKey;
         // First-paint indent before the rAF taper measures the viewport:
-        // selected pins full-width; the rest fall back to the discrete
-        // focus index. The scroll handler takes over immediately after.
+        // every banner starts at the ~75% width (25% left inset) with the
+        // selected group pinned there and the rest falling back to the
+        // discrete focus index on top. The scroll handler takes over
+        // immediately after with the pixel-measured equivalent.
         // Cheap arithmetic only — sorting, star ratings, and history scans
         // live inside the memoized card below.
-        const fallbackIndentPx = isGroupActive
+        const fallbackTaperPx = isGroupActive
           ? 0
           : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 4;
+        const fallbackIndentPx = fallbackTaperPx === 0
+          ? '25%'
+          : `calc(25% + ${fallbackTaperPx}px)`;
         const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : UNSELECTED_RIGHT_OVERLAP_PX;
         const prevGroupKey = groupIndex > 0 ? songGroups[groupIndex - 1].songKey : null;
         const fallbackBelowExpanded = prevGroupKey !== null && prevGroupKey === expandedSongKey && prevGroupKey !== group.songKey;

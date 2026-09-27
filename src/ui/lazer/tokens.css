@@ -1620,9 +1620,9 @@ html[data-ui="lazer"] {
 .lazer-carousel-card {
   position: relative;
   min-height: 54px;
-  /* Song-select banners bleed to the right screen edge — rounded on
-     the left only, square + borderless on the right where they attach. */
-  border-radius: 6px 0 0 6px;
+  /* Song-select banners keep a small right inset — rounded on all
+     corners since they no longer attach to the screen edge. */
+  border-radius: 6px;
   overflow: hidden;
   background: rgba(22, 25, 32, 0.94);
   border: none;
@@ -1677,9 +1677,9 @@ html[data-ui="lazer"] {
 .lazer-carousel-diff-row {
   position: relative;
   min-height: 36px;
-  /* Square on the right like the banners; unselected rows sit slightly
-     shorter via margin while the selected row pins flush to the edge. */
-  border-radius: 4px 0 0 4px;
+  /* Rounded on all corners like the banners; unselected rows sit slightly
+     shorter via margin while the selected row pins near banner width. */
+  border-radius: 4px;
   overflow: hidden;
   background: rgba(16, 19, 26, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.06);

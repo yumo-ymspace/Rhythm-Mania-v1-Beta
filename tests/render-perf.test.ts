@@ -9,6 +9,7 @@ import {
 import { cachedHexToRgba, clearColorCaches, darkenCached, getCachedRgb01 } from '../src/render/colorCache';
 import { getVisibleNotes } from '../src/render/noteVisibility';
 import type { HitObject } from '../src/types';
+import type { PlayfieldVisualSettings, VisibleNote } from '../src/render/types';
 
 describe('renderDpr user setting', () => {
   it('defaults to balanced 1.5x', () => {
@@ -43,7 +44,7 @@ describe('renderDpr user setting', () => {
   });
 
   it('drops limitDprToOne from sanitized settings', () => {
-    const clean = sanitizeSettings({ renderDpr: 2 }, DEFAULT_SETTINGS) as Record<string, unknown>;
+    const clean = sanitizeSettings({ renderDpr: 2 }, DEFAULT_SETTINGS) as unknown as Record<string, unknown>;
     expect('limitDprToOne' in clean).toBe(false);
     expect(getEffectiveDpr({ renderDpr: 2 })).toBe(2);
     expect(getEffectiveDpr({})).toBe(1.5);
@@ -78,8 +79,11 @@ describe('color cache', () => {
 });
 
 describe('getVisibleNotes buffer reuse', () => {
-  const settings = {
+  const settings: PlayfieldVisualSettings = {
     upsurfaceNoteMode: false,
+    scrollSpeed: 21,
+    audioOffset: 0,
+    visualOffset: 0,
     noteOpacity: 1,
     selectedMods: [],
   };
@@ -100,7 +104,7 @@ describe('getVisibleNotes buffer reuse', () => {
   it('reuses the provided output array without changing results', () => {
     const notes = [makeNote(1000), makeNote(2000), makeNote(3000)];
     const fresh = getVisibleNotes(notes, settings, 800, 600, 1000, 0.2);
-    const out: import('../src/render/types').VisibleNote[] = [];
+    const out: VisibleNote[] = [];
     const reused = getVisibleNotes(notes, settings, 800, 600, 1000, 0.2, null, 0, [], out);
     expect(reused).toBe(out);
     expect(out.map((n) => n.id)).toEqual(fresh.map((n) => n.id));
