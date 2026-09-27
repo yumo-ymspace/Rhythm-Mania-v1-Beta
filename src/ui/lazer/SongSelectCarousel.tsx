@@ -62,6 +62,10 @@ export interface SongSelectCarouselProps {
   centerSignal?: CarouselCenterSignal;
   /** True while beatmaps are still loading (IndexedDB/migration). Shows a bare spinner instead of the empty box. */
   isLoading?: boolean;
+  /** Height of the floating filter overlay. The list reserves it as a top
+      spacer so the first banners rest below the overlay while scrolled
+      content slides underneath it up to the toolbar. */
+  topOverlayPx?: number;
 }
 
 const DEFAULT_BANNER = '/backgrounds/Ferineon.webp';
@@ -449,15 +453,17 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
         className={`lazer-carousel-card ${isActive ? 'is-active' : ''}`}
       >
         <SongBannerArt group={group} />
+        {/* 30% dim over the banner art only — sits below the text content. */}
+        <div className="absolute inset-0 bg-black/30 pointer-events-none" aria-hidden="true" />
 
         {/* Set Card Content */}
         <div className="relative flex items-center justify-between px-3.5 py-2 gap-3 min-h-[56px]">
           <div className="flex items-start gap-2 min-w-0 flex-1">
             <div className="flex flex-col text-left overflow-hidden min-w-0 flex-1">
-              <h4 className="font-extrabold font-sans text-[15px] sm:text-base text-white tracking-tight truncate leading-tight order-first">
+              <h4 className="font-extrabold font-sans text-base sm:text-lg text-white tracking-tight truncate leading-tight order-first">
                 {group.title}
               </h4>
-              <span className="text-[11px] font-sans text-slate-200/90 truncate">
+              <span className="text-[11px] font-sans text-white truncate">
                 {group.artist || 'Unknown Artist'}
               </span>
               <div className="flex items-center gap-1.5 mt-1">
@@ -484,11 +490,8 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
             </div>
           </div>
 
-          {/* Right side: diff count + favorite */}
+          {/* Right side: favorite */}
           <div className="flex items-center gap-2 shrink-0 select-none">
-            <span className="px-2 py-0.5 bg-white/10 border border-white/15 rounded text-[10px] font-mono font-bold text-slate-200">
-              {group.maps.length} {group.maps.length === 1 ? 'diff' : 'diffs'}
-            </span>
             <button
               type="button"
               onClick={(e) => {
@@ -635,6 +638,7 @@ export function SongSelectCarousel({
   activeItemRef,
   centerSignal,
   isLoading = false,
+  topOverlayPx = 0,
 }: SongSelectCarouselProps) {
   // Viewport carousel taper (osu!lazer-style): every panel's left offset is
   // a continuous function of that panel's own pixel distance from the
@@ -643,8 +647,8 @@ export function SongSelectCarousel({
   //
   // Length hierarchy (always true, even mid-scroll):
   //   selected group  >  centred non-selected  >  edge non-selected
-  // Banners render at ~75% of the carousel width, right-aligned: a base
-  // left inset of 25% of the container width applies to every group, and
+  // Banners render at ~83.5% of the carousel width, right-aligned: a base
+  // left inset of 16.5% of the container width applies to every group, and
   // non-selected groups taper with an extra indent at the centre out to
   // the max indent at the edges.
   //
@@ -658,17 +662,16 @@ export function SongSelectCarousel({
   const MAX_INDENT_PX = 32;
   const CENTER_INDENT_PX = 12;
   const RANGE_PX = 300;
-  // Banner width fraction: banners occupy the right ~75% of the carousel.
-  // The complementary 25% left inset is resolved against the live container
+  // Banner width fraction: banners occupy the right ~83.5% of the carousel.
+  // The complementary 16.5% left inset is resolved against the live container
   // width in the taper (percent fallback pre-paint), so it holds on any
   // viewport instead of a fixed pixel guess.
-  const BANNER_LEFT_FRACTION = 0.25;
-  // The native scrollbar is hidden (see tokens.css): banners keep a small
-  // right inset so they read slightly shorter than full width. The custom
-  // overlay thumb floats in that inset gap on top of the backdrop art
-  // (no layout gap between banners and the screen edge beyond the inset).
-  const SELECTED_RIGHT_EXTEND_PX = 12;
-  const UNSELECTED_RIGHT_OVERLAP_PX = 12;
+  const BANNER_LEFT_FRACTION = 0.165;
+  // The native scrollbar is hidden (see tokens.css): banners sit flush to
+  // the right screen edge (marginRight 0). The custom overlay thumb floats
+  // on top of the banner art (no layout gap between banners and the edge).
+  const SELECTED_RIGHT_EXTEND_PX = 0;
+  const UNSELECTED_RIGHT_OVERLAP_PX = 0;
   // Unselected song banners stack with a slight vertical overlap
   // (osu!lazer-style); the selected/expanded group keeps a normal gap.
   const UNSELECTED_OVERLAP_PX = 3;
@@ -723,11 +726,12 @@ export function SongSelectCarousel({
   // Custom overlay scrollbar thumb (the native bar is hidden so nothing
   // clips the banner art). Written directly like the taper — no React state per scroll frame.
   const scrollThumbRef = useRef<HTMLDivElement | null>(null);
-  // No top spacer: the list starts flush at the top and selection snaps to
-  // the top edge (not the viewport centre), so there is never an empty gap
-  // above the first card. A small bottom pad keeps the last card off the
+  // Top spacer reserves the floating filter overlay's height: at rest the
+  // first card sits just below the overlay, and scrolled content slides
+  // underneath it up to the toolbar. Selection snaps account for it (see
+  // centreTarget). A small bottom pad keeps the last card off the
   // footer edge. The carousel bottom sits flush at the bottom bar.
-  const TOP_SPACER_PX = 0;
+  const TOP_SPACER_PX = Math.max(0, Math.round(topOverlayPx));
   const BOTTOM_SPACER_PX = 0;
   // Gated until the first synchronous measure+taper pass completes, so the
   // list's first painted frame already has the measured top spacer and
@@ -750,7 +754,7 @@ export function SongSelectCarousel({
     const selectedKey = selectedKeyRef.current;
     const viewCenter = container.scrollTop + container.clientHeight / 2;
     const expandedKeyForStack = expandedKeyRef.current;
-    // Base left inset for the ~75% banner width, right-aligned.
+    // Base left inset for the ~83.5% banner width, right-aligned.
     const baseShrinkPx = Math.round(container.clientWidth * BANNER_LEFT_FRACTION);
     for (let gi = 0; gi < groupsRef.current.length; gi += 1) {
       const g = groupsRef.current[gi];
@@ -786,8 +790,8 @@ export function SongSelectCarousel({
       const indent = Math.round(CENTER_INDENT_PX + (MAX_INDENT_PX - CENTER_INDENT_PX) * Math.pow(t, 0.85));
       const left = `${baseShrinkPx + indent}px`;
       if (el.style.marginLeft !== left) el.style.marginLeft = left;
-      // Every banner keeps a small right inset; the overlay
-      // scrollbar thumb floats in that gap instead of taking a layout gap.
+      // Every banner sits flush to the right screen edge; the overlay
+      // scrollbar thumb floats on top of the art instead of taking a gap.
       if (el.style.marginRight !== `${UNSELECTED_RIGHT_OVERLAP_PX}px`) el.style.marginRight = `${UNSELECTED_RIGHT_OVERLAP_PX}px`;
     }
 
@@ -906,7 +910,7 @@ export function SongSelectCarousel({
       cancelProgScroll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerRef, songGroups.length, expandedSongKey, selectedGroupKey]);
+  }, [containerRef, songGroups.length, expandedSongKey, selectedGroupKey, TOP_SPACER_PX]);
 
   // Keep the taper in sync when the selection flips without a scroll
   // event (selection pins are direct style writes so they never wait for
@@ -1058,20 +1062,19 @@ export function SongSelectCarousel({
   // scratch, which reads as a position glitch at the top of the list.
   // pl-4 reserves room for the hover slide (-4px) plus card glow on the left.
   // The wrapper bleeds through the column gutter (negative right margin) so
-  // the scroll area reaches the screen edge; banners themselves keep a
-  // small right inset via margin, and the search/filter rows above
-  // keep their own padding and stay inset. The overlay thumb floats in the
-  // banner inset gap because the native bar is hidden (it would otherwise
+  // banners sit flush to the screen edge; the search/filter rows above
+  // keep their own padding and stay inset. The overlay thumb floats on top
+  // of the banner art because the native bar is hidden (it would otherwise
   // sit between the banners and the edge).
   const carouselWrapClassName =
     'flex-1 relative min-h-0 flex flex-col mr-[-8px] lg:mr-[-12px]';
   const carouselClassName =
     'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-0 flex flex-col gap-0 relative z-10 min-h-0';
   const carouselOverlay = (
-    <div className="pointer-events-none absolute top-0 bottom-0 right-0 w-[7px] z-20" aria-hidden="true">
+    <div className="pointer-events-none absolute top-0 bottom-0 right-0 w-[10px] z-20" aria-hidden="true">
       <div
         ref={scrollThumbRef}
-        className="absolute right-[1px] top-0 w-[5px] rounded-full bg-white/30 shadow-[0_0_6px_rgba(0,0,0,0.55)]"
+        className="absolute right-[1px] top-0 w-[8px] rounded-full bg-white/30 shadow-[0_0_6px_rgba(0,0,0,0.55)]"
         style={{ opacity: 0 }}
       />
     </div>
@@ -1114,17 +1117,19 @@ export function SongSelectCarousel({
         // never flashed at the top when the banners first appear.
         style={listReady ? undefined : { visibility: 'hidden' }}
       >
-      {/* Flush top: no gap above the first card; list snaps to the top. */}
+      {/* Top spacer reserves the floating filter overlay; list snaps to the
+          top of the visible area below it. */}
       {TOP_SPACER_PX > 0 && (
         <div aria-hidden="true" style={{ height: TOP_SPACER_PX, flexShrink: 0 }} />
       )}
       {songGroups.map((group, groupIndex) => {
         const isGroupActive = selectedGroupKey === group.songKey;
-        // Expansion is driven only by expandedSongKey so clicking the active
-        // banner toggles (closes) its diff list while keeping selection.
+        // Expansion is driven only by expandedSongKey. Clicking the active
+        // banner keeps its diff list open; it only collapses when another
+        // song's diffs are opened.
         const isExpanded = expandedSongKey === group.songKey;
         // First-paint indent before the rAF taper measures the viewport:
-        // every banner starts at the ~75% width (25% left inset) with the
+        // every banner starts at the ~83.5% width (16.5% left inset) with the
         // selected group pinned there and the rest falling back to the
         // discrete focus index on top. The scroll handler takes over
         // immediately after with the pixel-measured equivalent.
@@ -1134,8 +1139,8 @@ export function SongSelectCarousel({
           ? 0
           : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 4;
         const fallbackIndentPx = fallbackTaperPx === 0
-          ? '25%'
-          : `calc(25% + ${fallbackTaperPx}px)`;
+          ? '16.5%'
+          : `calc(16.5% + ${fallbackTaperPx}px)`;
         const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : UNSELECTED_RIGHT_OVERLAP_PX;
         const prevGroupKey = groupIndex > 0 ? songGroups[groupIndex - 1].songKey : null;
         const fallbackBelowExpanded = prevGroupKey !== null && prevGroupKey === expandedSongKey && prevGroupKey !== group.songKey;

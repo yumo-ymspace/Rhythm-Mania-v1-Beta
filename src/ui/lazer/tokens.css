@@ -1620,9 +1620,9 @@ html[data-ui="lazer"] {
 .lazer-carousel-card {
   position: relative;
   min-height: 54px;
-  /* Song-select banners keep a small right inset — rounded on all
-     corners since they no longer attach to the screen edge. */
-  border-radius: 6px;
+  /* Song-select banners sit flush to the right screen edge — rounded on
+     the left only, square + borderless on the right where they attach. */
+  border-radius: 8px 0 0 8px;
   overflow: hidden;
   background: rgba(22, 25, 32, 0.94);
   border: none;
@@ -1652,6 +1652,20 @@ html[data-ui="lazer"] {
   box-shadow: none;
 }
 
+/* Song banner rank pills (ranked / loved / graveyard) read dark grey
+   instead of white on the pill fill. Scoped to the banner cards so the
+   beatmap listing pills keep their own treatment. */
+.lazer-carousel-card .lazer-status-pill.is-ranked,
+.lazer-carousel-card .lazer-status-pill.is-loved,
+.lazer-carousel-card .lazer-status-pill.is-graveyard {
+  color: #2b2f36;
+}
+
+/* Song banner titles always render in Nunito (self-hosted). */
+.lazer-carousel-card h4 {
+  font-family: "Nunito", "Space Grotesk", Inter, sans-serif;
+}
+
 /* Real-carousel taper: indents are written directly to the DOM every
    animation frame (no React re-render), so the follow stays tight with no
    trailing lag while scrolling fast. Margins must NOT transition — a CSS
@@ -1677,9 +1691,9 @@ html[data-ui="lazer"] {
 .lazer-carousel-diff-row {
   position: relative;
   min-height: 36px;
-  /* Rounded on all corners like the banners; unselected rows sit slightly
-     shorter via margin while the selected row pins near banner width. */
-  border-radius: 4px;
+  /* Square on the right like the banners; unselected rows sit slightly
+     shorter via margin while the selected row pins to the banner edge. */
+  border-radius: 6px 0 0 6px;
   overflow: hidden;
   background: rgba(16, 19, 26, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1960,12 +1974,14 @@ html[data-ui="lazer"] {
   background: transparent;
   border: none;
   /* Square flush into the left screen edge; the rounded corner now lives
-     on the slanted bottom-right joint (drawn into the ::before polygon). */
+     on the slanted bottom-right joint (drawn into the ::before polygon).
+     No drop-shadow: it painted a dark halo onto the background art just
+     outside the slanted right edge (the filter-stack shell is flat, so
+     the wedge stays flat to match). */
   border-radius: 0;
   margin: 0 20px 0 0;
-  padding: 16px 62px 16px 16px;
+  padding: 16px 68px 16px 16px;
   overflow: hidden;
-  filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
 }
 
 .lazer-song-wedge::before {
@@ -1978,9 +1994,22 @@ html[data-ui="lazer"] {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: none;
   border-left: none;
-  /* Slanted right edge with a rounded bottom-right joint (extra polygon
-     points approximate the curve); bottom-left stays square and flush. */
-  clip-path: polygon(0 0, 100% 0, calc(100% - 46px + 11px) calc(100% - 52px), calc(100% - 46px + 8px) calc(100% - 40px), calc(100% - 46px + 5px) calc(100% - 29px), calc(100% - 46px + 2px) calc(100% - 19px), calc(100% - 46px - 2px) calc(100% - 11px), calc(100% - 46px - 7px) calc(100% - 5px), calc(100% - 46px - 15px) 100%, 0 100%);
+  /* Right edge slants at the SAME DEGREE as the filter-stack shell's left
+     edge, not the same width. Measured at 1600x900 (DPR 1):
+       filter ::before height = 166.5px (158.5px stack + 8px top tuck),
+         straight slant 26px wide (32px top -> 6px) over 146.5px tall
+         = atan(26 / 146.5) ≈ 10.1° from vertical;
+       wedge ::before height = 219.2px, straight run = 219.2 - 20 = 199.2px,
+         so the straight slant must be 199.2 x tan(10.1°) ≈ 35px wide
+         (100% top -> 100%-35px) to run parallel.
+     Only the bottom-right corner is rounded: a true circular fillet of
+     radius 16px tangent to both the slanted edge and the bottom edge
+     (material-side angle is 100°, so each tangent sits
+     16/tan(50°) ≈ 13.4px from the slant/bottom line-corner at
+     100%-38.9px). The arc is sampled every 20° so curvature spreads
+     evenly — segment angles flow 10° -> 21° -> 39° -> 61° -> 80° -> 90°
+     with no flat or kink. Bottom-left stays square. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 36.6px) calc(100% - 13.2px), calc(100% - 38.5px) calc(100% - 8px), calc(100% - 42px) calc(100% - 3.7px), calc(100% - 46.9px) calc(100% - 1px), calc(100% - 52.3px) 100%, 0 100%);
 }
 
 /* Tabs + ranking/details body sit below the flush wedge with left gutter. */
@@ -2244,36 +2273,33 @@ html[data-ui="lazer"] {
    ========================================================================== */
 
 .lazer-song-filter-stack {
-  position: relative;
+  /* Floating overlay: the carousel runs full-height to the toolbar behind
+     this box, and scrolled banners slide underneath it. Geometry matches the
+     old in-flow bleed (8px inside the column's left padding, flush to the
+     column's right edge). */
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 0;
+  z-index: 30;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  /* Bleed to the right screen edge (cancels the column pr-2 / lg:pr-3,
-     touching the right wall). */
-  margin-right: -8px;
-  /* Small left overlap stays inside the column's visible padding box so the
-     slanted left edge and its rounded top joint are never clipped by the
-     column's overflow clip. Left padding clears the 32px slant cut so no
-     row content sits over background art. */
-  margin-left: -8px;
   padding: 8px 14px 8px 48px;
   gap: 6px;
 }
 
-@media (min-width: 1024px) {
-  .lazer-song-filter-stack {
-    margin-right: -12px;
-  }
-}
-
 /* Single shell: parallelogram slanted on the LEFT edge only, mirrored
-   against the song info wedge (20px slant: 32px top inset, 12px bottom
-   inset; left edge rises to the right). The top-left corner is sharp and
-   follows the slant straight up, tucking behind the top bar. The right
-   side stays straight and square, bled all but 2px to the right screen
-   edge. The bottom-left slant joint carries a small rounded curve in the
-   same style as the info wedge's bottom-right joint. The shell stays
-   fully inside the column's padding box so no corner is clipped. */
+   against the song info wedge (20px slant: 32px top inset; left edge
+   rises to the right). The top-left corner is sharp and follows the
+   slant straight up, tucking behind the top bar. The right side stays
+   straight and square, bled all but 2px to the right screen edge.
+   The bottom-left corner is a true circular fillet of radius 12px
+   tangent to both the slanted edge and the bottom edge (same
+   construction as the info wedge's R16 joint; 12/166.5 and 16/219.2
+   give both corners the identical radius-to-height ratio, so they read
+   as the same roundness). The arc is sampled every 20° so curvature
+   spreads evenly — no vertical flat or kink. The shell stays fully
+   inside the column's padding box so no corner is clipped. */
 .lazer-song-filter-stack::before {
   content: "";
   position: absolute;
@@ -2285,15 +2311,16 @@ html[data-ui="lazer"] {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  clip-path: polygon(32px 0, 100% 0, 100% 100%, 12px 100%, 7px calc(100% - 3px), 6px calc(100% - 10px), 6px calc(100% - 20px));
+  clip-path: polygon(32px 0, 100% 0, 100% 100%, 16.8px 100%, 12.7px calc(100% - 0.7px), 9.1px calc(100% - 2.8px), 6.4px calc(100% - 6px), 5px calc(100% - 14.1px));
 }
 
-/* --- Search row: inset parallelogram field (slants right, like the shell). --- */
+/* --- Search row: inset parallelogram field (left edge matches the shell's
+   20px slant, right edge keeps the 12px slant). --- */
 .lazer-song-filter-stack .lazer-song-search {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  clip-path: polygon(20px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
 
 .lazer-song-filter-stack .lazer-song-search:focus-within {
@@ -2301,7 +2328,7 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-stack .lazer-song-search-input {
-  padding: 12px 50px 20px 18px;
+  padding: 12px 50px 20px 26px;
   font-size: 16px;
   background: transparent;
   border: none;
@@ -2315,7 +2342,7 @@ html[data-ui="lazer"] {
 }
 
 .lazer-song-filter-stack .lazer-song-search-matches {
-  left: 18px;
+  left: 26px;
   bottom: 5px;
   font-size: 11px;
 }

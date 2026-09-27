@@ -148,6 +148,23 @@ export default function SongSelect({
   const [showOptionsMenu, setShowOptionsMenu] = useState<boolean>(false);
   const carouselContainerRef = useRef<HTMLDivElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
+  // The filter stack floats over the top of the carousel (which runs up to
+  // the toolbar), so the scroll content reserves a top spacer matching the
+  // stack height to keep the first banners from hiding underneath it.
+  const filterStackRef = useRef<HTMLDivElement | null>(null);
+  const [filterStackH, setFilterStackH] = useState(0);
+  useEffect(() => {
+    const el = filterStackRef.current;
+    if (!el) return;
+    const measure = () => setFilterStackH(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    return undefined;
+  }, []);
 
   // One-time carousel centring (osu!lazer ScrollToSelection behaviour):
   // explicit selections request a single animated centre of the chosen
@@ -942,25 +959,21 @@ export default function SongSelect({
   // Refs keep carousel callbacks stable so memoized cards don't re-render
   // on every selection — only the groups whose active/expanded state
   // changed re-render.
-  const expandedSongKeyRef = useRef(expandedSongKey);
-  expandedSongKeyRef.current = expandedSongKey;
   const selectedCustomMapRef = useRef(selectedCustomMap);
   selectedCustomMapRef.current = selectedCustomMap;
 
   const handleSelectGroup = useCallback((group: any) => {
-    // Expand instantly from cached diff info; media unpack follows in the
+    // Clicking a banner always leaves its diff list open, even when it is
+    // already expanded — there is no click-to-collapse. The list only goes
+    // away when another song opens its diffs. Media unpack follows in the
     // background and never blocks the banner/diff list.
-    if (expandedSongKeyRef.current === group.songKey) {
-      setManualExpandedSongKey('');
-    } else {
-      setManualExpandedSongKey(group.songKey);
-      const targetMap = resolveGroupTargetMap(group);
-      if (targetMap) {
-        void handleSelectCustomMap(targetMap);
-      }
-      // One-time centre of the newly selected song (not sticky).
-      requestCarouselCenter(group.songKey);
+    setManualExpandedSongKey(group.songKey);
+    const targetMap = resolveGroupTargetMap(group);
+    if (targetMap) {
+      void handleSelectCustomMap(targetMap);
     }
+    // One-time centre of the newly selected song (not sticky).
+    requestCarouselCenter(group.songKey);
   }, [resolveGroupTargetMap, handleSelectCustomMap, requestCarouselCenter]);
 
   // Song preview: play audio for the currently selected map once its media has
@@ -1362,10 +1375,11 @@ export default function SongSelect({
         {/* =======================================================
             RIGHT COLUMN: SEARCH, FILTER, AND CAROUSEL — hud/songselect.jpg
             ======================================================= */}
-        <div className="flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-0 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[49%] lg:min-w-[400px] lg:max-w-[704px] xl:max-w-[744px] flex">
+        <div className="relative flex-1 flex-col h-full min-h-0 pl-4 pr-2 lg:pl-4 lg:pr-3 pt-0 pb-0 gap-2 overflow-hidden lg:flex-none lg:ml-auto lg:w-[49%] lg:min-w-[400px] lg:max-w-[704px] xl:max-w-[744px] flex">
 
-          {/* TOP-RIGHT FILTER BOX — single shell, slanted left, flush right (hud refs) */}
-          <div className="lazer-song-filter-stack">
+          {/* TOP-RIGHT FILTER BOX — floating overlay: the carousel runs
+              full-height to the toolbar behind this shell. */}
+          <div className="lazer-song-filter-stack" ref={filterStackRef}>
           {/* SEARCH BOX — italic placeholder, yellow matches, magnifier */}
           <div className="relative flex-shrink-0 lazer-song-search">
             <input
@@ -1509,6 +1523,7 @@ export default function SongSelect({
             activeItemRef={activeItemRef}
             centerSignal={carouselCenterSignal}
             isLoading={isLoading}
+            topOverlayPx={filterStackH}
           />
 
         </div>

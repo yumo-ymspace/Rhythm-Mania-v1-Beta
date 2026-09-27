@@ -570,3 +570,61 @@ integration smoke tests when those paths change.
 - Screenshots are for visual evaluation only. Use `browser_snapshot` to get
   element refs, then click, type, and navigate the changed flow the way a
   user would. A single render screenshot is not verification.
+
+### Slant Fillet Corners
+
+Slanted Song Select shells (the top-left song info wedge
+`.lazer-song-wedge::before` and the top-right filter shell
+`.lazer-song-filter-stack::before` in `src/ui/lazer/tokens.css`) get their
+rounded corners with the **Slant Fillet** method: a true circular arc,
+tangent to both the slanted edge and the straight edge, baked into the
+`clip-path: polygon()` as sampled points. `border-radius` cannot be used
+because the slant itself is a clip-path cut, and the background lives on
+`::before` (painted behind content) so dropdown popups and inner content
+are never clipped by it.
+
+Follow these steps exactly when creating or retuning one:
+
+1. **Measure live heights.** `clip-path` mixes width-relative (`%`/px on x)
+   and height-relative units, so a fixed pixel slant looks different on
+   every box height. Start `npm run dev`, open the target screen at
+   1600x900 (DPR 1), and read `getBoundingClientRect()` for the element
+   plus the `::before` height (element height plus any `top` offset, e.g.
+   the filter shell's `top: -8px` adds 8px). Reference numbers:
+   wedge `::before` = 219.2px, filter `::before` = 166.5px.
+2. **Match degrees, not widths.** Take the reference shell's *straight*
+   slant portion only (excluding its corner curve): angle from vertical
+   is `θ = atan(straight_width_px / straight_height_px)`. The filter
+   shell runs 26px over 146.5px, so `θ ≈ 10.1°`. Size the new slant as
+   `straight_width = straight_run × tan(θ)` on its own height (the wedge
+   needs 199.2 × tan(10.1°) ≈ 35px). Verify `atan()` of the result lands
+   within ~0.1° of θ.
+3. **Cut a circular fillet, not a chamfer.** Let `R` be the corner radius
+   and `φ` the material-side angle between the two edges (100° where a
+   10°-from-vertical slant meets a horizontal edge). Each tangent point
+   sits `T = R / tan(φ/2)` from the line-corner (where the extended
+   slant meets the straight edge). Wedge: R16 → T ≈ 13.4px. Filter: R12
+   → T ≈ 13.4px on its own geometry. Keep the radius-to-height ratio
+   consistent across shells (12/166.5 = 16/219.2 ≈ 0.073) so matching
+   corners read as equally round.
+4. **Sample the arc every ~20°.** Convert each sample to
+   `calc(100% - Xpx) calc(100% - Ypx)` (or plain px for left/top edges),
+   keep fractional precision, and list points in winding order from the
+   straight slant through the arc into the straight edge. Then check the
+   segment angles flow monotonically (wedge: 10° → 21° → 39° → 61° →
+   80° → 90°). Any vertical flat, direction reversal, or sudden jump
+   (the old slant → vertical → round sequence) renders as a visible
+   bulge or shoulder kink.
+5. **Clear the cut and keep it flat.** Set the content padding on the cut
+   side to `max_inset + 16px` (wedge: 52.3 + 16 = 68px right padding;
+   filter: 32px slant + 16px = 48px left padding). Never put
+   `filter: drop-shadow()` on the wedge element itself: it paints a dark
+   halo onto the background art just outside the slant. The mobile
+   breakpoint (<768px) must keep `clip-path: none` with a plain
+   `border-radius`, since the slant insets are tuned for desktop heights.
+6. **Verify like the original pass.** Confirm the new polygon in computed
+   style, screenshot the corner at 1x and at 3x device scale (a 260x170
+   CSS-px clip of the corner is enough to judge roundness), and run
+   `npm run build`. Document the measured heights, θ, R, and T in the
+   CSS comment above the `clip-path` so the next retune starts from
+   numbers, not guesses.
