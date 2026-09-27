@@ -27,7 +27,7 @@ export interface SongSelectLeftPanelProps {
   localScores: PlayHistoryRecord[];
   onWatchReplay?: (record: PlayHistoryRecord, beatmap?: Beatmap) => Promise<{ success: boolean; error?: string }> | void;
   settings: GameSettings;
-  getDifficultyColor: (rating: number) => string;
+  getDifficultyColor: (rating: number) => React.CSSProperties;
   getGradeBadgeClass: (grade: string) => string;
   onOpenOnlineCatalog?: () => void;
   onImportClick?: () => void;
@@ -139,7 +139,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
 
           {/* 2. DIFFICULTY & MAPPER LINE */}
           <div className="flex items-center gap-2 mt-2.5">
-            <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-black ${getDifficultyColor(0)}`}>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-black" style={getDifficultyColor(0)}>
               ★ -
             </span>
             <div className="text-[12px] font-bold text-slate-100 truncate">
@@ -149,8 +149,9 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
             </div>
           </div>
 
-          {/* 3. MANIA STATS ROW */}
-          <div className="grid grid-cols-5 gap-3 mt-3">
+          {/* 3. MANIA STATS STRIP SKELETON — same dark strip, blank values */}
+          <div className="lazer-song-statbox">
+          <div className="grid grid-cols-5 gap-3">
             {[
               { label: 'Notes' },
               { label: 'Hold Notes' },
@@ -168,9 +169,10 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
                   />
                 </div>
               </div>
-            ))}
+           ))}
           </div>
         </div>
+      </div>
 
         {/* 4. TABS & RANKING TOOLBAR */}
         <div className="flex flex-col gap-2 mt-1 flex-shrink-0">
@@ -229,8 +231,8 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
                   <div className="text-sm font-black text-white mt-1">-</div>
                 </div>
                 <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
-                  <div className={`text-sm font-black mt-1 ${getDifficultyColor(0)}`}>★ -</div>
+                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
+                <div className="text-sm font-black mt-1" style={getDifficultyColor(0)}>★ -</div>
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-slate-300 leading-relaxed">
@@ -337,7 +339,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
 
         {/* 2. DIFFICULTY & MAPPER LINE */}
         <div className="flex items-center gap-2 mt-2.5">
-          <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-black ${getDifficultyColor(currentStarRating)}`}>
+          <span className="px-2 py-0.5 rounded text-[11px] font-mono font-black" style={getDifficultyColor(currentStarRating)}>
             ★ {currentStarRating.toFixed(2)}
           </span>
           <div className="text-[12px] font-bold text-slate-100 truncate">
@@ -347,8 +349,11 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
           </div>
         </div>
 
-        {/* 3. MANIA STATS ROW */}
-        <div className="grid grid-cols-5 gap-3 mt-3">
+        {/* 3. MANIA STATS STRIP — dark rounded parallelogram pinned flush
+            to the wedge's bottom-left; straight square corners on the left
+            so it connects with the shell. */}
+        <div className="lazer-song-statbox">
+          <div className="grid grid-cols-5 gap-3">
           {[
             { label: 'Notes', value: String(riceNoteCount), fill: Math.min(1, riceNoteCount / 2000) },
             { label: 'Hold Notes', value: String(holdNoteCount), fill: Math.min(1, holdNoteCount / 800) },
@@ -367,6 +372,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
               </div>
             </div>
           ))}
+          </div>
         </div>
       </div>
 
@@ -428,7 +434,7 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
               </div>
               <div className="rounded-xl bg-black/40 border border-white/5 p-3">
                 <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
-                <div className={`text-sm font-black mt-1 ${getDifficultyColor(currentStarRating)}`}>★ {currentStarRating.toFixed(2)}</div>
+                <div className="text-sm font-black mt-1" style={getDifficultyColor(currentStarRating)}>★ {currentStarRating.toFixed(2)}</div>
               </div>
             </div>
             <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-slate-300 leading-relaxed">

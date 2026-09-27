@@ -96,7 +96,7 @@ describe('TASK-V-021: Song Select Carousel', () => {
     },
   ];
 
-  it('renders collapsed set card with title, artist, LOCAL pill, key dots, and diff count', () => {
+  it('renders collapsed set card with title, artist, LOCAL pill, key dots, and mania pill', () => {
     const html = renderToStaticMarkup(
       React.createElement(SongSelectCarousel, {
         songGroups: mockGroups,
@@ -110,7 +110,6 @@ describe('TASK-V-021: Song Select Carousel', () => {
         onStartPlay: () => {},
         onToggleFavorite: () => {},
         getStarRating: (m) => (m.id === 'test-map-1' ? 2.4 : 5.8),
-        getDifficultyColor: () => 'text-amber-400',
         getGradeBadgeClass: () => 'text-emerald-400',
       })
     );
@@ -118,11 +117,12 @@ describe('TASK-V-021: Song Select Carousel', () => {
     expect(html).toContain('Test Track Alpha');
     expect(html).toContain('Artist One');
     expect(html).toContain('LOCAL');
-    expect(html).toContain('2 diffs');
+    expect(html).toContain('Mania');
+    expect(html).not.toContain('diffs');
     expect(html).toContain('bg-cyan-400'); // 4K key dot color
   });
 
-  it('renders expanded difficulty rows with star badge, 10-dot meter, diff name, and local grade', () => {
+  it('renders expanded difficulty rows with star badge, 10-dot meter, and diff name', () => {
     const html = renderToStaticMarkup(
       React.createElement(SongSelectCarousel, {
         songGroups: mockGroups,
@@ -136,7 +136,6 @@ describe('TASK-V-021: Song Select Carousel', () => {
         onStartPlay: () => {},
         onToggleFavorite: () => {},
         getStarRating: (m) => (m.id === 'test-map-1' ? 2.4 : 5.8),
-        getDifficultyColor: () => 'text-amber-400',
         getGradeBadgeClass: () => 'text-emerald-400',
       })
     );
@@ -147,7 +146,6 @@ describe('TASK-V-021: Song Select Carousel', () => {
     expect(html).toContain('Easy');
     expect(html).toContain('[4K]');
     expect(html).toContain('lazer-star-meter');
-    expect(html).toContain('S'); // Best record local grade badge
     expect(html).not.toContain('READY');
   });
 });

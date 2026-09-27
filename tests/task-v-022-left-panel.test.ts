@@ -71,7 +71,7 @@ describe('TASK-V-022 — Left title, stats, ranking', () => {
           onChangeTab: vi.fn(),
           localScores: [],
           settings: mockSettings,
-          getDifficultyColor: () => 'text-emerald-400',
+          getDifficultyColor: () => ({}),
           getGradeBadgeClass: () => 'bg-emerald-500',
         })
       );
@@ -149,7 +149,7 @@ describe('TASK-V-022 — Left title, stats, ranking', () => {
           localScores: [mockRecord],
           onWatchReplay: vi.fn(),
           settings: mockSettings,
-          getDifficultyColor: () => 'text-emerald-400',
+          getDifficultyColor: () => ({}),
           getGradeBadgeClass: () => 'bg-amber-400',
         })
       );

@@ -12,9 +12,10 @@
 
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, Info, Loader2 } from 'lucide-react';
+import { Heart, Info, Loader2, Star } from 'lucide-react';
 import { Beatmap, PlayHistoryRecord } from '../../types';
 import { sanitizeCssUrl } from '../../utils/securityLimits';
+import { contrastTextOn, hexWithAlpha, sampleStarDifficultyColor } from '../../utils/starRating';
 import { buildBackgroundCacheKey, storageManager } from '../../utils/storageManager';
 import { AssetLifecycleManager, isBrowserPlayableVideoFilename } from '../../utils/assetLifecycle';
 
@@ -54,7 +55,6 @@ export interface SongSelectCarouselProps {
   onStartPlay: (map: Beatmap) => void;
   onToggleFavorite: (songKey: string) => void;
   getStarRating: (map: Beatmap) => number;
-  getDifficultyColor: (rating: number) => string;
   getGradeBadgeClass: (grade: string) => string;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   activeItemRef?: React.RefObject<HTMLDivElement | null>;
@@ -224,66 +224,32 @@ function getStarDotCount(starRating: number): number {
 }
 
 /**
- * osu!lazer-style difficulty tint. Matches hud/songselect refs:
- * ~0-1.5 blue, 1.5-2.5 teal/green, 2.5-3.5 olive/yellow,
- * 3.5-4.5 orange, 4.5+ pink/red.
+ * Official osu!lazer difficulty tint. The edge/blob colour is the exact
+ * `OsuColour.ForStarDifficulty` sample for the rating; the row background
+ * is near-black with a flat wash of the official colour over it (no
+ * gradient), and the star pill is the solid official colour with
+ * contrasting text (like the client's `StarRatingDisplay`).
  */
-export function getDiffTint(starRating: number): { bg: string; edge: string; pill: string } {
-  if (starRating < 1.5) return {
-    bg: 'linear-gradient(90deg, rgba(56,130,190,0.92) 0%, rgba(43,95,150,0.88) 100%)',
-    edge: '#7dd3fc',
-    pill: 'bg-sky-950/70 text-sky-200 border border-sky-300/40',
-  };
-  if (starRating < 2.5) return {
-    bg: 'linear-gradient(90deg, rgba(46,160,140,0.92) 0%, rgba(34,120,115,0.88) 100%)',
-    edge: '#5eead4',
-    pill: 'bg-teal-950/70 text-teal-100 border border-teal-300/40',
-  };
-  if (starRating < 3.5) return {
-    bg: 'linear-gradient(90deg, rgba(150,150,60,0.90) 0%, rgba(110,110,45,0.88) 100%)',
-    edge: '#fde047',
-    pill: 'bg-yellow-950/70 text-yellow-100 border border-yellow-300/40',
-  };
-  if (starRating < 4.5) return {
-    bg: 'linear-gradient(90deg, rgba(180,120,50,0.92) 0%, rgba(140,90,35,0.88) 100%)',
-    edge: '#fdba74',
-    pill: 'bg-orange-950/70 text-orange-100 border border-orange-300/40',
-  };
+export function getDiffTint(starRating: number): { bg: string; edge: string; pill: React.CSSProperties } {
+  const base = sampleStarDifficultyColor(starRating);
+  const wash = hexWithAlpha(base, 0.28);
   return {
-    bg: 'linear-gradient(90deg, rgba(170,60,110,0.92) 0%, rgba(120,40,85,0.88) 100%)',
-    edge: '#f9a8d4',
-    pill: 'bg-pink-950/70 text-pink-100 border border-pink-300/40',
+    bg: `linear-gradient(0deg, ${wash}, ${wash}), #06070c`,
+    edge: base,
+    pill: {
+      backgroundColor: base,
+      color: contrastTextOn(base),
+      border: '1px solid rgba(255, 255, 255, 0.4)',
+    },
   };
 }
 
 /**
- * Small per-difficulty color dots shown on the set card (hud refs).
- * Same hue ramp as the expanded rows.
+ * Blob colour shown on the set card: the exact official star-difficulty
+ * colour for the rating.
  */
 function getDiffDotColor(starRating: number): string {
-  if (starRating < 1.5) return '#7dd3fc';
-  if (starRating < 2.5) return '#5eead4';
-  if (starRating < 3.5) return '#fde047';
-  if (starRating < 4.5) return '#fdba74';
-  return '#f9a8d4';
-}
-
-function getGradeCircleClass(grade: string): string {
-  switch (grade) {
-    case 'SS':
-    case 'S':
-      return 'bg-amber-300 text-amber-950';
-    case 'A':
-      return 'bg-emerald-300 text-emerald-950';
-    case 'B':
-      return 'bg-sky-300 text-sky-950';
-    case 'C':
-      return 'bg-violet-300 text-violet-950';
-    case 'D':
-      return 'bg-rose-300 text-rose-950';
-    default:
-      return 'bg-slate-300 text-slate-800';
-  }
+  return sampleStarDifficultyColor(starRating);
 }
 
 /**
@@ -340,9 +306,9 @@ export interface BestRecordIndex {
 }
 
 /**
- * One pass over local history -> best record per chart id/hash. Replaces
- * the per-diff `filter(fullHistory).sort()[0]` scan that used to run for
- * every difficulty row on every render (O(diffs × history)).
+ * One pass over local history -> best record per chart id/hash. Kept as a
+ * tested utility even though the compact diff rows no longer render the
+ * per-diff grade badge.
  */
 export function buildBestRecordIndex(playHistory: PlayHistoryRecord[]): BestRecordIndex {
   const byId = new Map<string, PlayHistoryRecord>();
@@ -361,24 +327,12 @@ export function buildBestRecordIndex(playHistory: PlayHistoryRecord[]): BestReco
   return { byId, byHash };
 }
 
-function lookupBestRecord(
-  diff: Beatmap,
-  best: BestRecordIndex,
-): PlayHistoryRecord | undefined {
-  const byId = best.byId.get(diff.id);
-  if (byId) return byId;
-  const hash = (diff as { beatmapHash?: unknown }).beatmapHash;
-  if (typeof hash === 'string' && hash) return best.byHash.get(hash);
-  return undefined;
-}
-
 interface CarouselGroupCardProps {
   group: CarouselSongGroup;
   isActive: boolean;
   isExpanded: boolean;
   isFavorite: boolean;
   selectedMapId?: string;
-  best: BestRecordIndex;
   fallbackIndentPx: number | string;
   fallbackExtendRightPx: number;
   fallbackMarginTopPx: number;
@@ -394,9 +348,9 @@ interface CarouselGroupCardProps {
 /**
  * Memoized song-group card. The parent list re-renders on every keystroke /
  * selection / unpack tick; without memo every group would re-sort its diffs
- * (star-rating note walks) and re-scan history per diff row each time.
- * With memo + stable parent callbacks, only groups whose props actually
- * changed (active/expanded/favorite/selection/content) re-render, and the
+ * (star-rating note walks) each time. With memo + stable parent callbacks,
+ * only groups whose props actually changed
+ * (active/expanded/favorite/selection/content) re-render, and the
  * expensive derivations below recompute only when `group.maps` changes.
  */
 const CarouselGroupCard = memo(function CarouselGroupCard({
@@ -405,7 +359,6 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
   isExpanded,
   isFavorite,
   selectedMapId,
-  best,
   fallbackIndentPx,
   fallbackExtendRightPx,
   fallbackMarginTopPx,
@@ -470,9 +423,9 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
                 <span className={`px-1.5 py-px rounded text-[9px] font-mono font-black uppercase tracking-wider ${rankBadge.bgClass}`}>
                   {rankBadge.label}
                 </span>
-                {/* mania mode icon */}
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/50 text-[8px] font-black text-white/90" title="mania mode">
-                  M
+                {/* mania mode pill: white text, white outline, transparent infill */}
+                <span className="inline-flex items-center justify-center px-2 h-4 rounded-full border border-white bg-transparent text-[8px] font-black uppercase tracking-widest text-white" title="mania mode">
+                  Mania
                 </span>
                 <span className="flex items-center gap-[3px]" aria-hidden="true">
                   {diffDots.map((c, i) => (
@@ -528,7 +481,6 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
               const rating = getStarRating(diff);
               const dotCount = getStarDotCount(rating);
               const tint = getDiffTint(rating);
-              const bestRecord = lookupBestRecord(diff, best);
 
               return (
                 <div
@@ -569,45 +521,45 @@ const CarouselGroupCard = memo(function CarouselGroupCard({
                   {/* Selected edge indicator */}
                   {isDiffSelected && <div className="lazer-carousel-diff-bar" style={{ background: tint.edge, boxShadow: `0 0 8px ${tint.edge}` }} />}
 
-                  <div className="flex items-center justify-between px-3 py-2 gap-2 relative z-10">
-                    {/* Left: grade circle, [4K] name, mapper */}
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {bestRecord ? (
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${getGradeCircleClass(bestRecord.grade)}`}>
-                          {bestRecord.grade}
-                        </span>
-                      ) : (
-                        <span className="w-6 h-6 rounded-full border border-white/40 flex items-center justify-center text-[9px] font-black text-white/70 shrink-0">
-                          {diff.keyCount || 4}K
-                        </span>
-                      )}
-
-                      <div className="flex items-center gap-1.5 truncate text-xs sm:text-[13px]">
-                        <span className="font-sans font-bold text-white/95 truncate">
+                  <div className="flex items-center px-3 py-1 gap-2 relative z-10">
+                    {/* Two-line diff info (name line, then star pill + bar) */}
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="font-sans font-extrabold text-white text-xs sm:text-[13px] truncate min-w-0">
                           [{diff.keyCount || 4}K] {diff.difficulty}
                         </span>
                         {diff.creator && (
-                          <span className="text-[10px] font-sans text-white/70 truncate hidden md:inline">
+                          <span className="text-[11px] font-sans text-white/55 truncate shrink-0">
                             mapped by {diff.creator}
                           </span>
                         )}
                       </div>
-                    </div>
-
-                    {/* Right: star pill + dots */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-black ${tint.pill}`}>
-                        ★ {rating.toFixed(2)}
-                      </span>
-                      <span className="lazer-star-meter hidden sm:flex items-center gap-[2px]" aria-hidden="true">
-                        {Array.from({ length: 10 }, (_, i) => (
-                          <span
-                            key={i}
-                            className={`lazer-star-meter-dot ${i < dotCount ? 'is-filled' : ''}`}
-                            style={i < dotCount ? undefined : { background: 'rgba(255,255,255,0.25)', boxShadow: 'none' }}
-                          />
-                        ))}
-                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="px-1.5 py-0 rounded-full text-[10px] font-mono font-black leading-none" style={tint.pill}>
+                          ★ {rating.toFixed(2)}
+                        </span>
+                        <span className="lazer-star-meter flex items-center gap-[2px]" aria-hidden="true">
+                          {Array.from({ length: 10 }, (_, i) => {
+                            const filled = i < dotCount;
+                            return filled ? (
+                              <Star
+                                key={i}
+                                size={9}
+                                className="shrink-0"
+                                color={tint.edge}
+                                fill={tint.edge}
+                                style={{ filter: `drop-shadow(0 0 2px ${tint.edge})` }}
+                              />
+                            ) : (
+                              <span
+                                key={i}
+                                className="lazer-star-meter-dot"
+                                style={{ background: 'rgba(255,255,255,0.25)', boxShadow: 'none' }}
+                              />
+                            );
+                          })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -632,7 +584,6 @@ export function SongSelectCarousel({
   onStartPlay,
   onToggleFavorite,
   getStarRating,
-  getDifficultyColor,
   getGradeBadgeClass,
   containerRef,
   activeItemRef,
@@ -715,9 +666,6 @@ export function SongSelectCarousel({
       }
     };
   }, [activeItemRef]);
-  // Best local record per chart, computed once per history change instead
-  // of a full history filter+sort per difficulty row per render.
-  const best = useMemo(() => buildBestRecordIndex(playHistory), [playHistory]);
   // O(1) favorite lookup for memoized cards (avoids Array.includes per card).
   const favoriteSet = useMemo(() => new Set(favoriteSongs), [favoriteSongs]);
   const centersCache = useRef(new Map<string, number>());
@@ -836,7 +784,9 @@ export function SongSelectCarousel({
 
     // Custom overlay scrollbar thumb: sized/positioned from live scroll
     // metrics so it tracks exactly like a native bar while floating over
-    // the banner art. Hidden when nothing overflows.
+    // the banner art. The track starts below the floating filter overlay
+    // (never under the search box) and runs to the bottom bar. Hidden when
+    // nothing overflows.
     const thumb = scrollThumbRef.current;
     if (thumb) {
       const scrollable = container.scrollHeight - container.clientHeight;
@@ -844,7 +794,7 @@ export function SongSelectCarousel({
         if (thumb.style.opacity !== '0') thumb.style.opacity = '0';
       } else {
         if (thumb.style.opacity !== '1') thumb.style.opacity = '1';
-        const trackH = container.clientHeight;
+        const trackH = Math.max(1, container.clientHeight - TOP_SPACER_PX);
         const thumbH = Math.max(28, Math.round((container.clientHeight / container.scrollHeight) * trackH));
         const top = Math.round((container.scrollTop / scrollable) * (trackH - thumbH));
         const height = `${thumbH}px`;
@@ -1071,7 +1021,11 @@ export function SongSelectCarousel({
   const carouselClassName =
     'lazer-carousel-scroll lazer-carousel-taper flex-1 overflow-y-auto overflow-x-hidden pl-4 pr-0 flex flex-col gap-0 relative z-10 min-h-0';
   const carouselOverlay = (
-    <div className="pointer-events-none absolute top-0 bottom-0 right-0 w-[10px] z-20" aria-hidden="true">
+    <div
+      className="pointer-events-none absolute bottom-0 right-0 w-[10px] z-20"
+      style={{ top: TOP_SPACER_PX }}
+      aria-hidden="true"
+    >
       <div
         ref={scrollThumbRef}
         className="absolute right-[1px] top-0 w-[8px] rounded-full bg-white/30 shadow-[0_0_6px_rgba(0,0,0,0.55)]"
@@ -1154,7 +1108,6 @@ export function SongSelectCarousel({
             isExpanded={isExpanded}
             isFavorite={favoriteSet.has(group.songKey)}
             selectedMapId={selectedMapId}
-            best={best}
             fallbackIndentPx={fallbackIndentPx}
             fallbackExtendRightPx={fallbackExtendRightPx}
             fallbackMarginTopPx={fallbackMarginTopPx}

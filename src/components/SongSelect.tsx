@@ -33,7 +33,7 @@ import { extractZipEntry } from '../utils/zipResolver';
 import { previewPlayer } from '../utils/previewPlayer';
 import { getCachedStarRating, getCachedNoteCounts, buildSongMapsIndex } from '../utils/songSelectCache';
 import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
-import { STRAIN_STAR_RATING_VERSION } from '../utils/starRating';
+import { contrastTextOn, hexWithAlpha, sampleStarDifficultyColor, STRAIN_STAR_RATING_VERSION } from '../utils/starRating';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { computeScrollTravelTimeMs } from '../render/playfieldLayout';
 import metadata from '../../metadata.json';
@@ -357,13 +357,17 @@ export default function SongSelect({
   // Stable reference so the carousel does not re-render on every parent render.
   const getStarRating = useCallback((map: any) => getCachedStarRating(map as Beatmap), []);
 
-  const getDifficultyColor = useCallback((rating: number) => {
-    if (rating < 2.0) return 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
-    if (rating < 3.0) return 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20';
-    if (rating < 4.0) return 'text-amber-400 bg-amber-500/10 border border-amber-500/20';
-    if (rating < 5.0) return 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
-    if (rating < 6.5) return 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
-    return 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
+  // Difficulty pill/text colours: official osu!lazer star-difficulty colour
+  // as a tinted chip (light colours read in their own colour, dark colours
+  // in white). Stable reference so the left panel does not re-render.
+  const getDifficultyColor = useCallback((rating: number): React.CSSProperties => {
+    const base = sampleStarDifficultyColor(rating);
+    const text = contrastTextOn(base) === '#ffffff' ? '#ffffff' : base;
+    return {
+      color: text,
+      backgroundColor: hexWithAlpha(base, 0.16),
+      border: `1px solid ${hexWithAlpha(base, 0.45)}`,
+    };
   }, []);
 
   // Resolve locally stored uploads and previously downloaded mirror maps.
@@ -1517,7 +1521,6 @@ export default function SongSelect({
             onStartPlay={handleStartPlay}
             onToggleFavorite={toggleFavorite}
             getStarRating={getStarRating}
-            getDifficultyColor={getDifficultyColor}
             getGradeBadgeClass={getGradeBadgeClass}
             containerRef={carouselContainerRef}
             activeItemRef={activeItemRef}

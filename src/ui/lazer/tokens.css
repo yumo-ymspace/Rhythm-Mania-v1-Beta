@@ -1690,7 +1690,7 @@ html[data-ui="lazer"] {
 
 .lazer-carousel-diff-row {
   position: relative;
-  min-height: 36px;
+  min-height: 30px;
   /* Square on the right like the banners; unselected rows sit slightly
      shorter via margin while the selected row pins to the banner edge. */
   border-radius: 6px 0 0 6px;
@@ -1991,6 +1991,7 @@ html[data-ui="lazer"] {
   z-index: -1;
   pointer-events: none;
   background: #22272A;
+  opacity: 0.7;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: none;
   border-left: none;
@@ -2010,6 +2011,34 @@ html[data-ui="lazer"] {
      evenly — segment angles flow 10° -> 21° -> 39° -> 61° -> 80° -> 90°
      with no flat or kink. Bottom-left stays square. */
   clip-path: polygon(0 0, 100% 0, calc(100% - 36.6px) calc(100% - 13.2px), calc(100% - 38.5px) calc(100% - 8px), calc(100% - 42px) calc(100% - 3.7px), calc(100% - 46.9px) calc(100% - 1px), calc(100% - 52.3px) 100%, 0 100%);
+}
+
+/* --- Stats strip: dark slanted band holding the Notes / Hold Notes /
+   Key Count / Accuracy / HP Drain counts. Stretches from the screen-left
+   edge to about the wedge's full width; the right edge slants at the
+   shell's 10.1° (top wider, like the outer box) with Slant Fillet rounds
+   on its top-right and bottom-right joints, and the straight bottom edge
+   sits 8px above the shell bottom, running back to the left screen edge.
+   Left side stays straight and square so it connects flush with the shell
+   (negative left margin cancels the wedge padding). Same #22272A colour
+   as the shell but 80% opaque, so over the 0.7 shell it reads as a
+   darker inset band. No borders or
+   shadows: clip-path would cut them — edge definition comes from the top
+   sheen gradient. Vertical footprint keeps the wedge 219.2px tall so its
+   tuned slant is untouched.
+   Measured at 1600x900 (DPR 1): strip is 596x58px. Slant run
+   58 x tan(10.1°) ≈ 10.3px. Both joints are R8 circular fillets
+   (material-side angle 80°, tangent length 8/tan(40°) ≈ 9.6px),
+   sampled every ~25°; segment angles flow
+   0° -> 12° -> 38° -> 63° -> 88° -> 100° (slant) and mirror back
+   down to the 180° bottom edge with no flat or kink. --- */
+.lazer-song-statbox {
+  margin: 8px -24px -8px -16px;
+  padding: 6px 26px 6px 16px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 14px),
+    rgba(34, 39, 42, 0.8);
+  clip-path: polygon(0 0, calc(100% - 9.6px) 0, calc(100% - 6.2px) 0.8px, calc(100% - 3.4px) 2.9px, calc(100% - 1.8px) 5.9px, calc(100% - 1.7px) 9.4px, calc(100% - 8.7px) calc(100% - 9.4px), calc(100% - 9.5px) calc(100% - 5.2px), calc(100% - 11.9px) calc(100% - 1.9px), calc(100% - 15.6px) calc(100% - 0.1px), calc(100% - 19.9px) 100%, 0 100%);
 }
 
 /* Tabs + ranking/details body sit below the flush wedge with left gutter. */
@@ -2232,9 +2261,11 @@ html[data-ui="lazer"] {
   background: transparent;
 }
 
-/* Song banners, status tags, and top-left song info box all use Nunito. */
+/* Song banners, status tags, diff rows, and top-left song info box all use Nunito. */
 .lazer-carousel-card,
 .lazer-carousel-card *,
+.lazer-carousel-diff-row,
+.lazer-carousel-diff-row *,
 .lazer-status-pill,
 .lazer-song-wedge,
 .lazer-song-wedge * {
@@ -2257,6 +2288,12 @@ html[data-ui="lazer"] {
   }
   .lazer-song-wedge::before {
     clip-path: none;
+  }
+  .lazer-song-statbox {
+    margin: 8px 0 -8px -16px;
+    padding: 6px 28px 6px 16px;
+    clip-path: none;
+    border-radius: 0 999px 999px 0;
   }
   .lazer-parked-cookie-wrapper {
     margin-bottom: 6px;
@@ -2307,7 +2344,7 @@ html[data-ui="lazer"] {
   top: -8px;
   z-index: -1;
   background: #22272A;
-  opacity: 1;
+  opacity: 0.7;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
