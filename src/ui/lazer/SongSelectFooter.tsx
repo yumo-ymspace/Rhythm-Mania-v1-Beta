@@ -49,7 +49,7 @@ export function SongSelectFooter({
       <div className="lazer-footer-left lazer-footer-cluster">
         <FooterBackButton onClick={onBack} label="Back" />
 
-        {/* Mods Button (F1) */}
+        {/* Mods Button */}
         <button
           id="bottom-mods-button"
           type="button"
@@ -62,7 +62,6 @@ export function SongSelectFooter({
               <Sliders className="h-6 w-6 lazer-footer-action-icon" />
               <span className="lazer-footer-action-label-row">
                 <span className="lazer-footer-action-label">Mods</span>
-                <span className="lazer-footer-hotkey-badge">F1</span>
                 {selectedModsCount > 0 && (
                   <span className="lazer-footer-action-badge">
                     {selectedModsCount}
@@ -73,7 +72,7 @@ export function SongSelectFooter({
           </Shear>
         </button>
 
-        {/* Random Button (F2) */}
+        {/* Random Button */}
         <button
           id="bottom-random-button"
           type="button"
@@ -86,13 +85,12 @@ export function SongSelectFooter({
               <Shuffle className="h-6 w-6 lazer-footer-action-icon" />
               <span className="lazer-footer-action-label-row">
                 <span className="lazer-footer-action-label">Random</span>
-                <span className="lazer-footer-hotkey-badge">F2</span>
               </span>
             </span>
           </Shear>
         </button>
 
-        {/* Options Popover Anchor (F3) */}
+        {/* Options Popover Anchor */}
         <div className="relative lazer-footer-options-anchor">
           <button
             id="bottom-options-button"
@@ -107,7 +105,6 @@ export function SongSelectFooter({
                 <SlidersHorizontal className="h-6 w-6 lazer-footer-action-icon" />
                 <span className="lazer-footer-action-label-row">
                   <span className="lazer-footer-action-label">Options</span>
-                  <span className="lazer-footer-hotkey-badge">F3</span>
                 </span>
               </span>
             </Shear>

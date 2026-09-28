@@ -100,21 +100,23 @@ void main() {
   if (alpha <= 0.001) discard;
   vec4 col = mix(vColorTop, vColorBottom, vUv.y);
   if (vGlyph > 0.5) {
-    // Argon glyphs live on the note accent quad. Geometry mirrors
-    // drawChevronDown / hold-head bar in argonPlayfield (Canvas2D).
+    // Argon glyphs live on the note slab. Shapes mirror drawChevronDown /
+    // hold-head bar in argonPlayfield (Canvas2D), but both glyphs sit
+    // exactly on the slab center (Canvas2D offsets them +4/+2 toward the
+    // lip; here they are geometrically centered per the skin reference).
     float gy = mix(p.y, vSize.y - p.y, uGlyphFlip);
     float cx = vSize.x * 0.5;
     float gsize = min(20.0 * uDpr, vSize.x * 0.42);
     float aa2 = uDpr;
-    // Accent-local Y of the note center: (R - 0.5) / R with
-    // R = ARGON_NOTE_ACCENT_RATIO (0.82).
-    float cy = vSize.y * (0.82 - 0.5) / 0.82;
+    // The glyph quad is the full-height note slab, so the note center is
+    // the quad center.
+    float cy = vSize.y * 0.5;
     float mask = 0.0;
     if (vGlyph < 1.5) {
       float halfW = gsize * 0.38;
       float halfH = gsize * 0.22;
       float t = max(2.5 * uDpr, gsize * 0.14);
-      float cyy = cy + 4.0 * uDpr;
+      float cyy = cy;
       vec2 gp = vec2(p.x, gy);
       vec2 a = vec2(cx - halfW, cyy - halfH);
       vec2 bb = vec2(cx, cyy + halfH);
@@ -123,7 +125,7 @@ void main() {
       mask = 1.0 - smoothstep(t * 0.5 - aa2, t * 0.5 + aa2, d);
     } else {
       float barH = 5.0 * uDpr;
-      float cyy = cy + 2.0 * uDpr;
+      float cyy = cy;
       vec2 qq = abs(vec2(p.x - cx, gy - cyy)) - vec2(max(gsize * 0.5 - barH * 0.5, 0.0), 0.0);
       float d = length(max(qq, 0.0)) + min(max(qq.x, qq.y), 0.0) - barH * 0.5;
       mask = 1.0 - smoothstep(-aa2, aa2, d);
@@ -473,17 +475,18 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       }
     }
 
-    // Note heads + tails. Mirrors drawArgonNotePiece (Canvas2D): dark base,
-    // vivid accent gradient, white judgement-side lip, and a white glyph
-    // (rice chevron, hold-head bar) drawn procedurally in the shader.
-    // Hold tails get the Canvas2D tail treatment instead: dark base plus a
-    // far-side additive-style highlight, no lip, no glyph. A soft
-    // transparent shadow on the far side keeps densely stacked notes
-    // readable, per the argon reference set. The closure performs no
+    // Note heads + tails. Rice/hold-head notes are a single solid argon
+    // slab (full-height vivid gradient + white judgement-side lip + white
+    // glyph drawn procedurally in the shader), with no dark far-side cap
+    // and no translucent overhang.
+    // Like lazer argon there is no separation shadow: notes sit flush with
+    // no transparent overhang on the far side. Hold tails reuse the hold
+    // body treatment (same dark base + same hold pulse over the full piece,
+    // no lip, no glyph) so the tail reads as one seamless structure with
+    // the middle instead of a detached darker cap. The closure performs no
     // allocations: colors resolve to cached tuples and quads write directly
     // into the preallocated buffer.
-    const SHADOW_H = 16;
-    const drawNotePiece = (rx: number, topY: number, rw: number, column: number, opacity: number, variant: 'rice' | 'head' | 'tail') => {
+    const drawNotePiece = (rx: number, topY: number, rw: number, column: number, opacity: number, variant: 'rice' | 'head' | 'tail', tailPulse = 0, tailFailed = false) => {
       if (topY > height + 100 || topY + noteHeight < -100) return;
       const o = opacity;
       if (o <= 0) return;
@@ -491,39 +494,32 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       const base = laneBase[column];
       const light = laneLightHead[column];
       if (!dark || !base) return;
-      const accentH = noteHeight * ARGON_NOTE_ACCENT_RATIO;
-      // Separation shadow on the receptor-far side (transparent gradient).
-      const shadowAlpha = 0.45 * o;
-      if (shadowAlpha > 0.01) {
-        if (upscroll) {
-          this.pushQuadNumbers(rx, topY + noteHeight, rw, SHADOW_H, dark[0], dark[1], dark[2], shadowAlpha, dark[0], dark[1], dark[2], 0, 0);
-        } else {
-          this.pushQuadNumbers(rx, topY - SHADOW_H, rw, SHADOW_H, dark[0], dark[1], dark[2], 0, dark[0], dark[1], dark[2], shadowAlpha, 0);
-        }
-      }
-      // Base shade (dark overlay gradient approximated as solid darkened).
-      this.quadRgb(rx, topY, rw, noteHeight, dark, o, ARGON_CORNER_RADIUS);
       if (variant === 'tail') {
-        // Canvas2D holdTail: darkened base with a lighter additive wash on
-        // the far half of the accent zone. No lip, no glyph.
-        const hl = light ?? base;
-        const hlAlpha = 0.4 * o;
-        if (upscroll) {
-          this.pushQuadNumbers(rx, topY + accentH / 2, rw, accentH / 2, hl[0], hl[1], hl[2], 0, hl[0], hl[1], hl[2], hlAlpha, 0);
-        } else {
-          const accentY = topY + noteHeight - accentH;
-          this.pushQuadNumbers(rx, accentY, rw, accentH / 2, hl[0], hl[1], hl[2], hlAlpha, hl[0], hl[1], hl[2], 0, 0);
+        // Seamless with the hold middle: same base color as the body
+        // (failed gray when failed, otherwise the darkened lane color) and
+        // the same hold pulse glow across the full piece height, so the end
+        // fades in and out together with the middle instead of sitting dark.
+        const tailBase = tailFailed ? failedRgb : dark;
+        const tailAlpha = o * (tailFailed ? 0.45 : 1);
+        if (tailBase) this.quadRgb(rx, topY, rw, noteHeight, tailBase, tailAlpha, ARGON_CORNER_RADIUS);
+        if (tailPulse > 0 && !tailFailed) {
+          const pulseRgb = laneLightPulse[column];
+          if (pulseRgb) {
+            const glowAlpha = 0.3 * tailPulse * o;
+            this.pushQuadNumbers(rx, topY, rw, noteHeight, pulseRgb[0], pulseRgb[1], pulseRgb[2], glowAlpha, pulseRgb[0], pulseRgb[1], pulseRgb[2], 0, 0);
+          }
         }
         return;
       }
-      // Accent + lip sit on the judgement side (mirrored for upscroll, like
-      // the Canvas2D vertical flip in drawArgonNotePiece).
-      const accentY = upscroll ? topY : topY + noteHeight - accentH;
-      const accentRgb = light ?? base;
+      // Solid argon slab: one full-height vivid gradient (light far side
+      // into the lane base at the judgement side) carrying the glyph, plus
+      // the white judgement-side lip below. No dark cap on top, so the note
+      // reads as a single solid colour.
+      const solidTop = light ?? base;
       const glyph = variant === 'rice' ? GLYPH_CHEVRON : GLYPH_BAR;
       this.pushQuad(
-        rx, accentY, rw, accentH,
-        [accentRgb[0], accentRgb[1], accentRgb[2], o],
+        rx, topY, rw, noteHeight,
+        [solidTop[0], solidTop[1], solidTop[2], o],
         [base[0], base[1], base[2], o],
         ARGON_CORNER_RADIUS,
         glyph,
@@ -556,9 +552,13 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
           : n.isReleaseHit;
         if (releaseDone) continue;
         const centerY = getNoteVisualY(n.endY, col.width, settingsSlice);
-        let opacity = n.endOpacity ?? n.opacity;
-        if (n.isHoldFailed) opacity *= 0.35;
-        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, opacity, 'tail');
+        const tailOpacity = n.endOpacity ?? n.opacity;
+        const tailFailed = !!n.isHoldFailed;
+        const tailHitting = n.isHolding !== undefined
+          ? n.isHolding
+          : (n.isHit && !n.isReleased && !n.isHoldFailed);
+        const tailPulse = tailHitting && !tailFailed ? pulseBase : 0;
+        drawNotePiece(rx, centerY - noteHeight / 2, rw, n.column, tailOpacity, 'tail', tailPulse, tailFailed);
       }
     }
 
@@ -568,7 +568,9 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     // below/above the receptor (hollow white ring idle, lane-color fill
     // when pressed). Rings are two rounded quads (outer white, inner fill);
     // still zero textures, zero extra draw calls.
-    const hitTargetH = noteHeight * ARGON_NOTE_ACCENT_RATIO * receptorScale;
+    // Receptor target matches the normal note height (not the 82% accent
+    // zone), so keys read at the same vertical size as incoming notes.
+    const hitTargetH = noteHeight * receptorScale;
     const lipH = ARGON_CORNER_RADIUS * 2;
     const CORE_H = 46;
     for (let i = 0; i < keyCount; i++) {

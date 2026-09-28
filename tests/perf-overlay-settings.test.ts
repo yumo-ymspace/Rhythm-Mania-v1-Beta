@@ -22,20 +22,20 @@ describe('Uncapped Menu Motion', () => {
     expect(sanitizeSettings({ uncappedMenuMotion: null }, DEFAULT_SETTINGS).uncappedMenuMotion).toBe(false);
   });
 
-  it('registers a graphics toggle row for the setting', () => {
+  it('registers a visual toggle row for the setting', () => {
     const row = SETTING_ROWS.find((r) => r.id === 'uncappedMenuMotion');
     expect(row).toBeDefined();
-    expect(row?.section).toBe('graphics');
+    expect(row?.section).toBe('visual');
     expect(row?.control.kind).toBe('toggle');
     expect(row?.defaultValue).toBe(false);
   });
 });
 
 describe('FPS counter readout', () => {
-  it('registers a graphics toggle row describing every screen', () => {
+  it('registers a visual toggle row describing every screen', () => {
     const row = SETTING_ROWS.find((r) => r.id === 'showFpsCounter');
     expect(row).toBeDefined();
-    expect(row?.section).toBe('graphics');
+    expect(row?.section).toBe('visual');
     expect(row?.control.kind).toBe('toggle');
     expect(row?.description).toMatch(/every screen/i);
   });

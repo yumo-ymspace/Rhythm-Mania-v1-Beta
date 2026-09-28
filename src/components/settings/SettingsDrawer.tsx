@@ -144,13 +144,10 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
       <AnimatePresence>
         {open && (
           <>
-            <motion.div 
+            <motion.div
               key="backdrop"
               className="fixed inset-0 z-40 backdrop-blur-sm"
-              style={{
-                backgroundColor: `rgba(0, 0, 0, ${settings.settingsMenuBackgroundDim !== undefined ? settings.settingsMenuBackgroundDim : 0})`
-              }}
-              onClick={onClose} 
+              onClick={onClose}
               aria-hidden 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

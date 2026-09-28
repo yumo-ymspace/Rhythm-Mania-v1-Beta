@@ -198,8 +198,8 @@ Media blob URLs are tracked and revoked through `AssetLifecycleManager`.
 
 ## Settings and controls
 
-The settings drawer covers general, graphics, gameplay, audio, input, and
-maintenance sections. Skin styles and playfield tuning live in the header's
+The settings drawer covers general, gameplay, visual, audio, input, and
+miscellaneous sections. Skin styles and playfield tuning live in the header's
 Skins menu. Important defaults include:
 
 - 4K mode with `D F J K` bindings.

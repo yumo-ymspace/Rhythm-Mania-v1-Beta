@@ -37,7 +37,7 @@ export interface CarouselSongGroup {
 }
 
 export interface CarouselCenterSignal {
-  /** songKey of the group to centre. */
+  /** songKey of the group whose selected difficulty is centred. */
   key: string;
   /** Increment to trigger a new one-time centre, even for the same key. */
   nonce: number;
@@ -58,7 +58,7 @@ export interface SongSelectCarouselProps {
   getGradeBadgeClass: (grade: string) => string;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   activeItemRef?: React.RefObject<HTMLDivElement | null>;
-  /** One-time "centre this group" request (selection / random / keyboard). */
+  /** One-time "centre this selection" request (selection / random / keyboard). */
   centerSignal?: CarouselCenterSignal;
   /** True while beatmaps are still loading (IndexedDB/migration). Shows a bare spinner instead of the empty box. */
   isLoading?: boolean;
@@ -291,9 +291,9 @@ function getRankStatusBadge(group: CarouselSongGroup): { label: string; bgClass:
 
 // First-paint diff-row margins. Mirrors the DIFF_* taper constants inside
 // SongSelectCarousel so memoized cards paint the same base geometry.
-const CARD_DIFF_SELECTED_ML_PX = -12;
+const CARD_DIFF_SELECTED_ML_PX = -11;
 const CARD_DIFF_SELECTED_MR_PX = -4;
-const CARD_DIFF_BASE_ML_PX = 8;
+const CARD_DIFF_BASE_ML_PX = 26;
 const CARD_DIFF_BASE_MR_PX = -4;
 
 function isBetterRecord(a: PlayHistoryRecord, b: PlayHistoryRecord): boolean {
@@ -601,10 +601,11 @@ export function SongSelectCarousel({
   //
   // Length hierarchy (always true, even mid-scroll):
   //   selected group  >  centred non-selected  >  edge non-selected
-  // Banners render at ~83.5% of the carousel width, right-aligned: a base
-  // left inset of 16.5% of the container width applies to every group, and
-  // non-selected groups taper with an extra indent at the centre out to
-  // the max indent at the edges.
+  // The selected banner renders at ~96% of the carousel width (15% longer
+  // than the rest); other banners render at ~83.5%, right-aligned: a base
+  // left inset of 16.5% of the container width applies to every non-selected
+  // group, and non-selected groups taper with an extra indent at the centre
+  // out to the max indent at the edges.
   //
   // Performance: indents are written directly to the DOM inside a
   // rAF-throttled scroll handler. No React state per scroll frame, so fast
@@ -616,11 +617,14 @@ export function SongSelectCarousel({
   const MAX_INDENT_PX = 32;
   const CENTER_INDENT_PX = 12;
   const RANGE_PX = 300;
-  // Banner width fraction: banners occupy the right ~83.5% of the carousel.
-  // The complementary 16.5% left inset is resolved against the live container
-  // width in the taper (percent fallback pre-paint), so it holds on any
-  // viewport instead of a fixed pixel guess.
+  // Banner width fraction: unselected banners occupy the right ~83.5% of
+  // the carousel. The complementary 16.5% left inset is resolved against the
+  // live container width in the taper (percent fallback pre-paint), so it
+  // holds on any viewport instead of a fixed pixel guess.
   const BANNER_LEFT_FRACTION = 0.165;
+  // Selected banner renders 15% longer: 83.5% * 1.15 = ~96% width, i.e. a
+  // ~4% left inset. Unselected groups keep the 16.5% base plus taper indent.
+  const SELECTED_BANNER_LEFT_FRACTION = 0.04;
   // The native scrollbar is hidden (see tokens.css): banners sit flush to
   // the right screen edge (marginRight 0). The custom overlay thumb floats
   // on top of the banner art (no layout gap between banners and the edge).
@@ -631,12 +635,12 @@ export function SongSelectCarousel({
   const UNSELECTED_OVERLAP_PX = 3;
   const SELECTED_GAP_PX = 6;
   // Difficulty-row taper: rows keep a small right inset matching the
-  // banners; unselected rows read slightly shorter through their larger
-  // left indent, which still tapers with viewport position. The selected
-  // row pins near banner width above them all.
-  const DIFF_BASE_ML_PX = 8;
+  // banners; unselected rows sit shorter through a larger left indent that
+  // still tapers with viewport position. The selected row pins near banner
+  // width above them all.
+  const DIFF_BASE_ML_PX = 26;
   const DIFF_BASE_MR_PX = -4;
-  const DIFF_SELECTED_ML_PX = -12;
+  const DIFF_SELECTED_ML_PX = -11;
   const DIFF_SELECTED_MR_PX = -4;
   const DIFF_RANGE_PX = 220;
   const DIFF_MAX_EXTRA_PX = 10;
@@ -674,6 +678,10 @@ export function SongSelectCarousel({
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
+  // Cleared 160ms after the last scroll event; while set, the container
+  // carries .is-scrolling so diff-row margin transitions stay off and the
+  // taper tracks instantly.
+  const scrollIdleTimer = useRef(0);
   // Custom overlay scrollbar thumb (the native bar is hidden so nothing
   // clips the banner art). Written directly like the taper — no React state per scroll frame.
   const scrollThumbRef = useRef<HTMLDivElement | null>(null);
@@ -705,8 +713,10 @@ export function SongSelectCarousel({
     const selectedKey = selectedKeyRef.current;
     const viewCenter = container.scrollTop + container.clientHeight / 2;
     const expandedKeyForStack = expandedKeyRef.current;
-    // Base left inset for the ~83.5% banner width, right-aligned.
+    // Base left insets: ~16.5% for the ~83.5% unselected banner width,
+    // ~4% for the ~96% (15% longer) selected width. Right-aligned.
     const baseShrinkPx = Math.round(container.clientWidth * BANNER_LEFT_FRACTION);
+    const selectedShrinkPx = Math.round(container.clientWidth * SELECTED_BANNER_LEFT_FRACTION);
     for (let gi = 0; gi < groupsRef.current.length; gi += 1) {
       const g = groupsRef.current[gi];
       const el = itemEls.current.get(g.songKey);
@@ -726,8 +736,9 @@ export function SongSelectCarousel({
       const targetZ = g.songKey === selectedKey ? '2' : '1';
       if (el.style.zIndex !== targetZ) el.style.zIndex = targetZ;
       if (g.songKey === selectedKey) {
-        // Selected: pinned to the ~75% width, always longer than the rest.
-        const selectedLeft = `${baseShrinkPx}px`;
+        // Selected: pinned to the ~96% width (15% longer), always longer
+        // than the rest.
+        const selectedLeft = `${selectedShrinkPx}px`;
         if (el.style.marginLeft !== selectedLeft) el.style.marginLeft = selectedLeft;
         if (el.style.marginRight !== `${SELECTED_RIGHT_EXTEND_PX}px`) el.style.marginRight = `${SELECTED_RIGHT_EXTEND_PX}px`;
         continue;
@@ -848,16 +859,30 @@ export function SongSelectCarousel({
     updateTaper();
     setListReady(groupsRef.current.length > 0);
     const handleResize = () => { scheduleTaper(); };
-    container.addEventListener('scroll', scheduleTaper, { passive: true });
+    // Diff-row margins glide on selection switches via CSS transition, but
+    // the taper writes margins every scroll frame — so while actively
+    // scrolling the container carries .is-scrolling (transitions off) and
+    // the class is lifted once scrolling idles.
+    const handleScrollState = () => {
+      container.classList.add('is-scrolling');
+      if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
+      scrollIdleTimer.current = window.setTimeout(() => {
+        container.classList.remove('is-scrolling');
+      }, 160);
+      scheduleTaper();
+    };
+    container.addEventListener('scroll', handleScrollState, { passive: true });
     window.addEventListener('resize', handleResize);
     // Re-measure after expand/collapse animations settle (heights change).
     const t1 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 120);
     const t2 = window.setTimeout(() => { measureCenters(); scheduleTaper(); }, 420);
     return () => {
-      container.removeEventListener('scroll', scheduleTaper);
+      container.removeEventListener('scroll', handleScrollState);
       window.removeEventListener('resize', handleResize);
       window.clearTimeout(t1);
       window.clearTimeout(t2);
+      if (scrollIdleTimer.current) window.clearTimeout(scrollIdleTimer.current);
+      scrollIdleTimer.current = 0;
       if (taperRaf.current) cancelAnimationFrame(taperRaf.current);
       taperRaf.current = 0;
       cancelProgScroll();
@@ -873,11 +898,11 @@ export function SongSelectCarousel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroupKey, selectedMapId]);
 
-  // One-time top snap: glide the requested group's top to the container
-  // top, then leave the scroll alone — it is not sticky. Damped tracking
-  // keeps it snappy; user input cancels it so it never fights manual
-  // scrolling. A settle correction re-runs after the expand animation
-  // grows the snapped group.
+  // One-time selection glide: move the selected difficulty row to the
+  // viewport middle, then leave the scroll alone — it is not sticky.
+  // Damped tracking keeps it snappy; user input cancels it so it never
+  // fights manual scrolling. A settle correction re-runs after the expand
+  // animation grows the opened group.
   useEffect(() => {
     if (!centerSignal) return;
     const container = containerRef?.current;
@@ -933,10 +958,29 @@ export function SongSelectCarousel({
       progScrollRaf.current = requestAnimationFrame(step);
     };
 
-    const centreTarget = (el: HTMLElement): number => {
-      const target = el.offsetTop - TOP_SPACER_PX;
+    // Destination for a selection: the selected difficulty row's centre
+    // goes to the viewport middle. Clamped to the scroll range, so a song
+    // too high up settles at the top and one too low settles at the
+    // bottom — the row centres whenever the range allows it. Falls back
+    // to the group top while its diff list isn't mounted. Re-read live
+    // every frame, so expand/collapse height changes mid-flight are
+    // tracked in a single smooth motion.
+    const selectionDest = (): number | null => {
+      const groupEl = itemEls.current.get(centerSignal.key);
+      if (!groupEl) return null;
       const max = Math.max(0, container.scrollHeight - container.clientHeight);
-      return Math.max(0, Math.min(max, target));
+      const clamp = (v: number) => Math.max(0, Math.min(max, v));
+      const selId = selectedMapIdRef.current;
+      const row = selId
+        ? groupEl.querySelector<HTMLElement>(`:scope [data-diff-id="${selId}"]`)
+        : null;
+      if (row) {
+        const containerRect = container.getBoundingClientRect();
+        const rect = row.getBoundingClientRect();
+        const center = rect.top - containerRect.top + container.scrollTop + rect.height / 2;
+        return clamp(center - container.clientHeight / 2);
+      }
+      return clamp(groupEl.offsetTop - TOP_SPACER_PX);
     };
 
     const scheduleSettleCorrection = () => {
@@ -948,7 +992,8 @@ export function SongSelectCarousel({
         // User grabbed the scroll after we finished — leave it alone.
         if (Math.abs(container.scrollTop - expectedTop) > 8) return;
         measureCenters();
-        const dest = centreTarget(el);
+        const dest = selectionDest();
+        if (dest === null) return;
         if (Math.abs(dest - container.scrollTop) < 4) return;
         const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
           && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -957,10 +1002,7 @@ export function SongSelectCarousel({
           expectedTop = dest;
           return;
         }
-        glideTo(() => {
-          const target = itemEls.current.get(centerSignal.key);
-          return target ? centreTarget(target) : null;
-        });
+        glideTo(() => selectionDest());
       }, 420);
     };
 
@@ -978,7 +1020,8 @@ export function SongSelectCarousel({
         return;
       }
       measureCenters();
-      const clamped = centreTarget(el);
+      const clamped = selectionDest();
+      if (clamped === null) return; // group vanished mid-flight; ignore
       const dist = clamped - container.scrollTop;
       if (Math.abs(dist) < 4) {
         expectedTop = clamped;
@@ -992,10 +1035,7 @@ export function SongSelectCarousel({
         scheduleSettleCorrection();
         return;
       }
-      glideTo(() => {
-        const target = itemEls.current.get(centerSignal.key);
-        return target ? centreTarget(target) : null;
-      }, scheduleSettleCorrection);
+      glideTo(() => selectionDest(), scheduleSettleCorrection);
     };
     run();
     return () => {
@@ -1086,17 +1126,18 @@ export function SongSelectCarousel({
         // song's diffs are opened.
         const isExpanded = expandedSongKey === group.songKey;
         // First-paint indent before the rAF taper measures the viewport:
-        // every banner starts at the ~83.5% width (16.5% left inset) with the
-        // selected group pinned there and the rest falling back to the
-        // discrete focus index on top. The scroll handler takes over
-        // immediately after with the pixel-measured equivalent.
+        // the selected banner starts at ~96% width (4% left inset, 15%
+        // longer) while every other banner starts at the ~83.5% width
+        // (16.5% left inset) with the rest falling back to the discrete
+        // focus index on top. The scroll handler takes over immediately
+        // after with the pixel-measured equivalent.
         // Cheap arithmetic only — sorting, star ratings, and history scans
         // live inside the memoized card below.
         const fallbackTaperPx = isGroupActive
           ? 0
           : CENTER_INDENT_PX + Math.min(Math.abs(groupIndex - focusIndex), 5) * 4;
-        const fallbackIndentPx = fallbackTaperPx === 0
-          ? '16.5%'
+        const fallbackIndentPx = isGroupActive
+          ? '4%'
           : `calc(16.5% + ${fallbackTaperPx}px)`;
         const fallbackExtendRightPx = isGroupActive ? SELECTED_RIGHT_EXTEND_PX : UNSELECTED_RIGHT_OVERLAP_PX;
         const prevGroupKey = groupIndex > 0 ? songGroups[groupIndex - 1].songKey : null;

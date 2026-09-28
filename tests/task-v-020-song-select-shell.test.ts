@@ -36,14 +36,15 @@ describe('TASK-V-020: song select shell + footer + parked cookie', () => {
     expect(html).toContain('Back');
     expect(html).toContain('id="bottom-mods-button"');
     expect(html).toContain('Mods');
-    expect(html).toContain('F1');
+    expect(html).not.toContain('lazer-footer-hotkey-badge');
+    expect(html).not.toContain('>F1<');
     expect(html).toContain('2'); // selected mods count badge
     expect(html).toContain('id="bottom-random-button"');
     expect(html).toContain('Random');
-    expect(html).toContain('F2');
+    expect(html).not.toContain('>F2<');
     expect(html).toContain('id="bottom-options-button"');
     expect(html).toContain('Options');
-    expect(html).toContain('F3');
+    expect(html).not.toContain('>F3<');
     expect(html).toContain('lazer-parked-cookie');
     expect(html).toContain('data-lazer-cookie');
   });

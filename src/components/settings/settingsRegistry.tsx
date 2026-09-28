@@ -32,7 +32,7 @@ import { computeScrollTravelTimeMs } from '../../render/playfieldLayout';
 import BindingMatrix from './BindingMatrix';
 
 export type SectionId =
-  | 'general' | 'graphics' | 'gameplay' | 'audio' | 'input' | 'maintenance';
+  | 'general' | 'gameplay' | 'visual' | 'audio' | 'input' | 'miscellaneous';
 
 export interface SectionDef {
   id: SectionId;
@@ -43,13 +43,23 @@ export interface SectionDef {
 }
 
 export const SECTIONS: SectionDef[] = [
-  { id: 'general',     label: 'General',     description: 'Account-agnostic preferences for the client.', icon: SlidersHorizontal },
-  { id: 'graphics',    label: 'Graphics',    description: 'Display, video, and pixel ratio.',        icon: Monitor },
-  { id: 'gameplay',    label: 'Gameplay',    description: 'Scroll speed, scroll direction, and timing.',      icon: Gamepad2 },
-  { id: 'audio',       label: 'Audio',       description: 'Volumes and the universal audio offset.',          icon: Volume2 },
-  { id: 'input',       label: 'Input',       description: 'Keyboard bindings per key count.',                 icon: Keyboard },
-  { id: 'maintenance', label: 'Maintenance', description: 'Reset to defaults and other global actions.',      icon: Wrench },
+  { id: 'general',       label: 'General',       description: 'Account-agnostic preferences for the client.', icon: SlidersHorizontal },
+  { id: 'gameplay',      label: 'Gameplay',      description: 'Scroll speed, scroll direction, and timing.',      icon: Gamepad2 },
+  { id: 'visual',        label: 'Visual',        description: 'Display, video, and pixel ratio.',        icon: Monitor },
+  { id: 'audio',         label: 'Audio',         description: 'Volumes and the universal audio offset.',          icon: Volume2 },
+  { id: 'input',         label: 'Input',         description: 'Keyboard bindings per key count.',                 icon: Keyboard },
+  { id: 'miscellaneous', label: 'Miscellaneous', description: 'Reset to defaults and other global actions.',      icon: Wrench },
 ];
+
+export interface SubgroupDef {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export const SUBGROUPS: Record<string, SubgroupDef> = {
+  Dim: { id: 'Dim', label: 'Dim', description: 'Control how dimmed each background is.' },
+};
 
 export type Control =
   | { kind: 'slider';    min: number; max: number; step: number; suffix?: string; format?: (v: number) => string; percent?: boolean }
@@ -71,6 +81,7 @@ export interface RowApi {
 export interface RowDef {
   id: string;
   section: SectionId;
+  subgroup?: string;              // optional subsection header within a section
   label: string;
   description: string;
   control: Control;
@@ -94,20 +105,10 @@ export const ROWS: RowDef[] = [
   },
   {
     id: 'menuCursorEnabled', section: 'general', label: 'Lazer menu cursor',
-    description: 'Replace the system pointer with the osu!(lazer)-style arrow cursor. Drop cursor.png + cursor-additive.png into public/cursor/ to use your own pictures.',
+    description: 'Replace the system pointer with the osu!lazer style arrow cursor.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.menuCursorEnabled,
     keywords: ['cursor', 'lazer', 'osu', 'pointer', 'mouse', 'arrow'],
-  },
-  {
-    id: 'progressBarTop', section: 'general', label: 'Progress bar position',
-    description: 'Show the song progress bar at the top of the screen instead of the bottom.',
-    control: { kind: 'select', options: [
-      { value: 'false', label: 'Bottom' },
-      { value: 'true',  label: 'Top' },
-    ]},
-    defaultValue: DEFAULT_SETTINGS.progressBarTop,
-    keywords: ['progress', 'bar', 'song'],
   },
   {
     id: 'enableSongPreview', section: 'general', label: 'Song preview audio',
@@ -117,70 +118,63 @@ export const ROWS: RowDef[] = [
     keywords: ['preview', 'song', 'select', 'music', 'listen'],
   },
 
-  // ── GRAPHICS ──────────────────────────────────────────────────────────
+  // ── VISUAL ────────────────────────────────────────────────────────────
   {
-    id: 'playfieldWidthPercent', section: 'graphics', label: 'Playfield width',
+    id: 'playfieldWidthPercent', section: 'visual', label: 'Playfield width',
     description: 'How wide the lanes are, as a percentage of the screen width.',
     control: { kind: 'slider', min: PLAYFIELD_WIDTH_MIN, max: PLAYFIELD_WIDTH_MAX, step: 1, suffix: '%' },
     defaultValue: DEFAULT_SETTINGS.playfieldWidthPercent,
   },
   {
-    id: 'backgroundDim', section: 'graphics', label: 'Gameplay Background Dim',
+    id: 'backgroundDim', section: 'visual', subgroup: 'Dim', label: 'Gameplay Background Dim',
     description: 'How much to dim the background while playing.',
     control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
     defaultValue: DEFAULT_SETTINGS.backgroundDim,
     keywords: ['gameplay', 'background', 'dim', 'play', 'shield', 'darken', 'opacity'],
   },
   {
-    id: 'menuBackgroundDim', section: 'graphics', label: 'Menus Background Dim',
-    description: 'How much to darken the background picture across the menus and selection screens.',
+    id: 'songSelectBackgroundDim', section: 'visual', subgroup: 'Dim', label: 'Song Select Background Dim',
+    description: 'How much to dim the cover artwork picture on the Song Select screen.',
     control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
-    defaultValue: DEFAULT_SETTINGS.menuBackgroundDim,
-    keywords: ['menu', 'menus', 'background', 'song', 'select', 'replay', 'history', 'artwork', 'dim', 'darken', 'brightness', 'opacity'],
+    defaultValue: DEFAULT_SETTINGS.songSelectBackgroundDim,
+    keywords: ['song', 'select', 'background', 'cover', 'artwork', 'picture', 'dim', 'darken', 'brightness', 'opacity'],
   },
   {
-    id: 'settingsMenuBackgroundDim', section: 'graphics', label: 'Settings menu background dim',
-    description: 'How much to dim and blur the background behind the settings menu.',
-    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
-    defaultValue: DEFAULT_SETTINGS.settingsMenuBackgroundDim,
-    keywords: ['settings', 'menu', 'background', 'dim', 'darken', 'brightness', 'opacity', 'blur', 'backdrop', 'overlay'],
-  },
-  {
-    id: 'disableVideo', section: 'graphics', label: 'Disable background video',
+    id: 'disableVideo', section: 'visual', label: 'Disable background video',
     description: 'Enable or disable the beatmap background video entirely.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.disableVideo,
   },
   {
-    id: 'videoOffset', section: 'graphics', label: 'Video offset',
+    id: 'videoOffset', section: 'visual', label: 'Video offset',
     description: 'Shift the video forward (+) or backward (-) in milliseconds.',
     control: { kind: 'slider', min: -500, max: 500, step: 10, format: ms },
     defaultValue: DEFAULT_SETTINGS.videoOffset,
     showWhen: (s) => !s.disableVideo,
   },
   {
-    id: 'disableComboBurst', section: 'graphics', label: 'Disable combo burst',
+    id: 'disableComboBurst', section: 'visual', label: 'Disable combo burst',
     description: 'Hide the combo milestone popup shown every 50 combo during gameplay.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.disableComboBurst,
     keywords: ['combo', 'burst', 'milestone', 'popup', '50', 'celebration'],
   },
   {
-    id: 'showFpsCounter', section: 'graphics', label: 'Show FPS counter',
+    id: 'showFpsCounter', section: 'visual', label: 'Show FPS counter',
     description: 'Display a small performance readout (FPS, frame time, input latency) in the corner on every screen.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.showFpsCounter,
     keywords: ['fps', 'frames', 'frame', 'time', 'latency', 'input', 'performance', 'counter'],
   },
   {
-    id: 'uncappedMenuMotion', section: 'graphics', label: 'Uncapped menu motion',
+    id: 'uncappedMenuMotion', section: 'visual', label: 'Uncapped menu motion',
     description: 'Render the animated menu background at the full display rate instead of the ~30fps eco throttle. Uses more GPU.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.uncappedMenuMotion,
     keywords: ['menu', 'background', 'fps', 'frames', 'uncapped', 'throttle', 'motion', 'triangles', 'performance', 'gpu'],
   },
   {
-    id: 'renderEngine', section: 'graphics', label: 'Playfield renderer',
+    id: 'renderEngine', section: 'visual', label: 'Playfield renderer',
     description: 'Canvas2D is the default. WebGL2 is a batched GPU playfield (argon/default skins first, others fall back to Canvas2D). SV and judgement are unchanged.',
     control: { kind: 'select', options: [
       { value: 'canvas', label: 'Canvas2D (default)' },
@@ -190,7 +184,7 @@ export const ROWS: RowDef[] = [
     keywords: ['renderer', 'webgl', 'canvas', 'gpu', 'playfield', 'performance', 'latency'],
   },
   {
-    id: 'allowCanvasFallback', section: 'graphics', label: 'Allow Canvas2D fallback',
+    id: 'allowCanvasFallback', section: 'visual', label: 'Allow Canvas2D fallback',
     description: 'When WebGL2 init fails, fall back to Canvas2D. Turn off to surface a hard error for testing.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.allowCanvasFallback,
@@ -198,7 +192,7 @@ export const ROWS: RowDef[] = [
     keywords: ['fallback', 'canvas', 'webgl', 'testing', 'error'],
   },
   {
-    id: 'renderDpr', section: 'graphics', label: 'Render resolution',
+    id: 'renderDpr', section: 'visual', label: 'Render resolution',
     description: 'Canvas pixel ratio. 1 is fastest, 1.5 is balanced, 2 is sharpest with the highest GPU cost.',
     control: { kind: 'select', options: [
       { value: '1', label: '1x (performance)' },
@@ -319,9 +313,9 @@ export const ROWS: RowDef[] = [
     defaultValue: DEFAULT_SETTINGS.bindings,
   },
 
-  // ── MAINTENANCE ───────────────────────────────────────────────────────
+  // ── MISCELLANEOUS ─────────────────────────────────────────────────────
   {
-    id: 'restoreDefaults', section: 'maintenance', label: 'Restore all defaults',
+    id: 'restoreDefaults', section: 'miscellaneous', label: 'Restore all defaults',
     description: 'Reset every setting on this page to its default value.',
     control: { kind: 'button', label: 'Restore', action: 'restoreAll' },
     defaultValue: null,

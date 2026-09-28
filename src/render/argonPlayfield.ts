@@ -56,6 +56,7 @@ function drawArgonNotePiece(
   opacity: number,
   upscroll: boolean,
   variant: NoteVariant,
+  holdOpts?: { isHitting?: boolean; isFailed?: boolean; visualTime?: number },
 ): void {
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -82,17 +83,33 @@ function drawArgonNotePiece(
   const accentY = topY + height - accentH;
 
   if (variant === 'holdTail') {
-    ctx.fillStyle = cachedDarkenRgba(color, 0.6, 1);
+    // Seamless with the hold middle: same base color as drawArgonHoldBody
+    // (failed gray when failed) and the same hold pulse while held, so the
+    // end fades in and out together with the middle instead of sitting dark
+    // and detached at the body junction.
+    const tailFailed = !!holdOpts?.isFailed;
+    ctx.fillStyle = tailFailed ? 'rgb(48,52,64)' : cachedDarkenRgba(color, 0.6, 1);
     ctx.beginPath();
     ctx.roundRect(x, accentY, width, accentH, ARGON_CORNER_RADIUS);
     ctx.fill();
-    const additive = ctx.createLinearGradient(x, accentY, x, accentY + accentH * 0.5);
-    additive.addColorStop(0, cachedHexToRgba(color, 0.4));
-    additive.addColorStop(1, cachedHexToRgba(color, 0));
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = additive;
-    ctx.fillRect(x, accentY, width, accentH * 0.5);
-    ctx.globalCompositeOperation = 'source-over';
+    if (holdOpts?.isHitting && !tailFailed) {
+      const visualTime = holdOpts.visualTime ?? 0;
+      const pulse = 0.75 + 0.25 * Math.sin((visualTime / 160) * Math.PI * 2);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = cachedLightenRgba(color, 0.2, 0.3 * pulse);
+      ctx.beginPath();
+      ctx.roundRect(x, accentY, width, accentH, ARGON_CORNER_RADIUS);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (!tailFailed) {
+      const additive = ctx.createLinearGradient(x, accentY, x, accentY + accentH * 0.5);
+      additive.addColorStop(0, cachedHexToRgba(color, 0.4));
+      additive.addColorStop(1, cachedHexToRgba(color, 0));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = additive;
+      ctx.fillRect(x, accentY, width, accentH * 0.5);
+      ctx.globalCompositeOperation = 'source-over';
+    }
   } else {
     const accent = ctx.createLinearGradient(x, accentY, x, topY + height);
     accent.addColorStop(0, cachedLightenRgba(color, 0.1, 1));
@@ -313,11 +330,20 @@ export function renderArgonPlayfield(
       const topY = centerY - noteHeight / 2;
       let opacity = n.endOpacity ?? n.opacity;
       if (n.isHoldFailed) opacity *= 0.35;
-      drawArgonNotePiece(ctx, rx, topY, rw, noteHeight, color, opacity, upscroll, 'holdTail');
+      const tailHitting = n.isHolding !== undefined
+        ? n.isHolding
+        : (n.isHit && !n.isReleased && !n.isHoldFailed);
+      drawArgonNotePiece(ctx, rx, topY, rw, noteHeight, color, opacity, upscroll, 'holdTail', {
+        isHitting: tailHitting,
+        isFailed: !!n.isHoldFailed,
+        visualTime: frame.timeMs,
+      });
     }
   });
 
-  const hitTargetH = noteHeight * ARGON_NOTE_ACCENT_RATIO * receptorScale;
+  // Receptor target matches the normal note height (not the 82% accent
+  // zone), so keys read at the same vertical size as incoming notes.
+  const hitTargetH = noteHeight * receptorScale;
   const lipH = ARGON_CORNER_RADIUS * 2;
 
   for (let i = 0; i < keyCount; i++) {

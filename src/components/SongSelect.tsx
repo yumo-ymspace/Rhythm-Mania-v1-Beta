@@ -168,8 +168,8 @@ export default function SongSelect({
 
   // One-time carousel centring (osu!lazer ScrollToSelection behaviour):
   // explicit selections request a single animated centre of the chosen
-  // group; free scrolling afterwards is never forced back. The carousel
-  // owns the animation and skips it when already centred.
+  // difficulty row; free scrolling afterwards is never forced back. The
+  // carousel owns the animation and skips it when already centred.
   const [carouselCenterSignal, setCarouselCenterSignal] = useState<{ key: string; nonce: number } | undefined>(undefined);
   const carouselCenterNonceRef = useRef(0);
   const requestCarouselCenter = useCallback((songKey: string) => {
@@ -1028,9 +1028,8 @@ export default function SongSelect({
     }
   }, [handleSelectCustomMap, onSelectMap]);
 
-  // Latest random-select callback for the global keyboard handler without
+  // Latest start-play callback for the global keyboard handler without
   // pulling a later-declared const into the deps array (TDZ).
-  const handleSelectRandomRef = useRef<() => void>(() => {});
   const handleStartPlayRef = useRef<(m?: Beatmap) => Promise<void>>(async () => {});
 
   // Global keyboard shortcuts on song select
@@ -1054,16 +1053,6 @@ export default function SongSelect({
           e.preventDefault();
           void handleStartPlayRef.current();
         }
-      } else if (e.key === 'F1') {
-        // While a beatmap-listing dropdown is open, keys stay confined to it.
-        if (showOptionsMenu || openFilterMenu) return;
-        e.preventDefault();
-        setShowModsModal((prev) => !prev);
-      } else if (e.key === 'F2') {
-        // Random select is a Song Select action, not a dropdown action.
-        if (showModsModal || showOptionsMenu || openFilterMenu) return;
-        e.preventDefault();
-        handleSelectRandomRef.current();
       } else if (e.key === 'ArrowDown') {
         if (!showModsModal && !showOptionsMenu && !openFilterMenu && filteredCustomMaps.length > 0) {
           e.preventDefault();
@@ -1094,9 +1083,9 @@ export default function SongSelect({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-    // handleSelectRandom/handleStartPlay are defined below; they are stable
-    // useCallbacks and are read via refs to avoid a use-before-declaration
-    // TDZ in the deps array. See randomRef/startPlayRef below.
+    // handleStartPlay is defined below; it is a stable useCallback read
+    // via a ref to avoid a use-before-declaration TDZ in the deps array.
+    // See startPlayRef below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showModsModal, showOptionsMenu, openFilterMenu, onBack, selectedCustomMap, selectedCustomMapId, filteredCustomMaps, expandedSongKey, getMapSongKey, handleSelectCustomMap, requestCarouselCenter]);
 
@@ -1279,11 +1268,8 @@ export default function SongSelect({
     requestCarouselCenter(getMapSongKey(diff));
   }, [handleSelectCustomMap, requestCarouselCenter, getMapSongKey]);
 
-  // Keep the global keyboard handler on the latest callbacks without
-  // pulling later-declared consts into its deps array (TDZ).
-  useEffect(() => {
-    handleSelectRandomRef.current = handleSelectRandom;
-  }, [handleSelectRandom]);
+  // Keep the global keyboard handler on the latest start-play callback
+  // without pulling the later-declared const into its deps array (TDZ).
   useEffect(() => {
     handleStartPlayRef.current = handleStartPlay;
   }, [handleStartPlay]);
@@ -1302,7 +1288,7 @@ export default function SongSelect({
     <div
       className="relative w-full h-full min-h-0 text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
-      {/* 1. Full-bleed background cover artwork with no dim overlay.
+      {/* 1. Full-bleed background cover artwork with Song Select dim overlay.
           Group-stable + preloaded + cross-fading in place: no slide,
           no flash when changing difficulties or songs. */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
@@ -1316,7 +1302,7 @@ export default function SongSelect({
               transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               className="absolute inset-0 bg-cover bg-center scale-105"
               style={{
-                backgroundImage: `url("${sanitizeCssUrl(displayedBgUrl)}")`,
+                backgroundImage: `linear-gradient(rgba(0, 0, 0, ${settings.songSelectBackgroundDim ?? 0}), rgba(0, 0, 0, ${settings.songSelectBackgroundDim ?? 0})), url("${sanitizeCssUrl(displayedBgUrl)}")`,
               }}
             />
           )}
@@ -1400,7 +1386,7 @@ export default function SongSelect({
             <Search className="lazer-song-search-icon" />
           </div>
 
-          {/* STAR RATING RAINBOW BAR + Show converts — drag/scroll directly on the bar */}
+          {/* STAR RATING RAINBOW BAR — drag/scroll directly on the bar */}
           <div className="flex-shrink-0 flex items-center gap-2 lazer-song-filter-star">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="lazer-filter-tab">Star Rating</span>
@@ -1458,7 +1444,6 @@ export default function SongSelect({
                 <span className="lazer-starbar-value is-max">{maxStar >= 10 ? '∞' : maxStar.toFixed(1)}</span>
               </div>
             </div>
-            <span className="lazer-filter-tab opacity-80 hidden sm:inline-flex">Show converts</span>
           </div>
 
           {/* SORT / GROUP / COLLECTION ROW — slanted pills, row stays unclipped for dropdowns */}

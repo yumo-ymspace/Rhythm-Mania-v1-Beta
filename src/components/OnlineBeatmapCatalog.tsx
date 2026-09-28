@@ -234,8 +234,6 @@ export default function OnlineBeatmapCatalog({
       'ArrowDown',
       'ArrowLeft',
       'ArrowRight',
-      'F1',
-      'F2',
       'F3',
       'F4',
       'F6',

@@ -292,8 +292,7 @@ export interface GameSettings {
   upsurfaceNoteMode: boolean; // whether notes scroll upwards rather than downwards
   videoOpacity: number; // background video opacity (0 to 1)
   backgroundDim: number; // gameplay background dim / solid-black lane background shielding opacity (0 to 1)
-  menuBackgroundDim?: number; // menus background dim overlay opacity across menus and selection screens (0 to 1)
-  settingsMenuBackgroundDim?: number; // settings drawer backdrop dim overlay opacity (0 to 1)
+  songSelectBackgroundDim?: number; // song select cover artwork dim overlay opacity (0 to 1)
   disableVideo?: boolean; // whether background video playback is completely disabled
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
   disableComboBurst?: boolean; // hide the combo milestone burst popup
@@ -313,7 +312,6 @@ export interface GameSettings {
   judgementSize?: number; // 0.5 to 1.5 (font size scaling multiplier)
   judgementPositionY?: number; // vertical screen position in percent
   laneSeparatorOpacity?: number; // 0.0 to 1.0 (opacity for lane divider lines)
-  progressBarTop?: boolean; // progress bar position setting (top vs bottom)
   playfieldWidthPercent?: number; // width of lanes as percent of screen width (33 to 50)
   selectedMods?: string[]; // list of active gameplay modifiers (e.g., 'NF', 'HD', 'HR', 'DT')
   bindPause?: string; // gameplay pause/resume keybind
