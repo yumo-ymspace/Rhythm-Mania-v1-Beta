@@ -2503,10 +2503,12 @@ html[data-ui="lazer"] {
    Shape is unchanged by the compact rhythm, only re-tuned to the shorter
    box. Measured ::before height = 123px (115px stack + 8px top tuck) at
    1600x900 (DPR 1): slant run 32 - 10.09 = 21.9px over 123px keeps the
-   10.1° shell degree (atan(21.9/123)). Bottom-left is the same R12
-   circular fillet as before (acute joint φ=79.9°, T = 12/tan(39.95°) =
-   14.33px on each edge, arc sampled every 20°, travel 0° -> 90° ->
-   180° -> -80° with no flat or kink). The fillet is bottom-anchored
+   10.1° shell degree (atan(21.9/123)). Bottom-left is an R4 circular
+   fillet matching the sort-row pills' corners: same R4, same acute
+   joint φ=79.9°, T = 4/tan(39.95°) = 4.78px on each edge — identical
+   joint geometry, so the arcs read as one family. Arc sampled every
+   20°, travel 0° -> 90° -> 180° -> -80° with no flat or kink.
+   The fillet is bottom-anchored
    (calc(100% - Npx)) so it stays exact if the stack height drifts a few
    px; only the straight slant angle breathes slightly. */
 .lazer-song-filter-stack::before {
@@ -2520,7 +2522,7 @@ html[data-ui="lazer"] {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  clip-path: polygon(32px 0, 100% 0, 100% 100%, 24.4px 100%, 21.0px calc(100% - 0.5px), 17.8px calc(100% - 2.0px), 15.2px calc(100% - 4.3px), 13.4px calc(100% - 7.3px), 12.5px calc(100% - 10.6px), 12.6px calc(100% - 14.1px));
+  clip-path: polygon(32px 0, 100% 0, 100% 100%, 14.9px 100%, 13.7px calc(100% - 0.2px), 12.7px calc(100% - 0.7px), 11.8px calc(100% - 1.4px), 11.2px calc(100% - 2.4px), 10.9px calc(100% - 3.5px), 10.9px calc(100% - 4.7px));
 }
 
 /* --- Search row: inset parallelogram field with Slant Fillet corners.

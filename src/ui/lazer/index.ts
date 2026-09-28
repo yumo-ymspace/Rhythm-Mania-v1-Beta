@@ -81,6 +81,8 @@ export { LazerToolbar, ToolbarTooltip } from './LazerToolbar';
 export type { LazerToolbarProps, ToolbarTooltipProps, LazerTooltipData } from './LazerToolbar';
 export { SongSelectFooter } from './SongSelectFooter';
 export type { SongSelectFooterProps } from './SongSelectFooter';
+export { SelectionLegalStrip, TERMS_URL, PRIVACY_URL } from './SelectionLegalStrip';
+export type { SelectionLegalStripProps } from './SelectionLegalStrip';
 export { SongSelectCarousel } from './SongSelectCarousel';
 export type { SongSelectCarouselProps, CarouselSongGroup } from './SongSelectCarousel';
 export { SongSelectLeftPanel, computeBpmSummary } from './SongSelectLeftPanel';

@@ -144,6 +144,5 @@ export class AssetLifecycleManager {
       }
     });
     this.activeBlobUrls.clear();
-    console.log('RhythmMania: Dynamic assets de-allocated in memory.');
   }
 }

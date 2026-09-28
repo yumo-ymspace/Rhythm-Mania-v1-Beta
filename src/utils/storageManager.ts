@@ -67,6 +67,17 @@ function safeString(value: unknown, maxLength: number, fallback = ''): string {
   return typeof value === 'string' && value.length <= maxLength ? value : fallback;
 }
 
+/**
+ * Byte-aware text guard for .osu content: the budget is UTF-8 bytes
+ * (MAX_OSU_TEXT_BYTES), not JS char count. Checks char length first as a
+ * cheap prefilter, then the encoded byte length, so multi-byte content is
+ * measured consistently in one place.
+ */
+function safeBoundedText(value: unknown, maxBytes: number): string {
+  if (typeof value !== 'string' || value.length > maxBytes) return '';
+  return new TextEncoder().encode(value).byteLength > maxBytes ? '' : value;
+}
+
 function safeMediaUrl(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_MEDIA_URL_LENGTH) return '';
   return !value || isSafeAssetUrl(value) ? value : '';
@@ -196,8 +207,8 @@ export function sanitizeSavedBeatmap(raw: unknown): SavedBeatmap | null {
     if (!isRecord(raw.hitSoundUrls) || Object.keys(raw.hitSoundUrls).length > 100) return null;
     for (const [name, url] of Object.entries(raw.hitSoundUrls)) hitSoundUrls[safeString(name, 512)] = safeMediaUrl(url);
   }
-  const originalContent = raw.originalContent === undefined ? undefined : safeString(raw.originalContent, MAX_OSU_TEXT_BYTES);
-  if (raw.originalContent !== undefined && (originalContent === '' || new TextEncoder().encode(originalContent).byteLength > MAX_OSU_TEXT_BYTES)) return null;
+  const originalContent = raw.originalContent === undefined ? undefined : safeBoundedText(raw.originalContent, MAX_OSU_TEXT_BYTES);
+  if (raw.originalContent !== undefined && originalContent === '') return null;
   const starRating = raw.starRating === undefined ? undefined : finiteNumber(raw.starRating, 0, 20);
   if (raw.starRating !== undefined && starRating === null) return null;
   const starRatingSource = raw.starRatingSource === 'osu-api-download' || raw.starRatingSource === 'chart-content' || raw.starRatingSource === 'legacy-fallback'

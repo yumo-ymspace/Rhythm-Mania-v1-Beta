@@ -51,7 +51,13 @@ describe('TASK-V-010: main menu idle', () => {
     expect(html).toContain(LAZER_COOKIE_TITLE);
     expect(html).toContain(LAZER_COOKIE_VERSION);
     expect(html).toContain('lazer-cookie-spectrum');
-    expect(html.toLowerCase()).not.toContain('osu');
+    // Brand chrome must not use the osu! mark — the only allowed mention is
+    // the legal non-affiliation disclaimer strip.
+    const withoutLegal = html.replace(/<div class="pointer-events-none flex flex-wrap.*?<\/div>/s, '');
+    expect(withoutLegal.toLowerCase()).not.toContain('osu');
+    expect(html).toContain('Not affiliated with ppy / osu!');
+    expect(html).toContain('terms and conditions');
+    expect(html).toContain('privacy policy');
   });
 
   it('does not render the stacked action cards, footer, or toolbar chrome', () => {

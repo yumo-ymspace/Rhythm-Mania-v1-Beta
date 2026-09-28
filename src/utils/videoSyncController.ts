@@ -35,7 +35,6 @@ export class VideoSyncController {
   // Tight PLL deadbands (ms)
   private readonly DEADBAND_FINE_MS = 16;
   private readonly DEADBAND_SOFT_SEEK_MS = 70;
-  private readonly DEADBAND_CATASTROPHIC_MS = 200;
   private readonly LOCKED_POLL_MS = 100;
   private readonly DRIFT_POLL_MS = 0;
   private readonly SEEK_COOLDOWN_MS = 150;
@@ -142,11 +141,8 @@ export class VideoSyncController {
 
     const inSeekCooldown = now < this.seekCooldownUntil;
 
-    if (!inSeekCooldown && driftMs >= this.DEADBAND_CATASTROPHIC_MS) {
-      this.seekTo(targetVideoTimeSec, baseRate);
-      return;
-    }
-
+    // A single seek threshold covers both soft (>= 70ms) and catastrophic
+    // (>= 200ms) drift: both paths hard-seek to the audio clock.
     if (!inSeekCooldown && driftMs >= this.DEADBAND_SOFT_SEEK_MS) {
       this.seekTo(targetVideoTimeSec, baseRate);
       return;

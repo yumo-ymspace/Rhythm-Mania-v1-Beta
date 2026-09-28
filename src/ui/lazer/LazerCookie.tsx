@@ -22,7 +22,7 @@ export const LAZER_COOKIE_MARK = `${LAZER_COOKIE_TITLE} ${LAZER_COOKIE_VERSION}`
 
 function splitCookieLabel(label: string): { title: string; version: string } {
   const trimmed = label.trim();
-  const match = trimmed.match(/^(.*?)\s+(v\d[\w.-]*)\s*$/i);
+  const match = trimmed.match(/^(.*?)\s+(v\d.*)\s*$/i);
   if (match) return { title: match[1].trim() || trimmed, version: match[2].trim() };
   return { title: trimmed, version: '' };
 }

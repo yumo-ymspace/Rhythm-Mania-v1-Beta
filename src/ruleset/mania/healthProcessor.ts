@@ -216,7 +216,7 @@ export function computeHpMultiplierNormalForMap(
   return hpMultiplierNormal;
 }
 
-export function computeHpMultiplierNormal(hpDrainRate: number): number {
+export function computeHpMultiplierNormal(_hpDrainRate: number): number {
   // No beatmap context: preserve the historical 1.0 default. Callers with
   // access to the note timeline should use computeHpMultiplierNormalForMap().
   return 1.0;

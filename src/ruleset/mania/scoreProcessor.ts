@@ -186,7 +186,7 @@ export function computeGrade(
 
   if (accuracyPercent >= 100 || onlyMaxTiers) {
     // onlyMaxTiers with all-perfect (osu Great) yields ~98.36% → S upgraded to X
-    if (onlyMaxTiers || accuracyPercent >= 100) return 'SS';
+    return 'SS';
   }
 
   if (accuracyPercent >= 95) return 'S';

@@ -287,7 +287,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
       className={`lazer-toolbar ${visible ? 'is-visible' : 'is-hidden'} ${isListingOpen || isListingElevated ? 'is-above-listing' : ''} ${className}`}
       data-lazer-toolbar=""
       role="banner"
-      aria-label="osu! lazer top toolbar"
+      aria-label="RhythmMania top toolbar"
     >
       {/* Left Section: Settings, Home */}
       <div className="lazer-toolbar-section lazer-toolbar-left">

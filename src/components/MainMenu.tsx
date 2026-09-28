@@ -17,6 +17,7 @@ import {
   LazerCookie,
   TriangleField,
   ButtonSystem,
+  SelectionLegalStrip,
   type ButtonSystemPhase,
   LAZER_DURATION,
   LAZER_EASE_IN_SINE,
@@ -424,6 +425,9 @@ export const MainMenu = ({
           onHoverChange={setCookieHovered}
         />
       </motion.div>
+
+      {/* Legal strip pinned to the menu bottom: non-affiliation left, terms acceptance right. */}
+      <SelectionLegalStrip className="fixed inset-x-0 bottom-0 z-[15]" />
     </div>
   );
 };

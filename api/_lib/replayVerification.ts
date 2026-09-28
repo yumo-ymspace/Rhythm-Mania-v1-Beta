@@ -69,7 +69,7 @@ function integer(value: unknown, min: number, max: number): value is number {
 }
 
 export function decodeCanonicalChart(value: unknown): CanonicalChart | null {
-  if (!isRecord(value) || value.mode !== 3 || !integer(value.keyCount, 2, 9)) return null;
+  if (!isRecord(value) || value.mode !== 3 || !integer(value.keyCount, 1, 10)) return null;
   if (
     typeof value.chartRevisionId !== 'string' || value.chartRevisionId.length < 1 ||
     typeof value.checksum !== 'string' || !finiteNumber(value.overallDifficulty, 0, 10) ||
@@ -304,7 +304,7 @@ export function parseCanonicalOsu(content: string, chartRevisionId: string, chec
       if (notes.length > MAX_NOTES) throw new Error('Too many notes');
     }
   }
-  if (mode !== 3 || !integer(keyCount, 2, 9) || !finiteNumber(od, 0, 10) || !finiteNumber(hp, 0, 10) || notes.length === 0) throw new Error('Chart is not a playable mania chart');
+  if (mode !== 3 || !integer(keyCount, 1, 10) || !finiteNumber(od, 0, 10) || !finiteNumber(hp, 0, 10) || notes.length === 0) throw new Error('Chart is not a playable mania chart');
   notes.sort((left, right) => left.timeMs - right.timeMs || left.lane - right.lane);
   const maxTimeMs = notes.reduce((max, note) => Math.max(max, note.endTimeMs || note.timeMs), 0);
   return { chartRevisionId, checksum, checksumAlgorithm, keyCount, mode: 3, overallDifficulty: od, hpDrainRate: hp, durationMs: Math.min(86_400_000, maxTimeMs + 3_000), notes, timingPoints };

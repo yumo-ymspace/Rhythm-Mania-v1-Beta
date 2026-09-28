@@ -40,8 +40,8 @@ export const DEFAULT_SKIN: SkinStyle = {
   label: 'Argon',
   category: 'default',
   badge: 'DEFAULT',
-  subtitle: 'osu!(lazer) Reference',
-  description: 'osu!(lazer) default mania skin. Authentic note geometry, receptors, darkened hold tails, and canonical 1K–10K column palettes on Canvas2D.',
+  subtitle: 'Argon (lazer-style) Reference',
+  description: 'Argon default mania skin. Authentic note geometry, receptors, darkened hold tails, and canonical 1K–10K column palettes on Canvas2D.',
 };
 
 export const LEGACY_SKINS: SkinStyle[] = [
@@ -102,7 +102,7 @@ export const styleSettings = (style: SkinStyleId): Partial<GameSettings> => ({
 });
 
 /**
- * High-fidelity vector preview of the osu!(lazer) Argon 4K playfield.
+ * High-fidelity vector preview of the Argon 4K playfield.
  * Renders authentic column colours, note geometry, darkened LN tail, receptor, and judgement.
  */
 function ArgonPlayfieldPreview({ compact = false }: { compact?: boolean }) {
@@ -422,7 +422,7 @@ export default function SkinScreen({
                 <div>
                   <div className="mb-1.5 flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300">
-                      Default Skin (osu!lazer)
+                      Default Skin (Argon)
                     </span>
                     <span className="text-[10px] text-white/40">Recommended</span>
                   </div>
@@ -563,7 +563,7 @@ export default function SkinScreen({
               <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-cyan-400/20 bg-cyan-950/20 p-2.5 text-xs text-cyan-200/90">
                 <Info className="h-4 w-4 shrink-0 text-cyan-400 mt-0.5" />
                 <p className="leading-relaxed text-[11px]">
-                  <strong>Argon column palette:</strong> osu!(lazer) Argon enforces canonical column colors for each key count (4K: Yellow, Orange, Pink, Purple). Custom lane color overrides apply when a legacy skin is selected.
+                  <strong>Argon column palette:</strong> Argon enforces canonical column colors for each key count (4K: Yellow, Orange, Pink, Purple). Custom lane color overrides apply when a legacy skin is selected.
                 </p>
               </div>
             )}
@@ -573,7 +573,7 @@ export default function SkinScreen({
                 <SkinSetting
                   id="receptorColorsByKeyCount"
                   label="Lane colors"
-                  description={isArgon ? "Custom colors for legacy skins (Argon uses canonical osu!lazer palette)." : "Set each lane color for every supported key count."}
+                  description={isArgon ? "Custom colors for legacy skins (Argon uses its canonical palette)." : "Set each lane color for every supported key count."}
                   settings={settings}
                   updateSettings={updateSettings}
                   className="lg:col-span-2"

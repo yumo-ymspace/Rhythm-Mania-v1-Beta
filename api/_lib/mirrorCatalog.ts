@@ -28,7 +28,7 @@
  *   NOTE (2026-09): catboy's `Mode` is currently degraded — mania
  *   difficulties (e.g. "[4K] Easy", CS 4) are returned as Mode 0. Mania is
  *   therefore detected via `catboyIsMania()`: Mode 3 wins, otherwise a
- *   `[NK]` (2-9) difficulty-name tag whose key count equals the integer CS.
+ *   `[NK]` (1-10) difficulty-name tag whose key count equals the integer CS.
  *   Download: https://catboy.best/d/<SetID>.
  * - nekoha: GET https://mirror.nekoha.moe/api/search?q=<q>&status=<csv>&mode=mania
  *   returns { beatmapsets: [...] } (100/page), each with a nested beatmaps[]
@@ -112,7 +112,7 @@ function toMirrorChart(input: {
   const keyCount = Number(input.keyCount);
   const checksum = typeof input.checksum === 'string' ? input.checksum.toLowerCase() : '';
   if (!Number.isInteger(id) || id < 1) return null;
-  if (!Number.isInteger(keyCount) || keyCount < 2 || keyCount > 9) return null;
+  if (!Number.isInteger(keyCount) || keyCount < 1 || keyCount > 10) return null;
   if (!checksum) return null;
   const starRating = Number(input.starRating);
   return {
@@ -132,14 +132,14 @@ function ppySlimCover(setId: number): string {
 /**
  * Catboy mania detection. `Mode === 3` is authoritative when present, but
  * catboy currently returns Mode 0 for mania difficulties, so a `[NK]`
- * difficulty-name tag (2K-9K) backed by a matching integer CS key count is
+ * difficulty-name tag (1K-10K) backed by a matching integer CS key count is
  * accepted as a fallback signal. A bare integer CS alone is NOT enough —
  * osu!standard maps can share those CS values.
  */
 export function catboyIsMania(child: UnknownRecord): { isMania: boolean; keyCount: unknown } {
   if (Number(child.Mode) === 3) return { isMania: true, keyCount: child.CS };
   const version = typeof child.DiffName === 'string' ? child.DiffName : '';
-  const tag = version.match(/\[\s*([2-9])\s*K\s*\]/i);
+  const tag = version.match(/\[\s*((?:10|[1-9]))\s*K\s*\]/i);
   const cs = Number(child.CS);
   if (tag && cs === Number(tag[1])) return { isMania: true, keyCount: cs };
   return { isMania: false, keyCount: child.CS };

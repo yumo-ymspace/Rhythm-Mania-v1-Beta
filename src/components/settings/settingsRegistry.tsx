@@ -105,10 +105,10 @@ export const ROWS: RowDef[] = [
   },
   {
     id: 'menuCursorEnabled', section: 'general', label: 'Lazer menu cursor',
-    description: 'Replace the system pointer with the osu!lazer style arrow cursor.',
+    description: 'Replace the system pointer with the lazer-style arrow cursor.',
     control: { kind: 'toggle' },
     defaultValue: DEFAULT_SETTINGS.menuCursorEnabled,
-    keywords: ['cursor', 'lazer', 'osu', 'pointer', 'mouse', 'arrow'],
+    keywords: ['cursor', 'lazer', 'pointer', 'mouse', 'arrow'],
   },
   {
     id: 'enableSongPreview', section: 'general', label: 'Song preview audio',

@@ -34,6 +34,7 @@ export class AudioEngine {
   private musicSource: AudioBufferSourceNode | null = null;
   private musicBuffer: AudioBuffer | null = null;
   private hitsoundBuffer: AudioBuffer | null = null;
+  private hihatNoiseBuffer: AudioBuffer | null = null;
   private beatmapHitsoundBuffers = new Map<string, AudioBuffer>();
   
   // Volume controls
@@ -185,6 +186,33 @@ export class AudioEngine {
       data[i] = val * envelope * 0.7;
     }
     this.hitsoundBuffer = buffer;
+    this.hihatNoiseBuffer = this.createHiHatNoiseBuffer();
+  }
+
+  /**
+   * Pre-generated white-noise buffer for the fallback hi-hat voice.
+   * Reused across triggers so the sequencer only allocates the cheap
+   * per-hit source/filter/gain nodes instead of a new AudioBuffer + fill
+   * loop on every hit.
+   */
+  private createHiHatNoiseBuffer(): AudioBuffer | null {
+    if (!this.ctx) return null;
+    const sampleRate = this.ctx.sampleRate;
+    const bufferSize = Math.max(1, Math.floor(sampleRate * 0.04)); // 40ms hi-hat duration
+    const buffer = this.ctx.createBuffer(1, bufferSize, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    return buffer;
+  }
+
+  private getHiHatNoiseBuffer(): AudioBuffer | null {
+    if (!this.ctx) return null;
+    if (!this.hihatNoiseBuffer || this.hihatNoiseBuffer.sampleRate !== this.ctx.sampleRate) {
+      this.hihatNoiseBuffer = this.createHiHatNoiseBuffer();
+    }
+    return this.hihatNoiseBuffer;
   }
 
   /**
@@ -499,9 +527,8 @@ export class AudioEngine {
 
   public stop() {
     this.transportGeneration++;
+    // pause() already stops the music source and backup synth sequencer.
     this.pause();
-    this.stopMusicSource();
-    this.stopBackupSynthSequencer();
     this.pauseTime = 0;
     this.remainingStartDelayMs = 0;
     this.transportState = 'stopped';
@@ -642,13 +669,10 @@ export class AudioEngine {
 
   private triggerHiHat(time: number) {
     if (!this.ctx || !this.musicGain) return;
-    // Direct white noise blockhihat simulation
-    const bufferSize = this.ctx.sampleRate * 0.04; // 40ms hi-hat duration
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
+    // Reuse the pre-generated white-noise buffer; only the lightweight
+    // source/filter/gain nodes are allocated per hit.
+    const buffer = this.getHiHatNoiseBuffer();
+    if (!buffer) return;
     
     const noise = this.trackSource(this.ctx.createBufferSource());
     noise.buffer = buffer;

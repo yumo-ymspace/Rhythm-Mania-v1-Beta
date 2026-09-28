@@ -470,7 +470,7 @@ export default function SongSelect({
     const q = deferredSearchTerm.trim().toLowerCase();
     const hasQuery = q.length > 0;
     return mergedCustomMaps.filter(map => {
-       // Song Select exposes osu!mania charts only.
+       // Song Select exposes mania charts only.
        if (map.mode !== undefined && map.mode !== 3) return false;
 
       // Filter by search text query
