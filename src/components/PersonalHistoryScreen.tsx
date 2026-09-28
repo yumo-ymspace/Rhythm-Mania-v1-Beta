@@ -37,7 +37,6 @@ import { PlayHistoryRecord, Beatmap, GameSettings } from '../types';
 import { sanitizeCssUrl } from '../utils/securityLimits';
 import { downloadReplayExport, parseReplayImport, MAX_IMPORT_FILE_BYTES } from '../utils/replayTransfer';
 import { DEFAULT_SETTINGS, HISTORY_LIMIT_UNLIMITED } from './settings/defaultSettings';
-import metadata from '../../metadata.json';
 import { resolveStarRating } from '../utils/starRating';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
 import { findMatchingBeatmap } from '../utils/replayManager';

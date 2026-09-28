@@ -23,7 +23,7 @@ import {
   ARGON_COLOUR_PURPLE,
 } from '../render/argonSkin';
 
-export type SkinStyleId = 'argon' | 'rhythmmania' | 'rhythmplus' | 'rhythmplus-dynamic' | 'circle';
+export type SkinStyleId = 'argon' | 'rhythmplus' | 'rhythmplus-dynamic';
 
 export interface SkinStyle {
   id: SkinStyleId;
@@ -41,19 +41,10 @@ export const DEFAULT_SKIN: SkinStyle = {
   category: 'default',
   badge: 'DEFAULT',
   subtitle: 'Argon (lazer-style) Reference',
-  description: 'Argon default mania skin. Authentic note geometry, receptors, darkened hold tails, and canonical 1K–10K column palettes on Canvas2D.',
+  description: 'Argon default mania skin. Authentic note geometry, receptors, darkened hold tails, and canonical 1K–10K column palettes on WebGL2.',
 };
 
 export const LEGACY_SKINS: SkinStyle[] = [
-  {
-    id: 'rhythmmania',
-    label: 'RhythmMania Classic',
-    category: 'legacy',
-    badge: 'LEGACY',
-    subtitle: 'Rectangular style',
-    description: 'Glowing rectangular notes with a full-height lane treatment.',
-    previewImage: '/skin/rhythmmania-style-rectangular.webp',
-  },
   {
     id: 'rhythmplus',
     label: 'RhythmPlus Classic',
@@ -72,33 +63,24 @@ export const LEGACY_SKINS: SkinStyle[] = [
     description: 'Tall hold blocks and bright timing bars for a more active read.',
     previewImage: '/skin/rhythmplus-dynamic-style-rectangular.webp',
   },
-  {
-    id: 'circle',
-    label: 'Circular Style',
-    category: 'legacy',
-    badge: 'LEGACY',
-    subtitle: 'Arcade spheres',
-    description: 'Round notes and receptors with a soft arcade glow.',
-    previewImage: '/skin/circular-style.webp',
-  },
 ];
 
 export const ALL_SKINS: SkinStyle[] = [DEFAULT_SKIN, ...LEGACY_SKINS];
 
 export const getSelectedStyle = (settings: GameSettings): SkinStyleId => {
   if (!settings.skinId || settings.skinId === 'argon') return 'argon';
-  if (settings.playfieldStyle === 'circle') return 'circle';
-  return settings.squareRenderStyle === 'rhythmplus-dynamic'
-    ? 'rhythmplus-dynamic'
-    : settings.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : 'rhythmmania';
+  if (settings.squareRenderStyle === 'rhythmplus-dynamic') return 'rhythmplus-dynamic';
+  if (settings.squareRenderStyle === 'rhythmplus') return 'rhythmplus';
+  return 'argon';
 };
 
 export const styleSettings = (style: SkinStyleId): Partial<GameSettings> => ({
   skinId: style === 'argon' ? 'argon' : 'custom',
-  playfieldStyle: style === 'circle' ? 'circle' : 'square',
-  squareRenderStyle: style === 'rhythmplus-dynamic'
-    ? 'rhythmplus-dynamic'
-    : style === 'rhythmplus' ? 'rhythmplus' : 'rhythmmania',
+  squareRenderStyle: style === 'argon'
+    ? undefined
+    : style === 'rhythmplus-dynamic'
+      ? 'rhythmplus-dynamic'
+      : 'rhythmplus',
 });
 
 /**
@@ -345,7 +327,6 @@ export default function SkinScreen({
     ...styleSettings('argon'),
     receptorColorsByKeyCount: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.receptorColorsByKeyCount)),
     noteSizeMultiplier: DEFAULT_SETTINGS.noteSizeMultiplier,
-    circleSize: DEFAULT_SETTINGS.circleSize,
     receptorSizeMultiplier: DEFAULT_SETTINGS.receptorSizeMultiplier,
     noteOpacity: DEFAULT_SETTINGS.noteOpacity,
     receptorOpacity: DEFAULT_SETTINGS.receptorOpacity,
@@ -385,9 +366,9 @@ export default function SkinScreen({
                 </h1>
               </div>
             </div>
-            <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
-              Argon Default · 4 Legacy
-            </span>
+              <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50">
+                Argon Default · 2 Legacy
+              </span>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

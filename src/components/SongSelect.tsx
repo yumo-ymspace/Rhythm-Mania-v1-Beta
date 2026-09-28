@@ -36,13 +36,10 @@ import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyC
 import { contrastTextOn, hexWithAlpha, sampleStarDifficultyColor, STRAIN_STAR_RATING_VERSION } from '../utils/starRating';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { computeScrollTravelTimeMs } from '../render/playfieldLayout';
-import metadata from '../../metadata.json';
 import { getCatalogSetMetadata } from '../utils/catalogSetMetadata';
 import { computeModMultiplier } from '../ruleset/mania/scoreProcessor';
 import ModSelectOverlay from './ModSelectOverlay';
-import { SongSelectFooter, SongSelectCarousel, SongSelectLeftPanel } from '../ui/lazer';
-
-const DEFAULT_SONG_BANNER = '/backgrounds/Ferineon.webp';
+import { SongSelectFooter, SongSelectCarousel, SongSelectLeftPanel, TriangleField } from '../ui/lazer';
 
 function recordMatchesSelectedChart(record: PlayHistoryRecord, map: Beatmap): boolean {
   if (record.beatmapId === map.id) return true;
@@ -91,7 +88,6 @@ interface SongSelectProps {
   onImportBeatmap: (map: Beatmap) => void;
   onImportPackage: (packageId: string, name: string, blob: Blob, maps: Beatmap[]) => Promise<void>;
   onDeleteSongGroup?: (mapIds: string[]) => void;
-  setSongSelectBgUrl?: (url: string) => void;
   onBack?: () => void;
   onOpenOnlineCatalog?: () => void;
   onWatchReplay?: (record: PlayHistoryRecord, beatmap?: Beatmap) => Promise<{ success: boolean; error?: string }> | void;
@@ -113,7 +109,6 @@ export default function SongSelect({
   onImportBeatmap,
   onImportPackage,
   onDeleteSongGroup,
-  setSongSelectBgUrl,
   onBack,
   onOpenOnlineCatalog,
   onWatchReplay,
@@ -293,6 +288,19 @@ export default function SongSelect({
 
   const endStarDrag = () => {
     starDragTargetRef.current = null;
+  };
+
+  // Number boxes double as drag handles: grabbing one drags its bound
+  // (the track underneath still catches drags starting on the gradient).
+  const handleStarChipPointerDown = (which: 'min' | 'max') => (e: React.PointerEvent<HTMLSpanElement>) => {
+    starDragTargetRef.current = which;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setStarBound(which, starValueFromClientX(e.clientX));
+  };
+  const handleStarChipPointerMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const target = starDragTargetRef.current;
+    if (!target) return;
+    setStarBound(target, starValueFromClientX(e.clientX));
   };
 
   const handleStarTrackWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -728,36 +736,13 @@ export default function SongSelect({
   }, [selectedGroupForBg]);
 
   // Displayed backdrop holds the last image until the next one is fully
-  // preloaded — it never unmounts or flashes mid-switch.
+  // preloaded — it never unmounts or flashes mid-switch. Empty means no
+  // song is selected yet, in which case the idle triangle field shows
+  // (same custom background as the first/main menu) instead of a
+  // public/backgrounds picture.
   const [displayedBgUrl, setDisplayedBgUrl] = useState('');
   const displayedBgUrlRef = useRef('');
   const pendingBgRef = useRef('');
-  const defaultRandomBgRef = React.useRef<string | null>(null);
-
-  const getDefaultRandomBg = () => {
-    if (!defaultRandomBgRef.current) {
-      const bgs = [
-        '- Y u m i J i-.webp',
-        'Arushii.webp',
-        'Ferineon.webp',
-        'MPDisplay.webp',
-        'PEALEERD_TAK.webp',
-        'Porukana.webp',
-        'RedcXca.webp',
-        'Sm0llBanana.webp',
-        'THICC Jeff.webp',
-        'Triantafyllia.webp',
-        'YellowX21.webp',
-        'mimile1606.webp',
-        'nikio.webp',
-        'serr.webp',
-        'soncak.webp',
-        'wxyz.webp'
-      ];
-      defaultRandomBgRef.current = bgs[Math.floor(Math.random() * bgs.length)];
-    }
-    return `/backgrounds/${defaultRandomBgRef.current}`;
-  };
 
   useEffect(() => {
     if (groupBgUrl) {
@@ -777,23 +762,20 @@ export default function SongSelect({
       img.onerror = apply;
       img.src = next;
     } else if (!selectedCustomMap) {
-      const fallback = getDefaultRandomBg();
+      // No selection yet (first entry into Song Select): fall back to the
+      // triangle field. Clear any stale art so the local layer hides its
+      // picture background (Song Select is the sole owner of its backdrop;
+      // the App-level unified layer renders nothing on this screen).
       pendingBgRef.current = '';
-      if (displayedBgUrlRef.current !== fallback) {
-        displayedBgUrlRef.current = fallback;
-        setDisplayedBgUrl(fallback);
+      if (displayedBgUrlRef.current !== '') {
+        displayedBgUrlRef.current = '';
+        setDisplayedBgUrl('');
       }
     }
     // No clearing while a new group's art is still unpacking — the old
     // backdrop holds instead of flashing away.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupBgUrl, selectedCustomMap]);
-
-  useEffect(() => {
-    if (typeof setSongSelectBgUrl === 'function' && displayedBgUrl) {
-      setSongSelectBgUrl(displayedBgUrl);
-    }
-  }, [displayedBgUrl, setSongSelectBgUrl]);
 
   // Neighbour prefetch: unzip + decode the song art for the groups around
   // the selection so carousel scrolling and backdrop swaps stay instant.
@@ -1288,10 +1270,17 @@ export default function SongSelect({
     <div
       className="relative w-full h-full min-h-0 text-slate-100 font-sans select-none overflow-hidden flex flex-col bg-transparent"
     >
-      {/* 1. Full-bleed background cover artwork with Song Select dim overlay.
-          Group-stable + preloaded + cross-fading in place: no slide,
-          no flash when changing difficulties or songs. */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+      {/* 1. Full-bleed background (sole backdrop on this screen — the
+          App-level unified layer renders nothing for Song Select so the
+          dim stays effective mid-switch): triangle field when no song is
+          selected (first entry into Song Select, same as the first/main
+          menu), otherwise the selected song's cover artwork with dim
+          overlay. Group-stable + preloaded + cross-fading in place: no
+          slide, no flash when changing difficulties or songs. */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden bg-[#0d1520]" style={{ zIndex: 0 }}>
+        {!displayedBgUrl && (
+          <TriangleField uncapped={settings.uncappedMenuMotion === true} />
+        )}
         <AnimatePresence initial={false}>
           {displayedBgUrl && (
             <motion.div
@@ -1307,10 +1296,6 @@ export default function SongSelect({
             />
           )}
         </AnimatePresence>
-      </div>
-      {/* Version Tag */}
-      <div className="absolute bottom-20 left-6 text-[10px] text-white/30 font-mono z-30 select-none pointer-events-none block">
-        {metadata.version}
       </div>
 
       {/* Floating Scroll Speed Toast */}
@@ -1392,10 +1377,18 @@ export default function SongSelect({
               <span className="lazer-filter-tab">Star Rating</span>
               <div
                 className="lazer-starbar is-interactive"
-                title="Drag the thumbs, click the bar, or scroll (Shift+scroll for max) to filter"
+                title="Drag the number boxes or anywhere on the bar, or scroll (Shift+scroll for max) to filter"
                 onDoubleClick={() => { setMinStar(0); setMaxStar(10); }}
               >
-                <span className="lazer-starbar-value">{minStar.toFixed(1)}</span>
+                <span
+                  className="lazer-starbar-value"
+                  title="Drag to set the minimum star rating"
+                  onPointerDown={handleStarChipPointerDown('min')}
+                  onPointerMove={handleStarChipPointerMove}
+                  onPointerUp={endStarDrag}
+                  onPointerCancel={endStarDrag}
+                  style={{ left: `max(0px, min(calc(${(minStar / 10) * 100}% - 2.4em), calc(100% - 4.7em)))` }}
+                >{minStar.toFixed(1)}</span>
                 <div
                   ref={starTrackRef}
                   className="lazer-starbar-track is-draggable"
@@ -1432,16 +1425,16 @@ export default function SongSelect({
                     className="lazer-starbar-dim is-right"
                     style={{ width: `${Math.max(0, Math.min(100, 100 - (maxStar / 10) * 100))}%` }}
                   />
-                  <span
-                    className="lazer-starbar-thumb is-min"
-                    style={{ left: `${Math.max(0, Math.min(100, (minStar / 10) * 100))}%` }}
-                  />
-                  <span
-                    className="lazer-starbar-thumb is-max"
-                    style={{ left: `${Math.max(0, Math.min(100, (maxStar / 10) * 100))}%` }}
-                  />
                 </div>
-                <span className="lazer-starbar-value is-max">{maxStar >= 10 ? '∞' : maxStar.toFixed(1)}</span>
+                <span
+                  className="lazer-starbar-value is-max"
+                  title="Drag to set the maximum star rating"
+                  onPointerDown={handleStarChipPointerDown('max')}
+                  onPointerMove={handleStarChipPointerMove}
+                  onPointerUp={endStarDrag}
+                  onPointerCancel={endStarDrag}
+                  style={{ right: `max(0px, min(calc(${100 - (maxStar / 10) * 100}% - 2.4em), calc(100% - 4.7em)))` }}
+                >{maxStar >= 10 ? '∞' : maxStar.toFixed(1)}</span>
               </div>
             </div>
           </div>
@@ -1453,7 +1446,7 @@ export default function SongSelect({
               { key: 'group' as const, label: 'Group', value: groupBy, options: ['None', 'Artist', 'Creator'] },
               { key: 'collection' as const, label: 'Collection', value: collectionFilter, options: ['All beatmaps', 'Downloaded', 'Favorites'] },
             ]).map((dd) => (
-              <div key={dd.key} className="relative flex items-center gap-1.5">
+              <div key={dd.key} className="relative flex items-center gap-0">
                 <span className="lazer-filter-tab">{dd.label}</span>
                 <button
                   type="button"

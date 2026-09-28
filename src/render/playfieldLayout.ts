@@ -13,7 +13,7 @@
 import { PlayfieldVisualSettings, ColumnLayout } from './types';
 import { ScrollModel, getScrollDelta } from './scrollVelocity';
 import { getArgonNoteHeight, isArgonSkin } from './argonSkin';
-import { isCircleSkinMode, getLaneColors } from './skinTheme';
+import { getLaneColors } from './skinTheme';
 import { getColumnStyles, type ColumnStyle } from './laneLayout';
 
 /**
@@ -133,13 +133,11 @@ export function getNoteVisualY(
   settings: PlayfieldVisualSettings
 ): number {
   const noteScale = settings.noteSizeMultiplier ?? 1;
-  const noteHeight = isCircleSkinMode(settings)
-    ? columnWidth * noteScale
-    : (settings.squareRenderStyle === 'rhythmplus' || settings.squareRenderStyle === 'rhythmplus-dynamic')
-      ? 8 * noteScale
-      : isArgonSkin(settings)
-        ? getArgonNoteHeight(settings)
-        : 20 * noteScale;
+  const noteHeight = (settings.squareRenderStyle === 'rhythmplus' || settings.squareRenderStyle === 'rhythmplus-dynamic')
+    ? 8 * noteScale
+    : isArgonSkin(settings)
+      ? getArgonNoteHeight(settings)
+      : 20 * noteScale;
   const halfHeight = noteHeight / 2;
   return settings.upsurfaceNoteMode ? timingY + halfHeight : timingY - halfHeight;
 }

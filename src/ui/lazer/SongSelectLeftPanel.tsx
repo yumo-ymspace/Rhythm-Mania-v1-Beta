@@ -10,12 +10,66 @@
  * from: https://github.com/yumo-ymspace/RhythmMania
  */
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Heart, Play, Clock, Activity, Award, Info, ChevronDown
+  Heart, Play, Clock, Activity, Award, Info, ChevronDown, Lock, Check
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../../types';
 import { calculateDominantBpm } from '../../utils/beatmapParser';
+
+export type RankingSortKey = 'score' | 'accuracy' | 'combo' | 'recent';
+
+export const RANKING_SORT_OPTIONS: Array<{ key: RankingSortKey; label: string }> = [
+  { key: 'score', label: 'Score' },
+  { key: 'accuracy', label: 'Accuracy' },
+  { key: 'combo', label: 'Combo' },
+  { key: 'recent', label: 'Recent' },
+];
+
+export function formatRankingAge(timestamp: number, now = Date.now()): string {
+  const diffMs = Math.max(0, now - (timestamp || now));
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}hr${hours === 1 ? '' : 's'}`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}dy${days === 1 ? '' : 's'}`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo${months === 1 ? '' : 's'}`;
+  const years = Math.floor(months / 12);
+  return `${years}yr${years === 1 ? '' : 's'}`;
+}
+
+export function areModsEqual(a: string[] | undefined, b: string[] | undefined): boolean {
+  const na = [...(a || [])].sort();
+  const nb = [...(b || [])].sort();
+  if (na.length !== nb.length) return false;
+  return na.every((m, i) => m === nb[i]);
+}
+
+export function sortRankingScores(
+  scores: PlayHistoryRecord[],
+  sortKey: RankingSortKey,
+): PlayHistoryRecord[] {
+  const rows = scores.slice();
+  switch (sortKey) {
+    case 'accuracy':
+      rows.sort((a, b) => b.accuracy - a.accuracy || b.score - a.score || (b.timestamp || 0) - (a.timestamp || 0));
+      break;
+    case 'combo':
+      rows.sort((a, b) => b.maxCombo - a.maxCombo || b.score - a.score || (b.timestamp || 0) - (a.timestamp || 0));
+      break;
+    case 'recent':
+      rows.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      break;
+    case 'score':
+    default:
+      rows.sort((a, b) => b.score - a.score || b.accuracy - a.accuracy || (b.timestamp || 0) - (a.timestamp || 0));
+      break;
+  }
+  return rows;
+}
 
 export interface SongSelectLeftPanelProps {
   selectedMap: Beatmap | null;
@@ -90,6 +144,21 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
   onImportClick,
   importStatus,
 }) => {
+  // Ranking toolbar state (local scope only — no online scores).
+  const [rankingSort, setRankingSort] = useState<RankingSortKey>('score');
+  const [modsOnly, setModsOnly] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const activeSortLabel =
+    RANKING_SORT_OPTIONS.find((o) => o.key === rankingSort)?.label || 'Score';
+  const selectedMods = settings.selectedMods || [];
+
+  const displayedScores = useMemo(() => {
+    const pool = modsOnly
+      ? localScores.filter((s) => areModsEqual(s.mods, selectedMods))
+      : localScores;
+    return sortRankingScores(pool, rankingSort);
+  }, [localScores, modsOnly, selectedMods, rankingSort]);
+
   // No selection: render a blank skeleton of the map-details layout so the
   // panel keeps its shape. Textual details stay blank or "-" as appropriate.
   if (!selectedMap) {
@@ -204,13 +273,68 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
             </button>
 
             {activeTab === 'ranking' && (
-              <div className="flex items-center gap-2 ml-3">
-                <span className="lazer-ranking-pill">
-                  <span className="opacity-60 font-bold">Sort</span>
-                  <span>Score</span>
-                  <ChevronDown className="h-3 w-3 opacity-60" />
+              <div className="flex items-center gap-2 ml-3 flex-wrap">
+                <span
+                  className="lazer-ranking-pill is-scope is-locked"
+                  title="Online rankings unavailable — local scores only"
+                  aria-disabled="true"
+                >
+                  <span className="opacity-60 font-bold">Scope</span>
+                  <span>Local</span>
+                  <Lock className="h-3 w-3 opacity-60" />
                 </span>
-                <span className="lazer-ranking-pill opacity-80">Selected Mods</span>
+                <span className="lazer-ranking-sort-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setSortOpen((v) => !v)}
+                    className="lazer-ranking-pill is-button"
+                    aria-haspopup="listbox"
+                    aria-expanded={sortOpen}
+                  >
+                    <span className="opacity-60 font-bold">Sort</span>
+                    <span>{activeSortLabel}</span>
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </button>
+                  {sortOpen && (
+                    <>
+                      <span
+                        className="fixed inset-0 z-30 cursor-default"
+                        onClick={() => setSortOpen(false)}
+                      />
+                      <span className="lazer-ranking-sort-menu" role="listbox">
+                        {RANKING_SORT_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            role="option"
+                            aria-selected={rankingSort === opt.key}
+                            onClick={() => {
+                              setRankingSort(opt.key);
+                              setSortOpen(false);
+                            }}
+                            className={`lazer-ranking-sort-option${rankingSort === opt.key ? ' is-selected' : ''}`}
+                          >
+                            {opt.label}
+                            {rankingSort === opt.key && <Check className="h-3 w-3" />}
+                          </button>
+                        ))}
+                      </span>
+                    </>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setModsOnly((v) => !v)}
+                  className={`lazer-ranking-pill is-button${modsOnly ? ' is-active' : ' opacity-80'}`}
+                  aria-pressed={modsOnly}
+                  title={
+                    selectedMods.length === 0
+                      ? 'Show only plays with no mods'
+                      : `Show only plays set with: ${selectedMods.join(' ')}`
+                  }
+                >
+                  Selected Mods
+                </button>
               </div>
             )}
           </div>
@@ -410,13 +534,68 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
           </button>
 
           {activeTab === 'ranking' && (
-            <div className="flex items-center gap-2 ml-3">
-              <span className="lazer-ranking-pill">
-                <span className="opacity-60 font-bold">Sort</span>
-                <span>Score</span>
-                <ChevronDown className="h-3 w-3 opacity-60" />
+            <div className="flex items-center gap-2 ml-3 flex-wrap">
+              <span
+                className="lazer-ranking-pill is-scope is-locked"
+                title="Online rankings unavailable — local scores only"
+                aria-disabled="true"
+              >
+                <span className="opacity-60 font-bold">Scope</span>
+                <span>Local</span>
+                <Lock className="h-3 w-3 opacity-60" />
               </span>
-              <span className="lazer-ranking-pill opacity-80">Selected Mods</span>
+              <span className="lazer-ranking-sort-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSortOpen((v) => !v)}
+                  className="lazer-ranking-pill is-button"
+                  aria-haspopup="listbox"
+                  aria-expanded={sortOpen}
+                >
+                  <span className="opacity-60 font-bold">Sort</span>
+                  <span>{activeSortLabel}</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+                {sortOpen && (
+                  <>
+                    <span
+                      className="fixed inset-0 z-30 cursor-default"
+                      onClick={() => setSortOpen(false)}
+                    />
+                    <span className="lazer-ranking-sort-menu" role="listbox">
+                      {RANKING_SORT_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          role="option"
+                          aria-selected={rankingSort === opt.key}
+                          onClick={() => {
+                            setRankingSort(opt.key);
+                            setSortOpen(false);
+                          }}
+                          className={`lazer-ranking-sort-option${rankingSort === opt.key ? ' is-selected' : ''}`}
+                        >
+                          {opt.label}
+                          {rankingSort === opt.key && <Check className="h-3 w-3" />}
+                        </button>
+                      ))}
+                    </span>
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setModsOnly((v) => !v)}
+                className={`lazer-ranking-pill is-button${modsOnly ? ' is-active' : ' opacity-80'}`}
+                aria-pressed={modsOnly}
+                title={
+                  selectedMods.length === 0
+                    ? 'Show only plays with no mods'
+                    : `Show only plays set with: ${selectedMods.join(' ')}`
+                }
+              >
+                Selected Mods
+              </button>
             </div>
           )}
         </div>
@@ -452,77 +631,93 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
               </div>
             </div>
           </div>
-        ) : localScores.length === 0 ? (
-          /* EMPTY LOCAL RANKING STATE — hud/songselect.jpg centered notice */
-          <div className="h-full min-h-[220px] flex items-center justify-center text-white/85 gap-2.5 font-sans font-normal text-[15px] pt-10">
-            <Info className="h-5 w-5 opacity-90 shrink-0" />
-            <span>No records yet!</span>
-          </div>
-        ) : (
-          /* POPULATED LOCAL RANKING LIST */
-          <div className="space-y-1.5 pt-2">
-            {localScores.map((score, idx) => (
-              <div
-                key={score.id || idx}
-                className="p-2.5 bg-black/50 border border-white/5 hover:border-white/20 rounded-xl flex items-center justify-between gap-3 text-xs font-mono transition-colors"
+        ) : displayedScores.length === 0 ? (
+          localScores.length === 0 ? (
+            /* EMPTY LOCAL RANKING STATE — hud/songselect.jpg centered notice */
+            <div className="h-full min-h-[220px] flex items-center justify-center text-white/85 gap-2.5 font-sans font-normal text-[15px] pt-10">
+              <Info className="h-5 w-5 opacity-90 shrink-0" />
+              <span>No records yet!</span>
+            </div>
+          ) : (
+            /* FILTERED EMPTY STATE — scores exist but none match Selected Mods */
+            <div className="h-full min-h-[220px] flex flex-col items-center justify-center gap-2 text-white/70 font-sans text-[13px] pt-10 text-center px-6">
+              <Info className="h-5 w-5 opacity-80 shrink-0" />
+              <span>No records with the selected mods yet!</span>
+              <button
+                type="button"
+                onClick={() => setModsOnly(false)}
+                className="mt-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/15 text-white text-[11px] font-bold transition cursor-pointer"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {/* Rank badge */}
-                  <span className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-black shrink-0 ${
-                    idx === 0 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' :
-                    idx === 1 ? 'bg-cyan-400/20 text-cyan-300 border border-cyan-400/40' :
-                    idx === 2 ? 'bg-orange-400/20 text-orange-300 border border-orange-400/40' :
-                    'bg-white/5 text-slate-400 border border-white/10'
-                  }`}>
-                    #{idx + 1}
+                Show all local scores
+              </button>
+            </div>
+          )
+        ) : (
+          /* LOCAL RANKING LIST — visual-refs/hud/leftscores base, local scope only */
+          <div className="lazer-ranking-list">
+            <div className="lazer-ranking-personal-best">
+              Personal Best (#1 of {displayedScores.length})
+              {modsOnly && (
+                <span className="lazer-ranking-personal-best-mods">
+                  {selectedMods.length === 0 ? 'Nomod' : selectedMods.join(' ')}
+                </span>
+              )}
+            </div>
+            {displayedScores.map((score, idx) => {
+              const playerName = score.playedBy || settings.localDisplayName || 'Guest';
+              const initial = (playerName.trim().charAt(0) || 'G').toUpperCase();
+              const grade = String(score.grade || 'F').toUpperCase();
+              return (
+                <div
+                  key={score.id || idx}
+                  data-grade={grade}
+                  className={`lazer-ranking-row${idx === 0 ? ' is-personal-best' : ''}`}
+                >
+                  <span className="lazer-ranking-pos">#{idx + 1}</span>
+                  <span className="lazer-ranking-avatar" aria-hidden="true">
+                    {initial}
                   </span>
-
-                  {/* Grade letter badge */}
-                  <span className={`w-7 h-6 flex items-center justify-center rounded text-[10px] font-black shrink-0 ${getGradeBadgeClass(score.grade)}`}>
-                    {score.grade}
+                  <span className="lazer-ranking-identity">
+                    <span className="lazer-ranking-age">{formatRankingAge(score.timestamp)}</span>
+                    <span className="lazer-ranking-name" title={playerName}>
+                      {playerName}
+                    </span>
+                    {score.mods && score.mods.length > 0 && (
+                      <span className="lazer-ranking-mods">
+                        {score.mods.map((mod) => (
+                          <span key={mod} className="lazer-ranking-mod">
+                            {mod}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </span>
-
-                  {/* Score details */}
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-white text-sm tracking-tight">
-                        {score.score.toLocaleString()}
-                      </span>
-                      {score.mods && score.mods.length > 0 && (
-                        <div className="flex items-center gap-0.5">
-                          {score.mods.map((mod) => (
-                            <span key={mod} className="px-1 py-0.2 bg-white/10 rounded text-[8px] font-black text-slate-300">
-                              {mod}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                      <span>{score.accuracy.toFixed(2)}%</span>
-                      <span>•</span>
-                      <span>{score.maxCombo}x</span>
-                      <span>•</span>
-                      <span className="truncate max-w-[100px] text-slate-500">
-                        {score.playedBy || settings.localDisplayName || 'Guest'}
-                      </span>
-                    </div>
-                  </div>
+                  <span className="lazer-ranking-combo">
+                    <span className="lazer-ranking-cap">Max Combo</span>
+                    <span className="lazer-ranking-combo-val">{score.maxCombo}x</span>
+                  </span>
+                  <span className="lazer-ranking-acc">
+                    <span className="lazer-ranking-cap">Accuracy</span>
+                    <span className="lazer-ranking-acc-val">{score.accuracy.toFixed(2)}%</span>
+                  </span>
+                  <span className="lazer-ranking-score">{score.score.toLocaleString()}</span>
+                  <span className={`lazer-ranking-grade is-${grade.toLowerCase()}`} title={`Grade ${grade}`}>
+                    {grade}
+                  </span>
+                  {onWatchReplay && (
+                    <button
+                      type="button"
+                      onClick={() => onWatchReplay(score, selectedMap)}
+                      className="lazer-ranking-replay"
+                      title="Watch Local Replay"
+                      aria-label={`Watch replay of ${score.score.toLocaleString()} by ${playerName}`}
+                    >
+                      <Play className="h-3.5 w-3.5 fill-current" />
+                    </button>
+                  )}
                 </div>
-
-                {/* Replay Spectate Button */}
-                {onWatchReplay && (
-                  <button
-                    type="button"
-                    onClick={() => onWatchReplay(score, selectedMap)}
-                    className="p-2 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 rounded-lg transition cursor-pointer shrink-0"
-                    title="Watch Local Replay"
-                  >
-                    <Play className="h-3.5 w-3.5 fill-current" />
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

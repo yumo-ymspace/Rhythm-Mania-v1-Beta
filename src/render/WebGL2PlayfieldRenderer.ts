@@ -18,17 +18,20 @@ import {
   getArgonNoteHeight,
 } from './argonSkin';
 import { darkenCached, getCachedRgb01, lightenCached } from './colorCache';
+import { getFlashlightRadius } from './flashlight';
 import { getNoteVisualY } from './playfieldLayout';
+import { resolvePlayfieldStyle } from './skinTheme';
 import { isHoldBodyAnchored, isHoldSuccessfullyCompleted } from './noteState';
 import { mergeVisibleTailSegments } from './tailSegments';
 
 /**
- * Raw WebGL2 batched quad playfield renderer (argon skin).
+ * Raw WebGL2 batched quad playfield renderer (Argon and RhythmPlus skins).
  *
  * SV parity is structural: this renderer never recomputes scroll positions.
  * All Y values come from `PlayfieldFrame` (built by `getVisibleNotes` with
  * the shared `ScrollModel`), so SV freeze/reverse, upscroll, and HD/FI
- * cover opacity behave exactly like Canvas2D. Only rasterization differs.
+ * cover opacity all come from shared frame math. Only rasterization happens
+ * here: notes, holds, receptors, and the Flashlight vignette.
  *
  * Design for low latency / high throughput:
  * - One shader program, one VAO/VBO, ~1 draw call per frame.
@@ -82,6 +85,8 @@ in float vRadius;
 in float vGlyph;
 uniform float uDpr;
 uniform float uGlyphFlip;
+uniform vec2 uVigCenter;
+uniform float uVigRadius;
 out vec4 outColor;
 float segDist(vec2 p, vec2 a, vec2 b) {
   vec2 pa = p - a;
@@ -91,6 +96,15 @@ float segDist(vec2 p, vec2 a, vec2 b) {
 }
 void main() {
   vec2 p = vUv * vSize;
+  if (vGlyph > 2.5) {
+    // Flashlight vignette (fullscreen quad): transparent hole of 0.45R at
+    // the receptor, then the legacy ramp 0 -> 0.45 -> 0.88 -> 1.0.
+    float dn = length((p - uVigCenter) / max(uVigRadius, 1e-3));
+    float t = clamp((dn - 0.45) / 0.55, 0.0, 1.0);
+    float va = t <= 0.0 ? 0.0 : (t < 0.5 ? mix(0.0, 0.45, t * 2.0) : (t < 0.8 ? mix(0.45, 0.88, (t - 0.5) / 0.3) : mix(0.88, 1.0, (t - 0.8) / 0.2)));
+    outColor = vec4(0.0, 0.0, 0.0, va);
+    return;
+  }
   vec2 b = vSize * 0.5;
   float r = min(vRadius, min(b.x, b.y));
   vec2 q = abs(p - b) - b + r;
@@ -100,10 +114,8 @@ void main() {
   if (alpha <= 0.001) discard;
   vec4 col = mix(vColorTop, vColorBottom, vUv.y);
   if (vGlyph > 0.5) {
-    // Argon glyphs live on the note slab. Shapes mirror drawChevronDown /
-    // hold-head bar in argonPlayfield (Canvas2D), but both glyphs sit
-    // exactly on the slab center (Canvas2D offsets them +4/+2 toward the
-    // lip; here they are geometrically centered per the skin reference).
+    // Argon glyphs live on the note slab: rice chevron and hold-head bar,
+    // both geometrically centered on the slab per the skin reference.
     float gy = mix(p.y, vSize.y - p.y, uGlyphFlip);
     float cx = vSize.x * 0.5;
     float gsize = min(20.0 * uDpr, vSize.x * 0.42);
@@ -141,6 +153,7 @@ void main() {
 const GLYPH_NONE = 0;
 const GLYPH_CHEVRON = 1; // rice notes
 const GLYPH_BAR = 2; // hold heads
+const GLYPH_VIGNETTE = 3; // flashlight fullscreen vignette (radial, not SDF)
 
 const FLOATS_PER_VERT = 16; // x,y + topRGBA + bottomRGBA + u,v + w,h + radius + glyph
 const VERTS_PER_QUAD = 6;
@@ -158,6 +171,11 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
   private uResolution: WebGLUniformLocation | null = null;
   private uDpr: WebGLUniformLocation | null = null;
   private uGlyphFlip: WebGLUniformLocation | null = null;
+  private uVigCenter: WebGLUniformLocation | null = null;
+  private uVigRadius: WebGLUniformLocation | null = null;
+  // Flashlight vignette for the frame being uploaded (CSS px; null = off).
+  // Stored at emission time, uploaded with the other uniforms.
+  private vigRadiusCss: number | null = null;
   private buffer = new Float32Array(BUFFER_FLOATS);
   private quadCount = 0;
   private cssWidth = 0;
@@ -206,6 +224,8 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.uResolution = gl.getUniformLocation(program, 'uResolution');
     this.uDpr = gl.getUniformLocation(program, 'uDpr');
     this.uGlyphFlip = gl.getUniformLocation(program, 'uGlyphFlip');
+    this.uVigCenter = gl.getUniformLocation(program, 'uVigCenter');
+    this.uVigRadius = gl.getUniformLocation(program, 'uVigRadius');
 
     const vao = gl.createVertexArray();
     const vbo = gl.createBuffer();
@@ -395,43 +415,94 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     const failedRgb = getCachedRgb01('rgb(48,52,64)');
     const whiteRgb = getCachedRgb01('#ffffff');
     const grayRgb = getCachedRgb01('rgb(196,196,196)');
+    const separatorRgb = getCachedRgb01('rgb(71,85,105)');
+    const laneGlowRgb = getCachedRgb01('rgb(59,130,246)');
+    const failedOutlineRgb = getCachedRgb01('#64748b');
 
-    // Lanes (argon inset columns, darkened base + pressed overlay).
-    for (let i = 0; i < keyCount; i++) {
-      const col = columns[i];
-      if (!col) continue;
-      const ix = col.x + ARGON_COLUMN_GAP / 2;
-      const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
-      const dark = laneDarkLane[i];
-      if (dark) this.quadRgb(ix, 0, iw, height, dark, 0.8, ARGON_CORNER_RADIUS);
-      const press = Math.max(col.glow, col.pressed ? 1 : 0);
-      if (press > 0) {
-        // Approximate the Canvas2D 'lighter' pressed gradient with a
-        // bottom-weighted alpha gradient in normal blending.
-        const base = laneBase[i];
-        if (base) {
-          const bottomAlpha = 0.6 * press;
-          if (upscroll) this.pushQuadNumbers(ix, 0, iw, receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
-          else this.pushQuadNumbers(ix, receptorY, iw, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+    // RhythmPlus bar skins share geometry: full column width, slim 8px bars.
+    const playStyle = resolvePlayfieldStyle(settingsSlice);
+    const isBarStyle = playStyle !== 'argon';
+    const isDynamicBar = playStyle === 'rhythmplus-dynamic';
+    const barH = 8 * noteScale;
+
+    if (isBarStyle) {
+      // Bar-skin lanes: separator lines + border + fixed-blue press glow.
+      // No filled lane background (the playfield clear color shows through).
+      const sepA = settingsSlice.laneSeparatorOpacity ?? 0.30;
+      const borderA = Math.min(1, sepA * 1.5);
+      for (let i = 0; i < keyCount; i++) {
+        const col = columns[i];
+        if (!col) continue;
+        this.quadRgb(col.x, 0, 1, height, separatorRgb, sepA, 0);
+        if (col.glow > 0) {
+          const ga = 0.3 * col.glow;
+          if (upscroll) this.pushQuadNumbers(col.x, 0, col.width, receptorY, laneGlowRgb[0], laneGlowRgb[1], laneGlowRgb[2], ga, laneGlowRgb[0], laneGlowRgb[1], laneGlowRgb[2], 0, 0);
+          else this.pushQuadNumbers(col.x, receptorY, col.width, height - receptorY, laneGlowRgb[0], laneGlowRgb[1], laneGlowRgb[2], 0, laneGlowRgb[0], laneGlowRgb[1], laneGlowRgb[2], ga, 0);
+        }
+      }
+      this.quadRgb(0, 0, width, 1, separatorRgb, borderA, 0);
+      this.quadRgb(0, height - 1, width, 1, separatorRgb, borderA, 0);
+      this.quadRgb(0, 0, 1, height, separatorRgb, borderA, 0);
+      this.quadRgb(width - 1, 0, 1, height, separatorRgb, borderA, 0);
+    } else {
+      // Lanes (argon inset columns, darkened base + pressed overlay).
+      for (let i = 0; i < keyCount; i++) {
+        const col = columns[i];
+        if (!col) continue;
+        const ix = col.x + ARGON_COLUMN_GAP / 2;
+        const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
+        const dark = laneDarkLane[i];
+        if (dark) this.quadRgb(ix, 0, iw, height, dark, 0.8, ARGON_CORNER_RADIUS);
+        const press = Math.max(col.glow, col.pressed ? 1 : 0);
+        if (press > 0) {
+          // Pressed-lane glow as a bottom-weighted alpha gradient in normal
+          // blending.
+          const base = laneBase[i];
+          if (base) {
+            const bottomAlpha = 0.6 * press;
+            if (upscroll) this.pushQuadNumbers(ix, 0, iw, receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+            else this.pushQuadNumbers(ix, receptorY, iw, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+          }
         }
       }
     }
 
-    // Hold bodies. Geometry mirrors renderArgonPlayfield: segment Y values
-    // are already SV-projected by getVisibleNotes; only the anchored start
-    // snaps to the receptor, exactly like Canvas2D.
+    // Hold bodies. Segment Y values are already SV-projected by
+    // getVisibleNotes; only the anchored start snaps to the receptor.
     // Pulse phase is constant for the frame: hoist the sin out of the loop.
     const pulsePhase = (frame.timeMs / 160) * Math.PI * 2;
     const pulseBase = 0.75 + 0.25 * Math.sin(pulsePhase);
+    // Bar-skin hold geometry (legacy bar path): trims the endpoint join and
+    // extends free ends by half a bar, with square joins. Single-radius SDF
+    // quads cannot round one end only, so joined ends rely on the endpoint
+    // cap drawn over the joint (same as the legacy overdraw).
+    const useBarPadding = playStyle === 'rhythmplus';
+    const barPad = (8 * noteScale) / 2;
+    const barSegRect = (a: number, b: number, trimStart: boolean, trimEnd: boolean) => {
+      const lowerY = Math.min(a, b);
+      const upperY = Math.max(a, b);
+      const startsAtLowerEdge = a <= b;
+      const lowerExtension = startsAtLowerEdge ? (trimStart ? 0 : barPad) : (trimEnd ? 0 : barPad);
+      const upperExtension = startsAtLowerEdge ? (trimEnd ? 0 : barPad) : (trimStart ? 0 : barPad);
+      return { drawY: lowerY - lowerExtension, drawH: upperY - lowerY + lowerExtension + upperExtension };
+    };
+    // 2px dynamic-style outline: sides always, caps unless trimmed at the
+    // endpoint join. Square corners (the legacy roundRect-4 arcs are not
+    // representable in the single-radius batched quad).
+    const barOutline = (x: number, y: number, w: number, h: number, rgb: readonly [number, number, number], alpha: number, skipTop: boolean, skipBottom: boolean) => {
+      const t = 2;
+      if (h > t * 2 && w > t) {
+        this.quadRgb(x, y + t, t, h - t * 2, rgb, alpha, 0);
+        this.quadRgb(x + w - t, y + t, t, h - t * 2, rgb, alpha, 0);
+      }
+      if (!skipTop && w > t * 2) this.quadRgb(x + t, y, w - t * 2, t, rgb, alpha, 0);
+      if (!skipBottom && w > t * 2) this.quadRgb(x + t, y + h - t, w - t * 2, t, rgb, alpha, 0);
+    };
     for (const n of notes) {
       if (n.type !== 'hold' || n.endY === undefined) continue;
       if (isHoldSuccessfullyCompleted(n)) continue;
       const col = columns[n.column];
       if (!col) continue;
-      const ix = col.x + ARGON_COLUMN_GAP / 2;
-      const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
-      const rw = iw * noteScale;
-      const rx = ix + (iw - rw) / 2;
       const anchored = isHoldBodyAnchored(n);
       let visualStartY = getNoteVisualY(n.bodyStartY ?? n.y, col.width, settingsSlice);
       if (anchored) visualStartY = receptorY;
@@ -453,9 +524,79 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         ? n.isHolding
         : (n.isHit && !n.isReleased && !n.isHoldFailed);
       const pulse = hitting && !failed ? pulseBase : 0;
+      const baseRgb = laneBase[n.column];
+      if (isBarStyle) {
+        if (!baseRgb) continue;
+        const colW = col.width;
+        const bw = colW * noteScale;
+        const bx = col.x + (colW - bw) / 2;
+        const fadeStart = n.opacity;
+        const fadeEnd = n.endOpacity ?? n.opacity;
+        // Legacy v2 bar padding: segments shift by half a bar so the body
+        // meets the endpoint cap (classic style only).
+        const needPadShift = useBarPadding && n.holdRulesVersion === 2;
+        let barSegs = renderSegments;
+        let barEp = n.endpointTailSegment;
+        if (needPadShift) {
+          barSegs = renderSegments.map((s) => ({
+            startY: getNoteVisualY(s.startY, colW, settingsSlice),
+            endY: getNoteVisualY(s.endY, colW, settingsSlice),
+          }));
+          barEp = n.endpointTailSegment
+            ? {
+              startY: getNoteVisualY(n.endpointTailSegment.startY, colW, settingsSlice),
+              endY: getNoteVisualY(n.endpointTailSegment.endY, colW, settingsSlice),
+            }
+            : undefined;
+        }
+        const drawBarFill = (x: number, y: number, w: number, h: number, radius: number) => {
+          if (h <= 0.5) return;
+          if (y > height + 100 || y + h < -100) return;
+          // Dynamic bodies are a 0.55-alpha lane wash; classic bodies are
+          // solid. Both dim to the failed gray while failed (classic failed
+          // is the legacy 0.5-alpha gray, dynamic a flat 0.55 wash).
+          const c = failed ? failedOutlineRgb : baseRgb;
+          const alphaScale = isDynamicBar ? 0.55 : (failed ? 0.5 : 1);
+          const a0 = fadeStart * alphaScale;
+          const a1 = fadeEnd * alphaScale;
+          this.pushQuad(x, y, w, h, [c[0], c[1], c[2], a0], [c[0], c[1], c[2], a1], radius, GLYPH_NONE);
+        };
+        for (const seg of barSegs) {
+          const epStart = barEp?.startY;
+          const joinsStart = epStart !== undefined && Math.abs(seg.startY - epStart) < 0.001;
+          const joinsEnd = epStart !== undefined && Math.abs(seg.endY - epStart) < 0.001;
+          const r = barSegRect(seg.startY, seg.endY, joinsStart, joinsEnd);
+          const startsLower = seg.startY <= seg.endY;
+          const compact = Math.abs(seg.startY - seg.endY) <= Math.max(24, 20 * noteScale);
+          drawBarFill(bx, r.drawY, bw, r.drawH, isDynamicBar && !compact ? 4 : 0);
+          if (isDynamicBar) {
+            const oc = failed ? failedOutlineRgb : baseRgb;
+            barOutline(bx, r.drawY, bw, r.drawH, oc, Math.min(1, fadeStart), startsLower ? joinsStart : joinsEnd, startsLower ? joinsEnd : joinsStart);
+          }
+        }
+        if (barEp) {
+          const r = barSegRect(barEp.startY, barEp.endY, true, false);
+          drawBarFill(bx, r.drawY, bw, r.drawH, isDynamicBar ? 4 : 0);
+          if (isDynamicBar) {
+            const oc = failed ? failedOutlineRgb : baseRgb;
+            const startsLower = barEp.startY <= barEp.endY;
+            barOutline(bx, r.drawY, bw, r.drawH, oc, Math.min(1, fadeStart), startsLower, !startsLower);
+          }
+        }
+        if (n.hitSegmentStartY !== undefined && n.hitSegmentEndY !== undefined) {
+          const hs = getNoteVisualY(n.hitSegmentStartY, colW, settingsSlice);
+          const he = getNoteVisualY(n.hitSegmentEndY, colW, settingsSlice);
+          const r = barSegRect(hs, he, false, false);
+          if (baseRgb) this.pushQuad(bx, r.drawY, bw, r.drawH, [baseRgb[0], baseRgb[1], baseRgb[2], fadeStart], [baseRgb[0], baseRgb[1], baseRgb[2], fadeEnd], isDynamicBar ? 4 : 0, GLYPH_NONE);
+        }
+        continue;
+      }
+      const ix = col.x + ARGON_COLUMN_GAP / 2;
+      const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
+      const rw = iw * noteScale;
+      const rx = ix + (iw - rw) / 2;
       const bodyRgb = failed ? failedRgb : laneDarkBody[n.column];
       const pulseRgb = laneLightPulse[n.column];
-      const baseRgb = laneBase[n.column];
       for (const seg of renderSegments) {
         const topY = Math.min(seg.startY, seg.endY);
         const h = Math.abs(seg.endY - seg.startY);
@@ -533,13 +674,62 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       if (n.type === 'normal' && (n.isHit || n.isMissed)) continue;
       const col = columns[n.column];
       if (!col) continue;
+      const shouldDrawHead = n.type === 'normal'
+        ? (!n.isHit && !n.isMissed)
+        : (n.isMissed || !n.isHit);
+      if (isBarStyle) {
+        // RhythmPlus bars: slim 8px timing bars, full column width. Classic
+        // fills; dynamic outlines in white (hold heads outline only, normal
+        // notes get a filled bar + white inner highlight).
+        const colW = col.width;
+        const bw = colW * noteScale;
+        const bx = col.x + (colW - bw) / 2;
+        const baseRgb = laneBase[n.column];
+        if (!baseRgb) continue;
+        if (shouldDrawHead) {
+          const centerY = getNoteVisualY(n.y, colW, settingsSlice);
+          let o = n.opacity;
+          if (n.type === 'hold' && n.isHoldFailed) o *= 0.35;
+          const by = centerY - barH / 2;
+          if (isDynamicBar) {
+            const isHoldHead = n.type === 'hold';
+            if (!isHoldHead) {
+              this.quadRgb(bx, by, bw, barH, baseRgb, o, 0);
+            }
+            barOutline(bx, by, bw, barH, whiteRgb, o, false, false);
+            if (!isHoldHead) {
+              this.quadRgb(bx + 3, centerY - 1, Math.max(1, bw - 6), 2, whiteRgb, 0.85 * o, 1);
+            }
+          } else {
+            this.quadRgb(bx, by, bw, barH, baseRgb, o, 0);
+          }
+        }
+        if (n.type === 'hold' && n.endY !== undefined) {
+          const releaseDone = n.holdRulesVersion !== 2
+            ? (n.isReleased && !n.isReleaseMissed)
+            : n.isReleaseHit;
+          if (releaseDone) continue;
+          const centerY = getNoteVisualY(n.endY, colW, settingsSlice);
+          let o = n.endOpacity ?? n.opacity;
+          if (n.isHoldFailed) o *= 0.35;
+          const by = centerY - barH / 2;
+          if (isDynamicBar) {
+            const oc = n.isHoldFailed ? failedOutlineRgb : baseRgb;
+            if (!n.isHoldFailed) {
+              // Legacy 5px glow stroke ≈ a translucent rect extended 2.5px.
+              this.quadRgb(bx - 2.5, by - 2.5, bw + 5, barH + 5, oc, 0.35 * o, 4.5);
+            }
+            barOutline(bx, by, bw, barH, oc, Math.min(1, o), false, false);
+          } else {
+            this.quadRgb(bx, by, bw, barH, baseRgb, o, 0);
+          }
+        }
+        continue;
+      }
       const ix = col.x + ARGON_COLUMN_GAP / 2;
       const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
       const rw = iw * noteScale;
       const rx = ix + (iw - rw) / 2;
-      const shouldDrawHead = n.type === 'normal'
-        ? (!n.isHit && !n.isMissed)
-        : (n.isMissed || !n.isHit);
       if (shouldDrawHead) {
         const centerY = getNoteVisualY(n.y, col.width, settingsSlice);
         let opacity = n.opacity;
@@ -563,7 +753,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     }
 
     // Receptors (target + lip + key pill + pressed glow). Key labels stay DOM-only.
-    // Mirrors the Canvas2D argon receptor: translucent white hit target with
+    // Argon receptor: translucent white hit target with
     // a solid lip on the judgement line, plus the outlined oval key pill
     // below/above the receptor (hollow white ring idle, lane-color fill
     // when pressed). Rings are two rounded quads (outer white, inner fill);
@@ -573,53 +763,97 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     const hitTargetH = noteHeight * receptorScale;
     const lipH = ARGON_CORNER_RADIUS * 2;
     const CORE_H = 46;
-    for (let i = 0; i < keyCount; i++) {
-      const col = columns[i];
-      if (!col) continue;
-      const ix = col.x + ARGON_COLUMN_GAP / 2;
-      const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
-      const pressed = col.pressed;
-      if (pressed) {
-        // White-hot core hugging the judgement line, fading into the lane.
-        const coreAlpha = 0.3 * receptorOpacity;
-        if (upscroll) {
-          this.pushQuadNumbers(ix, receptorY, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
+    if (isBarStyle) {
+      // RhythmPlus receptor: a slim 4px full-width line. Pressed adds a
+      // translucent lane-color pad, a white line, and the lane flash.
+      const rh = 4;
+      const ry = receptorY - rh / 2;
+      for (let i = 0; i < keyCount; i++) {
+        const col = columns[i];
+        if (!col) continue;
+        const base = laneBase[i];
+        if (col.pressed && base) {
+          this.quadRgb(col.x, ry - 3, col.width, rh + 6, base, 0.45 * receptorOpacity, 0);
+          this.quadRgb(col.x, ry, col.width, rh, whiteRgb, receptorOpacity, 0);
+          const ga = 0.35 * receptorOpacity;
+          if (upscroll) {
+            this.pushQuadNumbers(col.x, 0, col.width, receptorY, base[0], base[1], base[2], ga, base[0], base[1], base[2], 0, 0);
+          } else {
+            this.pushQuadNumbers(col.x, receptorY, col.width, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], ga, 0);
+          }
         } else {
-          this.pushQuadNumbers(ix, receptorY - CORE_H, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, 0);
+          this.quadRgb(col.x, ry, col.width, rh, whiteRgb, 0.45 * receptorOpacity, 0);
         }
       }
-      const targetY = upscroll ? receptorY : receptorY - hitTargetH;
-      this.quadRgb(
-        ix, targetY, iw, hitTargetH,
-        whiteRgb, (pressed ? 0.55 : 0.3) * receptorOpacity, ARGON_CORNER_RADIUS,
-      );
-      this.quadRgb(
-        ix, receptorY - lipH / 2, iw, lipH,
-        pressed ? whiteRgb : grayRgb, receptorOpacity, lipH / 2,
-      );
-      const base = laneBase[i];
-      const darkLane = laneDarkLane[i];
-      if (base && darkLane) {
-        const ovalW = Math.min(22, iw * 0.42);
-        const ovalH = 14;
-        const ovalCY = upscroll ? receptorY - 30 : receptorY + 30;
-        const cx = ix + iw / 2;
+    } else {
+      for (let i = 0; i < keyCount; i++) {
+        const col = columns[i];
+        if (!col) continue;
+        const ix = col.x + ARGON_COLUMN_GAP / 2;
+        const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
+        const pressed = col.pressed;
         if (pressed) {
-          const glowAlpha = 0.28 * receptorOpacity;
-          const ox = cx - (ovalW + 12) / 2;
-          this.pushQuadNumbers(ox, ovalCY - (ovalH + 12) / 2, ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
+          // White-hot core hugging the judgement line, fading into the lane.
+          const coreAlpha = 0.3 * receptorOpacity;
+          if (upscroll) {
+            this.pushQuadNumbers(ix, receptorY, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
+          } else {
+            this.pushQuadNumbers(ix, receptorY - CORE_H, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, 0);
+          }
         }
-        // Outer white ring.
-        const outerW = ovalW + 4;
-        const outerH = ovalH + 4;
-        this.quadRgb(cx - outerW / 2, ovalCY - outerH / 2, outerW, outerH, whiteRgb, (pressed ? 0.95 : 0.7) * receptorOpacity, outerH / 2);
-        // Inner fill: lane color when pressed, lane background when idle.
-        if (pressed) {
-          this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, base, 0.85 * receptorOpacity, ovalH / 2);
-        } else {
-          this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, darkLane, 0.8 * receptorOpacity, ovalH / 2);
+        const targetY = upscroll ? receptorY : receptorY - hitTargetH;
+        this.quadRgb(
+          ix, targetY, iw, hitTargetH,
+          whiteRgb, (pressed ? 0.55 : 0.3) * receptorOpacity, ARGON_CORNER_RADIUS,
+        );
+        this.quadRgb(
+          ix, receptorY - lipH / 2, iw, lipH,
+          pressed ? whiteRgb : grayRgb, receptorOpacity, lipH / 2,
+        );
+        const base = laneBase[i];
+        const darkLane = laneDarkLane[i];
+        if (base && darkLane) {
+          const ovalW = Math.min(22, iw * 0.42);
+          const ovalH = 14;
+          const ovalCY = upscroll ? receptorY - 30 : receptorY + 30;
+          const cx = ix + iw / 2;
+          if (pressed) {
+            const glowAlpha = 0.28 * receptorOpacity;
+            const ox = cx - (ovalW + 12) / 2;
+            this.pushQuadNumbers(ox, ovalCY - (ovalH + 12) / 2, ovalW + 12, ovalH + 12, base[0], base[1], base[2], glowAlpha, base[0], base[1], base[2], 0, (ovalH + 12) / 2);
+          }
+          // Outer white ring.
+          const outerW = ovalW + 4;
+          const outerH = ovalH + 4;
+          this.quadRgb(cx - outerW / 2, ovalCY - outerH / 2, outerW, outerH, whiteRgb, (pressed ? 0.95 : 0.7) * receptorOpacity, outerH / 2);
+          // Inner fill: lane color when pressed, lane background when idle.
+          if (pressed) {
+            this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, base, 0.85 * receptorOpacity, ovalH / 2);
+          } else {
+            this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, darkLane, 0.8 * receptorOpacity, ovalH / 2);
+          }
         }
       }
+    }
+
+    // Flashlight vignette draws last, over notes and receptors. Radius
+    // math lives in flashlight.ts (combo steps + break easing, CSS px).
+    this.vigRadiusCss = getFlashlightRadius(
+      settingsSlice.selectedMods,
+      frame.combo ?? 0,
+      frame.timeMs,
+      frame.breaks,
+      width,
+      height,
+    );
+    if (this.vigRadiusCss !== null && this.vigRadiusCss > 0) {
+      this.pushQuad(
+        0, 0, width, height,
+        [0, 0, 0, 1],
+        [0, 0, 0, 1],
+        0,
+        GLYPH_VIGNETTE,
+      );
     }
 
     // Upload + draw in one shot.
@@ -630,6 +864,11 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     gl.uniform2f(this.uResolution, this.canvas!.width, this.canvas!.height);
     gl.uniform1f(this.uDpr, this.dpr);
     gl.uniform1f(this.uGlyphFlip, upscroll ? 1 : 0);
+    if (this.vigRadiusCss !== null && this.vigRadiusCss > 0) {
+      // Fragment math runs in device px (vSize folds in uDpr).
+      gl.uniform2f(this.uVigCenter, (width * 0.5) * this.dpr, receptorY * this.dpr);
+      gl.uniform1f(this.uVigRadius, this.vigRadiusCss * this.dpr);
+    }
     gl.viewport(0, 0, this.canvas!.width, this.canvas!.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -663,6 +902,9 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.uResolution = null;
     this.uDpr = null;
     this.uGlyphFlip = null;
+    this.uVigCenter = null;
+    this.uVigRadius = null;
+    this.vigRadiusCss = null;
     this.onContextLost = null;
     this.quadCount = 0;
   }

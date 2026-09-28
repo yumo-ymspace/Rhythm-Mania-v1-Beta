@@ -67,14 +67,12 @@ export interface PlayfieldVisualSettings {
   visualOffset: number;
   skinId?: string;
   customSkinColors?: string[];
-  squareRenderStyle?: 'rhythmmania' | 'rhythmplus' | 'rhythmplus-dynamic';
+  squareRenderStyle?: 'rhythmplus' | 'rhythmplus-dynamic';
   receptorColorsByKeyCount?: Record<number, string[]>;
   noteOpacity?: number;
   receptorOpacity?: number;
-  circleSize?: number;
   noteSizeMultiplier?: number;
   receptorSizeMultiplier?: number;
-  playfieldStyle?: 'square' | 'circle';
   judgementPositionY?: number;
   laneSeparatorOpacity?: number;
   selectedMods?: string[];
@@ -104,7 +102,6 @@ export interface PlayfieldFrame {
 }
 
 export interface ResolvedSkin {
-  isCircleMode: boolean;
   colors: {
     blue: string;
     white: string;

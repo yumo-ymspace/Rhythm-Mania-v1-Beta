@@ -111,46 +111,20 @@ describe('Argon column colours', () => {
     expect(isArgonSkin(rhythmplus)).toBe(false);
   });
 
-  it('TASK-V-050: draws filled note chevron polygon with expected geometry', async () => {
-    const { drawChevronDown } = await import('../src/render/argonPlayfield');
-    const calls: string[] = [];
-    const mockCtx = {
-      beginPath: () => calls.push('beginPath'),
-      moveTo: (x: number, y: number) => calls.push(`moveTo(${x.toFixed(1)},${y.toFixed(1)})`),
-      lineTo: (x: number, y: number) => calls.push(`lineTo(${x.toFixed(1)},${y.toFixed(1)})`),
-      closePath: () => calls.push('closePath'),
-      fill: () => calls.push('fill'),
-      fillStyle: '',
-    } as unknown as CanvasRenderingContext2D;
-
-    drawChevronDown(mockCtx, 50, 50, 20);
-    expect(mockCtx.fillStyle).toBe('#ffffff');
-    expect(calls).toContain('beginPath');
-    expect(calls).toContain('closePath');
-    expect(calls).toContain('fill');
-    // Top-left outer: 50 - 20*0.38 = 42.4, 50 - 20*0.22 = 45.6
-    expect(calls).toContain('moveTo(42.4,45.6)');
-    // Bottom apex outer: 50, 50 + 20*0.22 = 54.4
-    expect(calls).toContain('lineTo(50.0,54.4)');
-    // Top-right outer: 50 + 20*0.38 = 57.6, 50 - 20*0.22 = 45.6
-    expect(calls).toContain('lineTo(57.6,45.6)');
-  });
 });
 
 describe('TASK-082: Skin screen Argon default and legacy catalog', () => {
-  it('identifies Argon as the default skin and lists 4 legacy skins', () => {
+  it('identifies Argon as the default skin and lists 2 legacy bar skins', () => {
     expect(DEFAULT_SKIN.id).toBe('argon');
     expect(DEFAULT_SKIN.category).toBe('default');
     expect(DEFAULT_SKIN.badge).toBe('DEFAULT');
 
     expect(LEGACY_SKINS.map((s) => s.id)).toEqual([
-      'rhythmmania',
       'rhythmplus',
       'rhythmplus-dynamic',
-      'circle',
     ]);
     expect(LEGACY_SKINS.every((s) => s.category === 'legacy')).toBe(true);
-    expect(ALL_SKINS).toHaveLength(5);
+    expect(ALL_SKINS).toHaveLength(3);
     expect(ALL_SKINS[0].id).toBe('argon');
   });
 
@@ -158,13 +132,25 @@ describe('TASK-082: Skin screen Argon default and legacy catalog', () => {
     expect(getSelectedStyle(DEFAULT_SETTINGS)).toBe('argon');
   });
 
-  it('configures proper settings when switching to Argon and legacy styles', () => {
+  it('configures proper settings when switching to Argon and RhythmPlus styles', () => {
     const argonConfig = styleSettings('argon');
     expect(argonConfig.skinId).toBe('argon');
-    expect(argonConfig.playfieldStyle).toBe('square');
+    expect(argonConfig.squareRenderStyle).toBeUndefined();
 
-    const circleConfig = styleSettings('circle');
-    expect(circleConfig.playfieldStyle).toBe('circle');
-    expect(circleConfig.skinId).toBe('custom');
+    const classicConfig = styleSettings('rhythmplus');
+    expect(classicConfig.skinId).toBe('custom');
+    expect(classicConfig.squareRenderStyle).toBe('rhythmplus');
+
+    const dynamicConfig = styleSettings('rhythmplus-dynamic');
+    expect(dynamicConfig.skinId).toBe('custom');
+    expect(dynamicConfig.squareRenderStyle).toBe('rhythmplus-dynamic');
+  });
+
+  it('maps legacy squareRenderStyle values back to the right style id', () => {
+    expect(getSelectedStyle({ ...DEFAULT_SETTINGS, skinId: 'custom', squareRenderStyle: 'rhythmplus' })).toBe('rhythmplus');
+    expect(getSelectedStyle({ ...DEFAULT_SETTINGS, skinId: 'custom', squareRenderStyle: 'rhythmplus-dynamic' })).toBe('rhythmplus-dynamic');
+    // Stored pre-removal values (rhythmmania / circle) collapse to Argon.
+    expect(getSelectedStyle({ ...DEFAULT_SETTINGS, skinId: 'custom' })).toBe('argon');
+    expect(getSelectedStyle({ ...DEFAULT_SETTINGS, skinId: 'custom', squareRenderStyle: undefined })).toBe('argon');
   });
 });

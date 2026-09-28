@@ -61,7 +61,6 @@ export function isArgonSkinId(skinId?: string): boolean {
 }
 
 export function isArgonSkin(settings: PlayfieldVisualSettings): boolean {
-  if (settings.playfieldStyle === 'circle') return false;
   if (settings.squareRenderStyle === 'rhythmplus' || settings.squareRenderStyle === 'rhythmplus-dynamic') {
     return false;
   }

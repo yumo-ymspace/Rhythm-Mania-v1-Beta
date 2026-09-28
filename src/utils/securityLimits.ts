@@ -341,7 +341,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     customSkinName: settings.customSkinName ? sanitizeString(settings.customSkinName, 'custom', 30) : undefined,
     squareRenderStyle: settings.squareRenderStyle === 'rhythmplus-dynamic'
       ? 'rhythmplus-dynamic'
-      : settings.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : 'rhythmmania',
+      : settings.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : undefined,
     receptorColorsByKeyCount: sanitizeLanePalettes(settings.receptorColorsByKeyCount, defaultSettings.receptorColorsByKeyCount),
     noteOpacity: clamp(settings.noteOpacity, 0, 1, defaultSettings.noteOpacity || 1.0),
     receptorOpacity: clamp(settings.receptorOpacity, 0, 1, defaultSettings.receptorOpacity || 1.0),
@@ -349,10 +349,8 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     judgementSize: clamp(settings.judgementSize, 0.5, 2, defaultSettings.judgementSize || 1.0),
     judgementPositionY: clamp(settings.judgementPositionY, 20, 85, defaultSettings.judgementPositionY || 50),
     laneSeparatorOpacity: clamp(settings.laneSeparatorOpacity, 0, 1, defaultSettings.laneSeparatorOpacity || 0.30),
-    circleSize: clamp(settings.circleSize, sizeMin, sizeMax, defaultSettings.circleSize || 1.0),
     noteSizeMultiplier: clamp(settings.noteSizeMultiplier, sizeMin, sizeMax, defaultSettings.noteSizeMultiplier || 1.0),
     receptorSizeMultiplier: clamp(settings.receptorSizeMultiplier, sizeMin, sizeMax, defaultSettings.receptorSizeMultiplier || 1.0),
-    playfieldStyle: settings.playfieldStyle === 'circle' ? 'circle' : 'square',
      playfieldWidthPercent: clamp(settings.playfieldWidthPercent, widthMin, widthMax, Math.max(widthMin, Math.min(widthMax, defaultSettings.playfieldWidthPercent || 40))),
     selectedMods: selectedMods,
     bindPause: sanitizeString(settings.bindPause, defaultSettings.bindPause || 'escape', 15),
@@ -366,8 +364,6 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     showPenarDuringPlay: settings.showPenarDuringPlay !== undefined ? Boolean(settings.showPenarDuringPlay) : (defaultSettings.showPenarDuringPlay ?? true),
     localDisplayName: sanitizeString(settings.localDisplayName, '', 32),
     menuCursorEnabled: settings.menuCursorEnabled !== undefined ? Boolean(settings.menuCursorEnabled) : (defaultSettings.menuCursorEnabled ?? true),
-    renderEngine: settings.renderEngine === 'webgl' ? 'webgl' : 'canvas',
-    allowCanvasFallback: settings.allowCanvasFallback !== undefined ? Boolean(settings.allowCanvasFallback) : (defaultSettings.allowCanvasFallback ?? true),
     difficultyAdjust: isRecord(settings.difficultyAdjust)
       ? {
           overallDifficulty: settings.difficultyAdjust.overallDifficulty !== undefined

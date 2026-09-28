@@ -174,24 +174,6 @@ export const ROWS: RowDef[] = [
     keywords: ['menu', 'background', 'fps', 'frames', 'uncapped', 'throttle', 'motion', 'triangles', 'performance', 'gpu'],
   },
   {
-    id: 'renderEngine', section: 'visual', label: 'Playfield renderer',
-    description: 'Canvas2D is the default. WebGL2 is a batched GPU playfield (argon/default skins first, others fall back to Canvas2D). SV and judgement are unchanged.',
-    control: { kind: 'select', options: [
-      { value: 'canvas', label: 'Canvas2D (default)' },
-      { value: 'webgl',  label: 'WebGL2 (experimental)' },
-    ]},
-    defaultValue: DEFAULT_SETTINGS.renderEngine,
-    keywords: ['renderer', 'webgl', 'canvas', 'gpu', 'playfield', 'performance', 'latency'],
-  },
-  {
-    id: 'allowCanvasFallback', section: 'visual', label: 'Allow Canvas2D fallback',
-    description: 'When WebGL2 init fails, fall back to Canvas2D. Turn off to surface a hard error for testing.',
-    control: { kind: 'toggle' },
-    defaultValue: DEFAULT_SETTINGS.allowCanvasFallback,
-    showWhen: (s) => s.renderEngine === 'webgl',
-    keywords: ['fallback', 'canvas', 'webgl', 'testing', 'error'],
-  },
-  {
     id: 'renderDpr', section: 'visual', label: 'Render resolution',
     description: 'Canvas pixel ratio. 1 is fastest, 1.5 is balanced, 2 is sharpest with the highest GPU cost.',
     control: { kind: 'select', options: [

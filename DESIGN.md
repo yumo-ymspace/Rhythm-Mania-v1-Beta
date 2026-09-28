@@ -21,7 +21,7 @@ This is a **visual and interaction specification**, not a backend architecture d
 
 RhythmMania is an **offline osu!(lazer)-style mania client in the browser**. The current screens are product-complete enough to play, import, score locally, and download from mirrors, but their chrome is not the lazer client. This spec rebuilds every session surface from the captures in `visual-refs/` so an engineer can implement layout, colour, type, motion, and states **without opening osu!**.
 
-The proposed solution **extends the in-tree lazer UI module** (`html[data-ui="lazer"]` via `applyLazerChrome`, `src/ui/lazer/tokens.css`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts`). It recreates osu!(lazer) geometry in original CSS/canvas: sheared parallelograms, the RhythmMania cookie (never the osu! mark), Argon playfield (Canvas2D source of truth), Local-only ranking, and a PENAR slot where lazer shows PP. Official artwork, the pink-circle osu! logo, Torus, “ppy”, and osu-resources bitmaps are **not shipped**. Brand text is **RhythmMania**. Performance rating is **PENAR**, never labelled “pp”.
+The proposed solution **extends the in-tree lazer UI module** (`html[data-ui="lazer"]` via `applyLazerChrome`, `src/ui/lazer/tokens.css`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts`). It recreates osu!(lazer) geometry in original CSS/canvas: sheared parallelograms, the RhythmMania cookie (never the osu! mark), Argon playfield (WebGL2 source of truth), Local-only ranking, and a PENAR slot where lazer shows PP. Official artwork, the pink-circle osu! logo, Torus, “ppy”, and osu-resources bitmaps are **not shipped**. Brand text is **RhythmMania**. Performance rating is **PENAR**, never labelled “pp”.
 
 ---
 
@@ -36,7 +36,7 @@ Pain points this spec removes:
 - Shipping trademarked marks, mascots, or Torus.
 - Treating Babylon 3D as the Argon source of truth.
 
-Current implementation files (reference, not visual truth): `src/components/MainMenu.tsx`, `SongSelect.tsx`, `ManiaHud.tsx`, `ModSelectOverlay.tsx`, `OnlineBeatmapCatalog.tsx`, `PauseOverlay.tsx`, `ResultsScreen.tsx`, `GameplayCanvas.tsx`, `src/render/argonPlayfield.ts`, `src/render/argonSkin.ts`, `src/index.css`. Shared chrome already lives in `src/ui/lazer/` (imported from `src/index.css`; `App.tsx` calls `applyLazerChrome`). Extend that module; do not duplicate files.
+Current implementation files (reference, not visual truth): `src/components/MainMenu.tsx`, `SongSelect.tsx`, `ManiaHud.tsx`, `ModSelectOverlay.tsx`, `OnlineBeatmapCatalog.tsx`, `PauseOverlay.tsx`, `ResultsScreen.tsx`, `GameplayCanvas.tsx`, `src/render/WebGL2PlayfieldRenderer.ts`, `src/render/argonSkin.ts`, `src/render/flashlight.ts`, `src/index.css`. Shared chrome already lives in `src/ui/lazer/` (imported from `src/index.css`; `App.tsx` calls `applyLazerChrome`). Extend that module; do not duplicate files.
 
 ---
 
@@ -47,7 +47,7 @@ Current implementation files (reference, not visual truth): `src/components/Main
 1. Recreate lazer **session chrome** from the stills, including idle motion, hover, enter/exit, and reduced-motion.
 2. Give every surface: layout regions + z-order, 1366×768 design units **and** a CSS mapping rule, sampled colour tokens, type, geometry, states, motion, and a “what is not copied” list.
 3. Keep the offline product: Local ranking only, device history (`rhythm_mania_v1_play_history` / IndexedDB). Listing **chrome** matches lazer; search/download stay on the live helper until a non-visual catalog task lands.
-4. Keep Canvas2D Argon as the playfield visual/latency source of truth. Babylon is an extra skin.
+4. Keep WebGL2 Argon as the playfield visual/latency source of truth.
 5. Preserve equal-width mania lanes, 64-bin density histogram, judgement display names Perfect → Great → Good → Ok → Meh → Miss, and the PENAR counter (`—` when uncalculated).
 
 ### Non-Goals
@@ -86,7 +86,7 @@ User-locked (do not re-open) plus architectural choices this spec had to make.
 | Results action mapping | History-browse footer from stills: Back, download (green), playlist (coming-soon), heart (favourite). **Just-finished play** inserts Retry + Replay (watch) in the gap between Back and the green cluster **without translating** Back or green. Exact widths in §12. Compact wrap/priority in §12 / §16. | User lock; stills lack Retry/Replay because they are history browse. |
 | Song Select V2 wedge | Decorative left metadata **500 du ±20** on desktop. No shear at 390×844. | User lock (~480–520). |
 | Density histogram | 64 bins in map time, rate-invariant (`computeSongDensityBins`). | Already shipped; HUD must keep it. |
-| Canvas2D vs Babylon | Canvas2D Argon is SoT. Babylon (`rhythmmania-3d`) is an **EXTRA** skin, not Argon SoT and not a visual review target. | Existing renderer split. |
+| WebGL2 Argon SoT | WebGL2 Argon is SoT. The two RhythmPlus bar skins render their own slim-bar geometry (filled classic / outlined dynamic) with legacy lane colors; they are not Argon SoT and not a visual review target. | Single WebGL2 renderer. |
 | Shared primitives | Extend `src/ui/lazer/` (`tokens.css`, `applyLazerChrome`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts` / `useLazerReducedMotion`). Add `ComingSoon` and `--rm-u`. Do not duplicate files. | The `src/ui/lazer/` primitives already exist. |
 | Display name | Persist `localDisplayName: ''`. Render fallback **`Guest`** (stills: menu chip, pause rank pill). One constant. | `defaultSettings.ts` empty; `SongSelect.tsx` already falls back to Guest. |
 | Parked cookie | **200 du** diameter (±20 du still-diff). Stills win; do not use the ~0.2× menu estimate (~96 du). | Measured clipped disc on Song Select stills. |
@@ -855,7 +855,7 @@ Compact: hide key counters and spectator line; keep health, score, combo, hit er
 ### 9. Argon playfield
 
 **Stills:** `lazer-argon-mania-gameplay.png`, `192641`, `192820`, `192855`, 19-55-* HUD frames, colour charts.  
-**Code:** `src/render/argonPlayfield.ts`, `argonSkin.ts`, `Canvas2DRenderer.ts`. Do not change judgement timing or hold rules.
+**Code:** `src/render/WebGL2PlayfieldRenderer.ts`, `argonSkin.ts`, `flashlight.ts`. Do not change judgement timing or hold rules.
 
 #### Column colours (ship `getArgonColumnColor` / `argonPaletteForKeyCount`)
 
@@ -902,7 +902,7 @@ Do **not** apply 1k/3k/6k/7k/8k/10k “UPDATED” mock rows.
 | Countdown | Centre dark disc ~120 du, white arc draining with the beat, number 3-2-1 then go (`192820` shows `2`) |
 | Skip intro | Existing skip control; visual: small skip chip if present — **no still**, keep functional, do not invent a second language |
 
-Canvas2D is SoT. Babylon extra skin may approximate but is not the review target.
+WebGL2 is SoT for the playfield.
 
 #### What is not copied
 
@@ -1113,12 +1113,11 @@ Keep `/skins` and `SkinScreen.tsx`. One row per `SkinStyleId`:
 
 | id | Label | Badge |
 |---|---|---|
-| `argon` | Argon | DEFAULT (Canvas2D SoT) |
-| `rhythmmania` | RhythmMania Classic | LEGACY |
-| `rhythmmania-3d` | RhythmMania 3D | **EXTRA** (not LEGACY; not Argon SoT) |
-| `rhythmplus` | RhythmPlus Classic | LEGACY |
-| `rhythmplus-dynamic` | RhythmPlus Dynamic | LEGACY |
-| `circle` | Circle | LEGACY |
+| `argon` | Argon | DEFAULT (WebGL2 SoT) |
+| `rhythmplus` | RhythmPlus Classic | LEGACY (slim filled bars) |
+| `rhythmplus-dynamic` | RhythmPlus Dynamic | LEGACY (outlined bars) |
+
+RhythmMania Classic, RhythmMania 3D, and the circular skin were removed; stored `skinId`/`squareRenderStyle` values for them collapse to Argon.
 
 Do not invent a listing-like overlay until a still exists.
 
@@ -1187,7 +1186,7 @@ Use existing `useLazerReducedMotion()` and the `prefers-reduced-motion` block al
 | Listing | `src/components/OnlineBeatmapCatalog.tsx` (replace chrome; keep download helper) |
 | PlayerLoader | new `src/components/PlayerLoader.tsx`, first paint of `/play` |
 | HUD | `src/components/ManiaHud.tsx` |
-| Playfield notes | `src/render/argonPlayfield.ts`, `argonSkin.ts`, `Canvas2DRenderer.ts` |
+| Playfield notes | `src/render/WebGL2PlayfieldRenderer.ts`, `argonSkin.ts`, `flashlight.ts` |
 | In-play overlay | `GameplayCanvas.tsx` + PlayerLoader settings groups shared module |
 | Pause / fail | `src/components/PauseOverlay.tsx` |
 | Results | `src/components/ResultsScreen.tsx` |
@@ -1266,7 +1265,7 @@ Rejected by user lock. Visible + coming-soon.
 Rejected by user lock. Chrome is `beatmaplisting.jpg`.
 
 **5. Treat Babylon as Argon SoT.**  
-Rejected. Canvas2D is latency/visual SoT; Babylon is EXTRA.
+Rejected. WebGL2 is the latency/visual SoT for the playfield.
 
 **6. Listing data: keep osu! token search vs ship hinai/osu.direct in overlay chrome vs local-only listing.**  
 Chosen: **chrome-only** overlay against the live Bearer + Catboy/osudl helper. Planned unauthenticated hinai → osu.direct → Catboy is not a visual dependency. Local-only listing would make Browse a no-op.
@@ -1311,7 +1310,7 @@ No production metrics required for chrome. Optional: count coming-soon clicks in
 
 ## Rollout Plan
 
-Lazer chrome is the **default Argon path**. Escape hatch: `skinId → rhythmmania` and `data-skin=legacy` still render old skins.
+Lazer chrome is the **default Argon path**. Escape hatch: the RhythmPlus skins keep `data-skin=legacy` and render their slim-bar playfield geometry.
 
 `applyLazerChrome` already sets `data-ui="lazer"` for Argon. Mixed chrome across surfaces (lazer menu + old select) is **expected** during restyle work; keep each surface change self-contained. Settings/Skins/History restyles are out of scope here.
 
@@ -1352,7 +1351,7 @@ None. Remaining leftovers were locked by the user on 2026-09-12.
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Mixed chrome across surfaces | Low (expected) | Restyle one surface at a time; do not “fix” other surfaces inside a change |
-| Elastic hover + triangle field cost | Medium | Cap triangles; Motion only on menu width; playfield stays Canvas2D |
+| Elastic hover + triangle field cost | Medium | Cap triangles; Motion only on menu width; playfield stays WebGL2 |
 | Shear clipping at 390×844 | High | Compact layout, Playwright 390×844 gate |
 | PENAR looking like a bug | Medium | Intentional `—` + `PENAR` label, never `pp` |
 | Trademark slip | High | Cookie/empty-state/listing icon rules; screenshot CI for “osu!” text in chrome |

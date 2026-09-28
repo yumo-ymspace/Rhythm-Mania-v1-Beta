@@ -217,18 +217,23 @@ export default function App() {
   });
   const [menuBgUrl] = useState<string>(() => getRandomDefaultBackground());
   const [skinBgUrl] = useState<string>(() => getRandomDefaultBackground());
-  const [songSelectBgUrl, setSongSelectBgUrl] = useState<string>(() => getRandomDefaultBackground());
   const [historyBgUrl, setHistoryBgUrl] = useState<string>(() => getRandomDefaultBackground());
 
+  // Song Select owns its own backdrop (dim overlay + triangle-field fallback
+  // in SongSelect.tsx), so 'select' resolves to no unified background here.
+  // Rendering the undimmed unified copy underneath it made the Song Select
+  // dim ineffective mid-switch (the bright copy showed through the fading
+  // dimmed copy, even at 100% dim) and the mismatched geometry (bg-fixed vs
+  // scale-105) read as a positional jump on diff/song switches.
   const activeBackgroundUrl = React.useMemo(() => {
-    if (currentScreen === 'select') return songSelectBgUrl;
+    if (currentScreen === 'select') return '';
     if (currentScreen === 'history') return historyBgUrl;
     if (currentScreen === 'skins') return skinBgUrl;
     if (currentScreen === 'results') {
       return selectedBeatmap?.bgUrl || menuBgUrl;
     }
     return menuBgUrl;
-  }, [currentScreen, songSelectBgUrl, historyBgUrl, skinBgUrl, selectedBeatmap, menuBgUrl]);
+  }, [currentScreen, historyBgUrl, skinBgUrl, selectedBeatmap, menuBgUrl]);
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showFindBeatmapOverlay, setShowFindBeatmapOverlay] = useState<boolean>(false);
@@ -1153,7 +1158,9 @@ export default function App() {
         skinId: updated.skinId === 'rhythmmania-3d' ? 'argon' : (updated.skinId || 'argon'),
         customSkinColors: updated.customSkinColors,
         customSkinName: updated.customSkinName,
-        squareRenderStyle: updated.squareRenderStyle || 'rhythmmania',
+        squareRenderStyle: updated.squareRenderStyle === 'rhythmplus-dynamic'
+          ? 'rhythmplus-dynamic'
+          : updated.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : undefined,
          receptorColorsByKeyCount: updated.receptorColorsByKeyCount || {},
         noteOpacity: updated.noteOpacity !== undefined ? Number(updated.noteOpacity) : 1.0,
         receptorOpacity: updated.receptorOpacity !== undefined ? Number(updated.receptorOpacity) : 1.0,
@@ -1161,10 +1168,8 @@ export default function App() {
          judgementSize: updated.judgementSize !== undefined ? Number(updated.judgementSize) : 1.0,
          judgementPositionY: updated.judgementPositionY !== undefined ? Math.max(20, Math.min(85, Number(updated.judgementPositionY))) : 50,
         laneSeparatorOpacity: updated.laneSeparatorOpacity !== undefined ? Number(updated.laneSeparatorOpacity) : 0.30,
-        circleSize: updated.circleSize !== undefined ? Number(updated.circleSize) : 1.0,
         noteSizeMultiplier: updated.noteSizeMultiplier !== undefined ? Math.max(0.60, Math.min(1.00, Number(updated.noteSizeMultiplier))) : 1.0,
         receptorSizeMultiplier: updated.receptorSizeMultiplier !== undefined ? Math.max(0.60, Math.min(1.00, Number(updated.receptorSizeMultiplier))) : 1.0,
-        playfieldStyle: updated.playfieldStyle || 'square',
          playfieldWidthPercent,
         selectedMods: updated.selectedMods || [],
         bindPause: updated.bindPause !== undefined ? String(updated.bindPause) : 'escape',
@@ -1178,8 +1183,6 @@ export default function App() {
         showPenarDuringPlay: updated.showPenarDuringPlay !== undefined ? Boolean(updated.showPenarDuringPlay) : true,
         localDisplayName: updated.localDisplayName !== undefined ? String(updated.localDisplayName).slice(0, 32) : '',
         difficultyAdjust: updated.difficultyAdjust,
-        renderEngine: updated.renderEngine === 'webgl' ? 'webgl' : 'canvas',
-        allowCanvasFallback: updated.allowCanvasFallback !== undefined ? Boolean(updated.allowCanvasFallback) : true,
       };
 
       if (updated.bindings) {
@@ -1466,8 +1469,7 @@ export default function App() {
                  onImportBeatmap={handleImportBeatmap}
                  onImportPackage={handleImportPackage}
                 onDeleteSongGroup={handleDeleteSongGroup}
-                 setSongSelectBgUrl={setSongSelectBgUrl}
-                 onBack={() => navigateScreen('menu')}
+                onBack={() => navigateScreen('menu')}
                 onOpenOnlineCatalog={() => setShowFindBeatmapOverlay(true)}
                 onWatchReplay={handleWatchReplay}
                 playHistory={playHistory}

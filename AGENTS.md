@@ -39,7 +39,7 @@ No `database/` dir. No auth/replay/profile API routers. Only API rewrite in `ver
 
 ## 4. Settings And Persistence
 
-`GameSettings` in `src/types.ts`; defaults in `defaultSettings.ts`; sanitize in `securityLimits.ts`. Defaults: Canvas2D renderer (`'canvas' | 'webgl'`), 4K, scroll `21`. Clamps: playfield width `20..50`, scroll `5..80`, offsets `-1000..1000`. `rhythmmania-3d` skin id maps to `argon`. No `babylon` engine, no `babylonFloor`, no `limitDprToOne` (now `renderDpr: 1 | 1.5 | 2`, default `1.5`). `upsurfaceNoteMode` is passthrough, always shown. Only engine-conditional row is `allowCanvasFallback` (webgl). Sections: General, Gameplay, Visual, Audio, Input, Miscellaneous. `localDisplayName` max 32 chars, copied to `playedBy`. Mod sanitize: base mods + `DA:`/`AC:` + `K1`-`K10`, with EZ/HR, rate-mod, NF/SD/PF/AC, AT/CN, RD/MR, cover-mod, IN/HO/NR, DA, K exclusivity.
+`GameSettings` in `src/types.ts`; defaults in `defaultSettings.ts`; sanitize in `securityLimits.ts`. Defaults: WebGL2-only playfield (no `renderEngine` / `allowCanvasFallback` settings), 4K, scroll `21`. Clamps: playfield width `20..50`, scroll `5..80`, offsets `-1000..1000`. `rhythmmania-3d` skin id maps to `argon`. No `babylon` engine, no `babylonFloor`, no `limitDprToOne` (now `renderDpr: 1 | 1.5 | 2`, default `1.5`). `upsurfaceNoteMode` is passthrough, always shown. Sections: General, Gameplay, Visual, Audio, Input, Miscellaneous. `localDisplayName` max 32 chars, copied to `playedBy`. Mod sanitize: base mods + `DA:`/`AC:` + `K1`-`K10`, with EZ/HR, rate-mod, NF/SD/PF/AC, AT/CN, RD/MR, cover-mod, IN/HO/NR, DA, K exclusivity.
 
 LocalStorage keys (`rhythm_mania_v1_`): `settings`, `custom_maps` (legacy migration), `play_history`, `history_limit` (default 50, 5..500/unlimited), `last_selected_map_id`, `last_diff_by_song`, `favorite_songs`, `catalog_set_metadata`, `mod_presets`. IndexedDB `RhythmManiaDB` v6: `beatmaps`, `packages`, `backgrounds`. Blob cache default 8, media instance 12. Video element tracked in `mediaRegistry.ts`.
 
@@ -57,7 +57,7 @@ Holds v1/v2/v3, live default v3 (`LAZER_HOLD_RULES_VERSION = 3`, 1.5x tail lenie
 
 ## 7. Renderers
 
-Canvas2D + WebGL2 (`IPlayfieldRenderer`: init/resize/render/destroy/isReady). `PlayfieldFrame` has no HUD; meters are `ManiaHud` dual vertical at ~6 Hz. Shared math: `laneLayout`, `playfieldLayout` (geometry, scroll, covers), `noteVisibility`, `scrollVelocity`, `skinTheme`, `tailSegments`, `argonSkin`/`argonPlayfield`. Equal-width lanes 1K-10K; touch 60% zone split. WebGL2 when `renderEngine === 'webgl'` + argon + no FL (batched quads, `MAX_QUADS 5120`); falls back to Canvas2D if `allowCanvasFallback !== false`.
+WebGL2-only playfield (`IPlayfieldRenderer`: init/resize/render/destroy/isReady; sole impl `WebGL2PlayfieldRenderer`, one shader + batched quads, `MAX_QUADS 5120`). `PlayfieldFrame` has no HUD; meters are `ManiaHud` dual vertical at ~6 Hz. Shared math: `laneLayout`, `playfieldLayout` (geometry, scroll, covers), `noteVisibility`, `scrollVelocity`, `skinTheme`, `tailSegments`, `argonSkin`, `flashlight` (FL view radius). Equal-width lanes 1K-10K; touch 60% zone split. No Canvas2D playfield code remains (`Canvas2DRenderer.ts`, `argonPlayfield.ts` deleted); FL vignette renders in-shader as a fullscreen `GLYPH_VIGNETTE` quad. `resolvePlayfieldStyle` picks the draw path: `argon` (default) or the RhythmPlus bar skins (`rhythmplus` slim filled 8px bars, `rhythmplus-dynamic` outlined bars). The RhythmMania Classic and circular skins were removed; stored values collapse to argon.
 
 ## 8. API
 
@@ -69,7 +69,7 @@ None. No schema, sessions, or leaderboards. Scores/replays/profiles are local-on
 
 ## 10. Tests
 
-`vitest.config.ts`: Node, `tests/**/*.test.ts` (~45 files). Covers parser/limits, settings/history, score/judgement, holds, replays, scroll/visibility, mirror catalog, UI tokens/shells, API handlers (health/config, CORS, catalog 404). No browser App/GameplayCanvas/renderer/AudioEngine/SW/PostgreSQL/real-download coverage. Changing timing: check `GameplayCanvas`, `holdTickRules`/`holdNote`/`judgementTiming`, replay sim/cursor, DT/HT + video sync, `replayVerification.ts`. Changing settings: update types, defaults, sanitize, registry/UI, persistence, consumers. Changing visuals: shared frame/math first, then both renderers.
+`vitest.config.ts`: Node, `tests/**/*.test.ts` (~47 files). Covers parser/limits, settings/history, score/judgement, holds, replays, scroll/visibility, mirror catalog, UI tokens/shells, flashlight radius, API handlers (health/config, CORS, catalog 404). No browser App/GameplayCanvas/renderer/AudioEngine/SW/PostgreSQL/real-download coverage. Changing timing: check `GameplayCanvas`, `holdTickRules`/`holdNote`/`judgementTiming`, replay sim/cursor, DT/HT + video sync, `replayVerification.ts`. Changing settings: update types, defaults, sanitize, registry/UI, persistence, consumers. Changing visuals: shared frame/math first, then the WebGL2 renderer (sole playfield renderer).
 
 ## 11. Tools and Thing I would want you to explicitly know. (Extra Importance)
 ### Fonts

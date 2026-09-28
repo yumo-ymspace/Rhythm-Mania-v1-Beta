@@ -84,16 +84,13 @@ import {
   type HealthState,
   type HealthJudgementContext,
 } from '../ruleset/mania/healthProcessor';
-import metadata from '../../metadata.json';
 import { SCROLL_SPEED_MAX, SCROLL_SPEED_MIN } from './settings/defaultSettings';
 import { computePenar, computeLivePenar } from '../utils/penar';
 import { calculateManiaDifficultyAttributes, calculateTimedManiaDifficultyAttributes, type TimedManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
 
 // HIGH PERFORMANCE INTEGRATED RENDERER IMPORTS
 import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
-import { Canvas2DRenderer } from '../render/Canvas2DRenderer';
 import { WebGL2PlayfieldRenderer } from '../render/WebGL2PlayfieldRenderer';
-import { isArgonSkin } from '../render/argonSkin';
 import { getLaneColors } from '../render/skinTheme';
 import { calculateScrollSpeedFactor, computeScrollTravelTimeMs, updateColumnsLayout } from '../render/playfieldLayout';
 import { getColumnStyles } from '../render/laneLayout';
@@ -855,8 +852,8 @@ export default function GameplayCanvas({
   const autoplayHoldKeysRef = useRef<boolean[]>([]);
   const [loadingAudioProgress, setLoadingAudioProgress] = useState<number>(0);
   const [isAudioLoaded, setIsAudioLoaded] = useState<boolean>(false);
-  // Hard renderer failure (e.g. WebGL2 unavailable with Canvas2D fallback
-  // disabled). Surfaced as an overlay instead of a blank playfield.
+  // Hard renderer failure (WebGL2 unavailable). Surfaced as an overlay
+  // instead of a blank playfield.
   const [rendererError, setRendererError] = useState<string | null>(null);
 
   // Custom pre-play stage states
@@ -888,10 +885,6 @@ export default function GameplayCanvas({
 
   // Playfield Renderer References
   const activeRendererRef = useRef<IPlayfieldRenderer | null>(null);
-  // A canvas element is bound to one context type for life; switching between
-  // Canvas2D and WebGL2 requires a fresh canvas node (getContext would else
-  // return null). Track the bound kind to know when to swap.
-  const rendererKindRef = useRef<'canvas' | 'webgl' | null>(null);
   // Cached CSS size avoids a forced layout (clientWidth) on every rAF tick.
   const canvasCssSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
@@ -910,94 +903,17 @@ export default function GameplayCanvas({
       }
 
       if (!canvasRef.current) return;
-      // Non-null local: the ref may be swapped to a fresh node below, while
-      // canvasRef.current stays the source of truth for the rAF loop.
-      let canvas: HTMLCanvasElement = canvasRef.current;
+      // Non-null local: canvasRef.current stays the source of truth for the
+      // rAF loop.
+      const canvas: HTMLCanvasElement = canvasRef.current;
 
-      // Renderer selection: WebGL2 is opt-in (settings.renderEngine) and MVP-
-      // scoped to argon/default skins without Flashlight. Everything else
-      // stays on Canvas2D. SV/judgement are untouched: both renderers consume
-      // the same SV-projected PlayfieldFrame.
-      const wantsWebGL = settings.renderEngine === 'webgl';
-      const hasFlashlight = (settings.selectedMods || []).some(m => m.toUpperCase() === 'FL');
-      const webglSupportedSkin = isArgonSkin({
-        upsurfaceNoteMode: settings.upsurfaceNoteMode,
-        scrollSpeed: settings.scrollSpeed,
-        audioOffset: settings.audioOffset,
-        visualOffset: settings.visualOffset,
-        skinId: settings.skinId,
-        squareRenderStyle: settings.squareRenderStyle,
-        playfieldStyle: settings.playfieldStyle,
-        noteSizeMultiplier: settings.noteSizeMultiplier,
-        receptorSizeMultiplier: settings.receptorSizeMultiplier,
-      });
-      const useWebGL = wantsWebGL && webglSupportedSkin && !hasFlashlight;
-      const desiredKind: 'canvas' | 'webgl' = useWebGL ? 'webgl' : 'canvas';
-
-      // A canvas keeps its first context type forever. When the desired
-      // renderer kind differs from the bound kind, swap in a fresh canvas
-      // node with identical styling so getContext can succeed.
-      if (rendererKindRef.current !== null && rendererKindRef.current !== desiredKind && canvas.parentNode) {
-        const fresh = document.createElement('canvas');
-        fresh.className = canvas.className;
-        canvas.parentNode.replaceChild(fresh, canvas);
-        canvasRef.current = fresh;
-        canvas = fresh;
-      }
-
-      // Swap the canvas node for a fresh unbound one. Required when the
-      // current node already carries the other context type (a canvas keeps
-      // its first context for life; getContext would else return null).
-      const swapFreshCanvas = () => {
-        if (!canvas.parentNode) return;
-        const fresh = document.createElement('canvas');
-        fresh.className = canvas.className;
-        canvas.parentNode.replaceChild(fresh, canvas);
-        canvasRef.current = fresh;
-        canvas = fresh;
-      };
-
-      const createFallback = async (): Promise<IPlayfieldRenderer | null> => {
-        const fallback: IPlayfieldRenderer = new Canvas2DRenderer();
-        await fallback.init(canvas, { settings, keyCount: beatmap.keyCount });
-        if (!fallback.isReady()) {
-          // The node is bound to a WebGL context (failed WebGL attempt);
-          // retry once on a fresh node.
-          swapFreshCanvas();
-          await fallback.init(canvas, { settings, keyCount: beatmap.keyCount });
-          if (!fallback.isReady()) throw new Error('Canvas2D fallback could not bind a 2D context');
-        }
-        rendererKindRef.current = 'canvas';
-        return fallback;
-      };
-
+      // WebGL2 is the only playfield renderer. SV/judgement are untouched:
+      // the renderer consumes the same SV-projected PlayfieldFrame.
+      // Flashlight's dark vignette renders in-shader (see flashlight.ts).
       try {
         setRendererError(null);
-        let renderer: IPlayfieldRenderer | null = null;
-        if (useWebGL) {
-          try {
-            const webgl = new WebGL2PlayfieldRenderer();
-            await webgl.init(canvas, { settings, keyCount: beatmap.keyCount });
-            renderer = webgl;
-            rendererKindRef.current = 'webgl';
-          } catch (webglErr) {
-            console.warn('WebGL2 playfield init failed:', webglErr);
-            if (settings.allowCanvasFallback !== false) {
-              swapFreshCanvas();
-              renderer = await createFallback();
-            } else {
-              throw webglErr;
-            }
-          }
-        } else {
-          if (wantsWebGL && !webglSupportedSkin) {
-            console.info('WebGL2 MVP supports argon/default skins only; using Canvas2D fallback for this skin.');
-          } else if (wantsWebGL && hasFlashlight) {
-            console.info('WebGL2 MVP does not cover Flashlight; using Canvas2D fallback.');
-          }
-          renderer = await createFallback();
-        }
-        if (!renderer) return;
+        const renderer: IPlayfieldRenderer = new WebGL2PlayfieldRenderer();
+        await renderer.init(canvas, { settings, keyCount: beatmap.keyCount });
 
         if (!active) {
           renderer.destroy();
@@ -1032,15 +948,8 @@ export default function GameplayCanvas({
         } catch (e) {}
         activeRendererRef.current = null;
       }
-      // NOTE: rendererKindRef is intentionally preserved across re-runs so a
-      // Canvas2D<->WebGL switch swaps in a fresh canvas node. It resets on
-      // unmount via the effect below, when React drops the canvas anyway.
     };
-  }, [settings.renderDpr, settings.renderEngine, settings.allowCanvasFallback, settings.skinId, settings.squareRenderStyle, settings.playfieldStyle, settings.selectedMods, beatmap.keyCount, isAudioLoaded]);
-
-  useEffect(() => () => {
-    rendererKindRef.current = null;
-  }, []);
+  }, [settings.renderDpr, beatmap.keyCount, isAudioLoaded]);
 
   // Lazer Mania EZ/HR scale hit-window difficulty rather than changing OD; DT/HT/NC/DC scale song-time hit-windows with clock rate.
   // Classic mod restores stable-style hit windows but keeps lazer speed compensation (totalMultiplier = speed / difficulty).
@@ -4075,7 +3984,6 @@ export default function GameplayCanvas({
 
           {/* Bottom info */}
           <div className="w-full flex justify-between text-[10px] text-zinc-500 font-mono px-2 relative z-10">
-            <div className="absolute -bottom-6 left-2 font-bold pointer-events-none text-white/30">{metadata.version}</div>
             <span>BPM: {beatmap.bpm}</span>
             <span>DIFFICULTY: {beatmap.difficulty}</span>
           </div>
@@ -4727,7 +4635,7 @@ export default function GameplayCanvas({
                 <div className="max-w-md rounded-xl border border-rose-400/40 bg-slate-950/90 px-5 py-4 text-center shadow-2xl">
                   <div className="font-mono text-xs font-black uppercase tracking-[0.25em] text-rose-300">Renderer error</div>
                   <div className="mt-2 font-mono text-xs text-slate-200 break-words">{rendererError}</div>
-                  <div className="mt-2 font-mono text-[11px] text-slate-400">Switch Graphics → Playfield renderer back to Canvas2D, or enable the Canvas2D fallback.</div>
+                  <div className="mt-2 font-mono text-[11px] text-slate-400">WebGL2 is required for the playfield. Try a browser with hardware acceleration enabled.</div>
                 </div>
               </div>
             )}

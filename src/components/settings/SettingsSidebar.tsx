@@ -14,7 +14,6 @@ import React from 'react';
 import { RotateCcw } from 'lucide-react';
 import { SECTIONS, SectionId } from './settingsRegistry';
 import type { GameSettings } from '../../types';
-import metadata from '../../../metadata.json';
 
 interface SettingsSidebarProps {
   activeSection: SectionId;
@@ -64,9 +63,6 @@ export default function SettingsSidebar({ activeSection, onSelect, onRestoreAll,
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Restore defaults</span>
         </button>
-        <div className="text-[10px] text-center text-[#6f6f92] font-sans mt-2">
-          {metadata.version}
-        </div>
       </div>
     </div>
   );

@@ -80,8 +80,8 @@ describe('TASK-V-001: lazer motion tokens and primitives', () => {
   it('enables lazer chrome for Argon and legacy skins', () => {
     expect(resolveLazerChrome(visualSettings())).toEqual({ skin: 'argon', ui: 'lazer' });
     expect(resolveLazerChrome(visualSettings({ skinId: 'argon' }))).toEqual({ skin: 'argon', ui: 'lazer' });
-    expect(resolveLazerChrome(visualSettings({ skinId: 'rhythmmania' }))).toEqual({ skin: 'legacy', ui: 'lazer' });
-    expect(resolveLazerChrome(visualSettings({ playfieldStyle: 'circle' }))).toEqual({ skin: 'legacy', ui: 'lazer' });
+    expect(resolveLazerChrome(visualSettings({ skinId: 'custom', squareRenderStyle: 'rhythmplus' }))).toEqual({ skin: 'legacy', ui: 'lazer' });
+    expect(resolveLazerChrome(visualSettings({ skinId: 'custom', squareRenderStyle: 'rhythmplus-dynamic' }))).toEqual({ skin: 'legacy', ui: 'lazer' });
   });
 
   it('renders the cookie as an RM disc with spectrum and inner triangles, never osu!', () => {

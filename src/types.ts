@@ -297,17 +297,17 @@ export interface GameSettings {
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
   disableComboBurst?: boolean; // hide the combo milestone burst popup
   renderDpr?: number; // user-selectable canvas device pixel ratio: 1, 1.5, or 2
-  skinId?: string; // 'argon' (default Canvas2D reference) | 'custom' | legacy ids
+  skinId?: string; // 'argon' (default) | 'custom' (RhythmPlus bar skins set 'custom' + squareRenderStyle)
   customSkinColors?: string[]; // user parsed custom colors: [blueKeyColor, whiteKeyColor, accentKeyColor, cyanKeyColor, holdNoteColor]
   customSkinName?: string;
-  squareRenderStyle?: 'rhythmmania' | 'rhythmplus' | 'rhythmplus-dynamic';
+  squareRenderStyle?: 'rhythmplus' | 'rhythmplus-dynamic';
   receptorColorsByKeyCount?: Record<number, string[]>; // per-lane receptor colors for 1K-10K
   noteOpacity?: number; // 0.1 to 1.0 (opacity for note visuals)
   receptorOpacity?: number; // 0.1 to 1.0 (opacity for landline keys receptors)
-  circleSize?: number; // scale multiplier for circle skin notes (0.5 to 1.5)
+
   noteSizeMultiplier?: number; // separate multiplier for falling notes
   receptorSizeMultiplier?: number; // scale multiplier for receptors
-  playfieldStyle?: 'square' | 'circle';
+
   judgementOpacity?: number; // 0.0 to 1.0 (opacity for judgement text)
   judgementSize?: number; // 0.5 to 1.5 (font size scaling multiplier)
   judgementPositionY?: number; // vertical screen position in percent
@@ -326,8 +326,6 @@ export interface GameSettings {
   localDisplayName?: string; // optional device-local player name; not an account
   menuCursorEnabled?: boolean; // lazer-style menu arrow cursor overlay
   difficultyAdjust?: DifficultyAdjustSettings; // Difficulty Adjust (DA) mod overrides
-  renderEngine?: 'canvas' | 'webgl'; // playfield renderer: Canvas2D default, WebGL2 batched
-  allowCanvasFallback?: boolean; // when WebGL init fails, fall back to Canvas2D (false = hard error for testing)
 }
 
 export type GameScreen = 'menu' | 'select' | 'play' | 'results' | 'settings' | 'skins' | 'calibrate' | 'history';

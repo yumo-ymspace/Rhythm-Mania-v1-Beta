@@ -51,7 +51,6 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   disableComboBurst: false,
   renderDpr: 1.5,
   skinId: 'argon',
-  squareRenderStyle: 'rhythmmania',
   receptorColorsByKeyCount: {
     1: argonPaletteForKeyCount(1),
     2: argonPaletteForKeyCount(2),
@@ -70,10 +69,8 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   judgementSize: 1.0,
   judgementPositionY: 50,
   laneSeparatorOpacity: 0.30,
-  circleSize: 1.0,
   noteSizeMultiplier: 1.0,
   receptorSizeMultiplier: 1.0,
-  playfieldStyle: 'square',
   customSkinColors: ['#2e6b9e', '#eceff1', '#d32f2f', '#00b0ff', '#eab308'],
   playfieldWidthPercent: 40,
   selectedMods: [],
@@ -88,8 +85,6 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   showPenarDuringPlay: true,
   localDisplayName: '',
   menuCursorEnabled: true,
-  renderEngine: 'canvas',
-  allowCanvasFallback: true,
 }) satisfies GameSettings;
 
 /** True when a setting's value differs from its default. */

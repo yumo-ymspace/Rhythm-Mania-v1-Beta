@@ -52,8 +52,6 @@ const BOOT_SOUNDS: readonly string[] = [
 ] as const;
 
 const BOOT_SKIN_PREVIEWS: readonly string[] = [
-  '/skin/circular-style.webp',
-  '/skin/rhythmmania-style-rectangular.webp',
   '/skin/rhythmplus-classic-style-rectangular.webp',
   '/skin/rhythmplus-dynamic-style-rectangular.webp',
 ] as const;

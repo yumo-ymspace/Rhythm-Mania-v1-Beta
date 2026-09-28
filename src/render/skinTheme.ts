@@ -19,16 +19,21 @@ export function getLaneColors(settings: PlayfieldVisualSettings, keyCount: numbe
   return Array.isArray(colors) && colors.length === keyCount ? colors : null;
 }
 
-export function isCircleSkinMode(settings: PlayfieldVisualSettings): boolean {
-  return settings.playfieldStyle === 'circle' ||
-         settings.skinId === 'circles' ||
-         settings.skinId === 'glassy-spheres' ||
-         settings.skinId === 'hollow-rings';
+export type PlayfieldRenderStyle = 'argon' | 'rhythmplus' | 'rhythmplus-dynamic';
+
+/**
+ * Which playfield geometry the WebGL2 renderer draws. Argon is the default;
+ * the two RhythmPlus legacy skins draw their slim-bar treatment instead.
+ * Anything else (including stored `rhythmmania`/circle-era values) falls
+ * back to argon.
+ */
+export function resolvePlayfieldStyle(settings: PlayfieldVisualSettings): PlayfieldRenderStyle {
+  if (settings.squareRenderStyle === 'rhythmplus-dynamic') return 'rhythmplus-dynamic';
+  if (settings.squareRenderStyle === 'rhythmplus') return 'rhythmplus';
+  return 'argon';
 }
 
 export function resolveSkinTheme(settings: PlayfieldVisualSettings): ResolvedSkin {
-  const isCircle = isCircleSkinMode(settings);
-  
   let colors = {
     blue: '#2e6b9e',
     white: '#eceff1',
@@ -57,13 +62,6 @@ export function resolveSkinTheme(settings: PlayfieldVisualSettings): ResolvedSki
       accent: '#f50057',
       cyan: '#00e676'
     };
-  } else if (settings.skinId === 'circles') {
-    colors = {
-      blue: '#2979ff',
-      white: '#ff4081',
-      accent: '#ffeb3b',
-      cyan: '#00e5ff'
-    };
   } else if (settings.skinId === 'cyberpunk') {
     colors = {
       blue: '#ec4899',
@@ -85,24 +83,9 @@ export function resolveSkinTheme(settings: PlayfieldVisualSettings): ResolvedSki
       accent: '#cbd5e1',
       cyan: '#64748b'
     };
-  } else if (settings.skinId === 'glassy-spheres') {
-    colors = {
-      blue: '#0284c7',
-      white: '#ec4899',
-      accent: '#eab308',
-      cyan: '#06b6d4'
-    };
-  } else if (settings.skinId === 'hollow-rings') {
-    colors = {
-      blue: '#3b82f6',
-      white: '#c084fc',
-      accent: '#f43f5e',
-      cyan: '#14b8a6'
-    };
   }
 
   return {
-    isCircleMode: isCircle,
     colors,
     customHoldColor: '#38bdf8'
   };
