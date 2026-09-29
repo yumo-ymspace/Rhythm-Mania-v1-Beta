@@ -72,7 +72,30 @@ describe('now playing panel', () => {
     expect(withTrack).not.toContain('Nothing to play');
     expect(withoutTrack).not.toContain('Nothing to play');
     expect(withoutTrack).toContain('Nothing Playing Now!');
+    expect(withoutTrack).toContain('is-idle');
     expect(withoutTrack).toContain('id="now-playing-panel"');
+  });
+
+  it('shows "Loading song..." while a switch is in flight', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(NowPlayingPanel, {
+        track: { kind: 'preview', title: 'Old Song', artist: 'a', bgUrl: '', src: 'blob:old' },
+        isPlaying: false,
+        currentTime: 0,
+        duration: 0,
+        shuffle: false,
+        controlsEnabled: true,
+        loading: true,
+        onToggleShuffle: vi.fn(),
+        onPrevious: vi.fn(),
+        onTogglePlay: vi.fn(),
+        onNext: vi.fn(),
+        onSeek: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain('Loading song...');
+    expect(html).not.toContain('Old Song');
   });
 
   it('disables controls when controlsEnabled is false', () => {

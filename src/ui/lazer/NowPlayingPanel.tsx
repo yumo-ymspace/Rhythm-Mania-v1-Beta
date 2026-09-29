@@ -44,10 +44,10 @@ export interface NowPlayingPanelProps {
   /** Committed seek target in seconds (drag end / click / keyboard). */
   onSeek: (seconds: number) => void;
   onClosePlaylistSoon?: () => void;
+  /** True from a switch click until the new track is audible: title reads "Loading song...". */
+  loading?: boolean;
   /** Hover intent for the App-level hover-to-open (button or panel keeps it alive). */
   onHoverChange?: (hovering: boolean) => void;
-  /** Inline positioning (App centres the panel on the toolbar button). */
-  style?: React.CSSProperties;
 }
 
 function progressRatio(currentTime: number, duration: number): number {
@@ -76,7 +76,7 @@ export const NowPlayingPanel: React.FC<NowPlayingPanelProps> = ({
   onSeek,
   onClosePlaylistSoon,
   onHoverChange,
-  style,
+  loading = false,
 }) => {
   const barRef = useRef<HTMLDivElement | null>(null);
   const [seekRatio, setSeekRatio] = useState<number | null>(null);
@@ -202,14 +202,14 @@ export const NowPlayingPanel: React.FC<NowPlayingPanelProps> = ({
     }
   }, [controlsEnabled, track, duration, currentTime, onSeek]);
 
-  const title = track?.title || 'Nothing Playing Now!';
+  const title = loading ? 'Loading song...' : (track?.title || 'Nothing Playing Now!');
   const artist = track?.artist || '';
   const hasDuration = Number.isFinite(duration) && duration > 0;
 
   return (
     <motion.div
       id="now-playing-panel"
-      className="lazer-now-playing"
+      className={`lazer-now-playing${!track || loading ? ' is-idle' : ''}`}
       role="region"
       aria-label="Now playing"
       initial={{ opacity: 0, scale: 0.96 }}
@@ -218,7 +218,6 @@ export const NowPlayingPanel: React.FC<NowPlayingPanelProps> = ({
       transition={{ duration: LAZER_DURATION.overlay, ease: LAZER_EASE_OUT_QUINT }}
       onMouseEnter={() => onHoverChange?.(true)}
       onMouseLeave={() => onHoverChange?.(false)}
-      style={style}
     >
       <div className="lazer-now-playing-art" aria-hidden="true">
         {track?.bgUrl ? (

@@ -171,8 +171,17 @@ export function getVisibleNotes(
           }
           if (!spanFallback) {
             picked.reverse();
-            const slice = orderedNotes.slice(startIdx, endIdx);
-            windowed = picked.length > 0 ? [...picked, ...slice] : slice;
+            if (picked.length === 0) {
+              windowed = orderedNotes.slice(startIdx, endIdx);
+            } else {
+              // Concatenate without spread allocs: the windowed list is
+              // rebuilt every frame on the render hot path.
+              const sliceLen = endIdx - startIdx;
+              const combined: HitObject[] = new Array(picked.length + sliceLen);
+              for (let p = 0; p < picked.length; p++) combined[p] = picked[p];
+              for (let s = 0; s < sliceLen; s++) combined[picked.length + s] = orderedNotes[startIdx + s];
+              windowed = combined;
+            }
           }
         }
       }

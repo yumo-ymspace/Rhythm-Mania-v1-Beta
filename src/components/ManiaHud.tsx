@@ -24,7 +24,7 @@ export interface HudHitErrorTick {
 /**
  * Draws one argon dual vertical hit-error meter. This is the sole owner of
  * hit-error meter rendering: the playfield canvas never draws HUD meters.
- * Called imperatively from the gameplay 6Hz HUD flush with the live tick list
+ * Called imperatively from the gameplay fast-tier HUD flush with the live tick list
  * so React reconciliation stays off the per-frame path. Each meter canvas uses
  * its own cached 2D context; the right meter is mirrored via CSS `scale-x-[-1]`.
  *
@@ -177,6 +177,9 @@ export interface ManiaHudProps {
   hp: number; // 0..100
   accuracy?: number; // 0..100
   combo?: number;
+  // Pop-animation generation: the combo number renders live, but the pop
+  // re-fires only when this key changes (bumped at the 3Hz slow tier).
+  comboPopKey?: number;
   penar?: PenarBreakdown | null;
   showPenar?: boolean;
   keyCount?: number;
@@ -200,11 +203,15 @@ export interface ManiaHudProps {
  * In ArgonSkin.cs: two stacked pieces (~380x72), second piece offset by (4, 5),
  * Shear = (0.8, 0), CornerRadius = 10, AccentColour = #66CCFF with 0% to 25% vertical gradient.
  */
-export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; className?: string }> = ({
+export const ArgonWedgePieces = React.memo(function ArgonWedgePieces({
   width = 380,
   height = 72,
   className = '',
-}) => {
+}: {
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
   // Shear factor 0.8 on X axis: shear offset = height * 0.8 = 57.6
   const shearOffset = height * 0.8;
   const rectWidth = Math.max(10, width - shearOffset);
@@ -289,7 +296,7 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
       </svg>
     </div>
   );
-};
+});
 
 /**
  * ArgonHealthDisplay component
@@ -297,10 +304,13 @@ export const ArgonWedgePieces: React.FC<{ width?: number; height?: number; class
  * In ArgonSkin.cs: width ~300, bar height 30, position ~(50, 20),
  * with a short horizontal accent line (45x3) beside it at x=0.
  */
-export const ArgonHealthDisplay: React.FC<{ hp: number; className?: string }> = ({
+export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
   hp,
   className = '',
-}) => {
+}: {
+  hp: number;
+  className?: string;
+}) {
   const clampedHp = Math.max(0, Math.min(100, hp));
   const isCritical = clampedHp < 20;
 
@@ -308,33 +318,34 @@ export const ArgonHealthDisplay: React.FC<{ hp: number; className?: string }> = 
     <div className={`flex items-center gap-2 pointer-events-none select-none ${className}`}>
       {/* Short horizontal accent line beside health display (45x3, rounded-full) */}
       <div
-        className="w-[45px] h-[3px] rounded-full bg-[#7ED7FD]/80 shadow-[0_0_8px_rgba(126,215,253,0.6)] shrink-0"
+        className="w-[45px] h-[3px] rounded-full bg-[#7ED7FD]/80 shrink-0"
         aria-hidden="true"
       />
 
       {/* Health bar container (width 300px, height 30px, pill shape) */}
       <div
         id="argon-health-display"
-        className="w-[min(300px,calc(100vw-80px))] h-[30px] rounded-full bg-slate-950/70 border border-white/15 p-[3px] relative overflow-hidden backdrop-blur-sm shadow-inner"
+        className="w-[min(300px,calc(100vw-80px))] h-[30px] rounded-full bg-slate-950/85 border border-white/15 p-[3px] relative overflow-hidden"
         role="progressbar"
         aria-valuenow={Math.round(clampedHp)}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label="Health"
       >
-        {/* Fill bar */}
+        {/* Fill bar: transition-none since the parent flushes quantized HP at
+            12.5Hz — a CSS transition would restart on every flush. */}
         <div
-          className={`h-full rounded-full transition-all duration-100 ease-out ${
+          className={`h-full rounded-full transition-none ${
             isCritical
-              ? 'bg-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.9)]'
-              : 'bg-white shadow-[0_0_12px_rgba(126,215,253,0.85)]'
+              ? 'bg-rose-100'
+              : 'bg-white'
           }`}
           style={{ width: `${clampedHp}%` }}
         />
       </div>
     </div>
   );
-};
+});
 
 /**
  * ArgonScoreCounter component
@@ -342,10 +353,13 @@ export const ArgonHealthDisplay: React.FC<{ hp: number; className?: string }> = 
  * In ArgonSkin.cs: ShowLabel = false (no "Score" label),
  * sits on top of the wedges, tabular digits, 6 display digits with wireframe background.
  */
-export const ArgonScoreCounter: React.FC<{ score: number; className?: string }> = ({
+export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   score,
   className = '',
-}) => {
+}: {
+  score: number;
+  className?: string;
+}) {
   const safeScore = Math.max(0, Math.round(score));
   const scoreStr = safeScore.toString();
   const minDigits = 6;
@@ -375,31 +389,34 @@ export const ArgonScoreCounter: React.FC<{ score: number; className?: string }> 
       {scoreStr.split('').map((d, i) => (
         <span
           key={`digit-${i}`}
-          className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
+          className="text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
         >
           {d}
         </span>
       ))}
     </div>
   );
-};
+});
 
 /**
  * ArgonAccuracyCounter component
  * Recreates the Argon accuracy counter from osu!(lazer) Argon skin.
  * Positioned top-right ~(-20, 20), tabular digits, two decimal places with %.
  */
-export const ArgonAccuracyCounter: React.FC<{ accuracy?: number; className?: string }> = ({
+export const ArgonAccuracyCounter = React.memo(function ArgonAccuracyCounter({
   accuracy = 100,
   className = '',
-}) => {
+}: {
+  accuracy?: number;
+  className?: string;
+}) {
   const safeAcc = Math.max(0, Math.min(100, accuracy));
   const accStr = safeAcc.toFixed(2);
 
   return (
     <div
       id="argon-accuracy-counter"
-      className={`font-display font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white ${className}`}
+      className={`font-display font-black select-none pointer-events-none [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white ${className}`}
       aria-label={`Accuracy: ${accStr}%`}
     >
       <span className="text-2xl sm:text-3xl md:text-4xl tracking-tight tabular-nums font-black">
@@ -408,7 +425,7 @@ export const ArgonAccuracyCounter: React.FC<{ accuracy?: number; className?: str
       <span className="text-base sm:text-xl md:text-2xl font-bold opacity-90 ml-0.5">%</span>
     </div>
   );
-};
+});
 
 /**
  * ArgonPenarCounter component
@@ -416,17 +433,20 @@ export const ArgonAccuracyCounter: React.FC<{ accuracy?: number; className?: str
  * Positioned directly under accuracy, scale ~0.8 relative to accuracy.
  * Never labelled "pp"; explicitly labelled "PENAR" with tooltip.
  */
-export const ArgonPenarCounter: React.FC<{
+export const ArgonPenarCounter = React.memo(function ArgonPenarCounter({
+  penar,
+  className = '',
+}: {
   penar?: PenarBreakdown | null;
   className?: string;
-}> = ({ penar, className = '' }) => {
+}) {
   const valueStr = formatPenar(penar);
 
   return (
     <div
       id="argon-penar-counter"
       title="Performance Evaluation & Numerical Achievement Rating"
-      className={`font-display font-black select-none pointer-events-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white/90 ${className}`}
+      className={`font-display font-black select-none pointer-events-none [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white/90 ${className}`}
       aria-label={`PENAR: ${valueStr}`}
     >
       <span className="text-xl sm:text-2xl md:text-3xl tracking-tight tabular-nums font-black">
@@ -437,24 +457,29 @@ export const ArgonPenarCounter: React.FC<{
       </span>
     </div>
   );
-};
+});
 
 /**
  * ArgonComboCounter component
  * Recreates the large combo counter from osu!(lazer) Argon skin.
  * Positioned bottom-left, scale ~1.3, bumping on combo increase.
  */
-export const ArgonComboCounter: React.FC<{ combo?: number; className?: string }> = ({
+export const ArgonComboCounter = React.memo(function ArgonComboCounter({
   combo = 0,
   className = '',
-}) => {
+}: {
+  combo?: number;
+  className?: string;
+}) {
   if (combo <= 0) return null;
 
+  // The number updates on every parent render (fast tier), but the pop
+  // animation only re-fires when the parent remounts this node via its
+  // `key` (slow 3Hz tier) — no per-combo remount from inside.
   return (
     <div
       id="argon-combo-counter"
-      key={`argon-combo-${combo}`}
-      className={`flex flex-col items-start leading-none font-display select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] drop-shadow-[0_4px_12px_rgba(0,0,0,0.95)] animate-combo-pop ${className}`}
+      className={`flex flex-col items-start leading-none font-display select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] [text-shadow:0_2px_6px_rgba(0,0,0,0.95)] animate-combo-pop ${className}`}
       aria-label={`Combo: ${combo}`}
     >
       <div className="text-5xl sm:text-6xl font-[900] tracking-tighter text-white">
@@ -462,7 +487,7 @@ export const ArgonComboCounter: React.FC<{ combo?: number; className?: string }>
       </div>
     </div>
   );
-};
+});
 
 /**
  * ArgonKeyCounter component
@@ -470,11 +495,15 @@ export const ArgonComboCounter: React.FC<{ combo?: number; className?: string }>
  * Lights up bright cyan with press animation when key is pressed.
  * Positioned bottom-right, above song progress bar.
  */
-export const ArgonKeyCounter: React.FC<{
+export const ArgonKeyCounter = React.memo(function ArgonKeyCounter({
+  keyCount = 4,
+  keyLabels = [],
+  className = '',
+}: {
   keyCount?: number;
   keyLabels?: string[];
   className?: string;
-}> = ({ keyCount = 4, keyLabels = [], className = '' }) => {
+}) {
   const keys = Array.from({ length: keyCount }, (_, i) => {
     const rawLabel = keyLabels[i] || `K${i + 1}`;
     const displayLabel = rawLabel === ' ' ? 'SPC' : rawLabel.toUpperCase().slice(0, 3);
@@ -491,7 +520,7 @@ export const ArgonKeyCounter: React.FC<{
         <div
           key={k.id}
           id={`argon-key-box-${k.id}`}
-          className="w-8 sm:w-9 h-11 sm:h-12 rounded-lg bg-slate-950/75 border border-white/15 backdrop-blur-sm flex flex-col items-center justify-between py-1 px-0.5 transition-all duration-75 shadow-sm"
+          className="w-8 sm:w-9 h-11 sm:h-12 rounded-lg bg-slate-950/85 border border-white/15 flex flex-col items-center justify-between py-1 px-0.5 transition-colors duration-75"
         >
           <span className="font-display text-[10px] sm:text-[11px] font-bold uppercase text-slate-300 select-none">
             {k.label}
@@ -506,24 +535,24 @@ export const ArgonKeyCounter: React.FC<{
       ))}
     </div>
   );
-};
+});
 
 /**
  * ArgonDualHitErrorMeters component
  * Two vertical BarHitErrorMeters flanking the playfield stage.
  * Left meter is positioned at stage left edge; Right meter is mirrored on stage right edge.
  */
-export const ArgonDualHitErrorMeters: React.FC<{
-  playfieldWidthPercent?: number;
-  leftCanvasRef?: React.Ref<HTMLCanvasElement>;
-  rightCanvasRef?: React.Ref<HTMLCanvasElement>;
-  className?: string;
-}> = ({
+export const ArgonDualHitErrorMeters = React.memo(function ArgonDualHitErrorMeters({
   playfieldWidthPercent = 40,
   leftCanvasRef,
   rightCanvasRef,
   className = '',
-}) => {
+}: {
+  playfieldWidthPercent?: number;
+  leftCanvasRef?: React.Ref<HTMLCanvasElement>;
+  rightCanvasRef?: React.Ref<HTMLCanvasElement>;
+  className?: string;
+}) {
   const halfPercent = Math.max(10, Math.min(48, (playfieldWidthPercent || 40) / 2));
 
   return (
@@ -567,21 +596,28 @@ export const ArgonDualHitErrorMeters: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 /**
  * ArgonSongProgress component
  * Full-width (scale X 0.9) rounded pill progress bar at bottom of the screen.
  * Displays elapsed time on the left, remaining time on the right, and bright fill.
  */
-export const ArgonSongProgress: React.FC<{
+export const ArgonSongProgress = React.memo(function ArgonSongProgress({
+  progressBarRef,
+  densityCanvasRef,
+  densityBins,
+  timeLabelRef,
+  timeLeftLabelRef,
+  className = '',
+}: {
   progressBarRef?: React.Ref<HTMLDivElement>;
   densityCanvasRef?: React.Ref<HTMLCanvasElement>;
   densityBins?: Float32Array;
   timeLabelRef?: React.Ref<HTMLSpanElement>;
   timeLeftLabelRef?: React.Ref<HTMLSpanElement>;
   className?: string;
-}> = ({ progressBarRef, densityCanvasRef, densityBins, timeLabelRef, timeLeftLabelRef, className = '' }) => {
+}) {
   const localCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
   const setMergedCanvasRef = React.useCallback(
@@ -631,13 +667,13 @@ export const ArgonSongProgress: React.FC<{
       {/* Current elapsed time label */}
       <span
         ref={timeLabelRef}
-        className="font-display text-[11px] font-bold text-white/80 tabular-nums shrink-0 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+        className="font-display text-[11px] font-bold text-white/80 tabular-nums shrink-0 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]"
       >
         0:00
       </span>
 
       {/* Pill-shaped progress track with density histogram */}
-      <div className="flex-1 h-[10px] sm:h-[12px] rounded-full bg-slate-950/75 border border-white/15 p-[2px] relative overflow-hidden backdrop-blur-sm shadow-inner">
+      <div className="flex-1 h-[10px] sm:h-[12px] rounded-full bg-slate-950/85 border border-white/15 p-[2px] relative overflow-hidden">
         {/* Background density histogram */}
         <canvas
           ref={setMergedCanvasRef}
@@ -647,10 +683,10 @@ export const ArgonSongProgress: React.FC<{
           aria-hidden="true"
         />
 
-        {/* Elapsed white fill with glowing accent border */}
+        {/* Elapsed white fill */}
         <div
           ref={progressBarRef}
-          className="h-full rounded-full bg-white shadow-[0_0_12px_rgba(126,215,253,0.9)] transition-none relative z-10"
+          className="h-full rounded-full bg-white transition-none relative z-10"
           style={{ width: '0%' }}
         />
       </div>
@@ -658,13 +694,13 @@ export const ArgonSongProgress: React.FC<{
       {/* Remaining time label */}
       <span
         ref={timeLeftLabelRef}
-        className="font-display text-[11px] font-bold text-white/80 tabular-nums shrink-0 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+        className="font-display text-[11px] font-bold text-white/80 tabular-nums shrink-0 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]"
       >
         -0:00
       </span>
     </div>
   );
-};
+});
 
 /**
  * ManiaHud component
@@ -679,11 +715,12 @@ export const ArgonSongProgress: React.FC<{
  * - ArgonDualHitErrorMeters flanking the playfield stage (left and right mirrored)
  * - ArgonSongProgress centered at bottom
  */
-export const ManiaHud: React.FC<ManiaHudProps> = ({
+export const ManiaHud = React.memo(function ManiaHud({
   score,
   hp,
   accuracy = 100,
   combo = 0,
+  comboPopKey = 0,
   penar,
   showPenar = true,
   keyCount = 4,
@@ -699,7 +736,7 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
   leftHitErrorCanvasRef,
   rightHitErrorCanvasRef,
   className = '',
-}) => {
+}: ManiaHudProps) {
   return (
     <div
       id="mania-hud"
@@ -729,7 +766,7 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
 
         {/* Replay indicator if in replay spectator mode */}
         {isReplayMode && (
-          <div className="mt-2 ml-12 flex items-center gap-2 bg-cyan-950/70 border border-cyan-400/40 text-cyan-400 px-3 py-1 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.25)] text-[10px] font-extrabold uppercase tracking-[0.2em]">
+          <div className="mt-2 ml-12 flex items-center gap-2 bg-cyan-950/85 border border-cyan-400/40 text-cyan-400 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-[0.2em]">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
             <span>REPLAY</span>
           </div>
@@ -751,9 +788,11 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
         rightCanvasRef={rightHitErrorCanvasRef}
       />
 
-      {/* BOTTOM-LEFT: Combo Counter */}
+      {/* BOTTOM-LEFT: Combo Counter. The number updates every render (fast
+          tier) but the pop animation only re-fires when comboPopKey changes
+          (slow 3Hz tier) via the remount key. */}
       <div className={`absolute left-4 sm:left-[50px] ${isReplayMode || isAutoplay ? 'bottom-24 sm:bottom-28' : 'bottom-6 sm:bottom-8'}`}>
-        <ArgonComboCounter combo={combo} />
+        <ArgonComboCounter key={`argon-combo-pop-${comboPopKey}`} combo={combo} />
       </div>
 
       {/* BOTTOM-RIGHT: Key Counter */}
@@ -773,6 +812,6 @@ export const ManiaHud: React.FC<ManiaHudProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default ManiaHud;

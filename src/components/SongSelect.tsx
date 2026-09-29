@@ -112,8 +112,8 @@ interface SongSelectProps {
   isLoading?: boolean;
   /** Reports the currently selected map (slim metadata) for the Now Playing bar. */
   onPreviewTrackChange?: (track: { id: string; title: string; artist: string; bgUrl?: string; audioUrl?: string } | null) => void;
-  /** Receives the Next/Previous stepper for the Now Playing bar (dir + shuffle). */
-  onRegisterStep?: (step: (dir: 1 | -1, shuffle: boolean) => void) => void;
+  /** Receives the Next/Previous stepper for the Now Playing bar (dir + shuffle). Returns true when the selection actually changed. */
+  onRegisterStep?: (step: (dir: 1 | -1, shuffle: boolean) => boolean) => void;
   /** Explicit pause from the Now Playing bar: suppresses preview autoplay. */
   previewPaused?: boolean;
 }
@@ -895,7 +895,7 @@ export default function SongSelect({
     return cached;
   };
 
-  const handleSelectCustomMap = useCallback(async (map: Beatmap, forceUnpack = false) => {
+  const handleSelectCustomMap = useCallback(async (map: Beatmap, forceUnpack = false, immediate = false) => {
     const skipVideo = settings.disableVideo === true;
     const wantsVideo = shouldUnpackVideo((map as any).videoFilename || '', { skipVideo });
     const cacheReady = (c: { audioUrl: string; videoUrl: string; bgUrl: string } | null) =>
@@ -943,6 +943,21 @@ export default function SongSelect({
 
     const cachedAfterBg = storageManager.lruMediaCache.get(map.id);
     if (cacheReady(cachedAfterBg)) return;
+
+    // Immediate mode (Now Playing next/previous): skip the 350ms debounce
+    // and unpack straight away so button-driven switches start faster.
+    // Rapid arrow-key navigation keeps the debounced path below.
+    if (immediate) {
+      try {
+        await unpackBeatmap(map, false, { skipVideo });
+        if (isStale()) return;
+        applyCachedMediaToMap(map, skipVideo);
+        setUnpackTrigger(prev => prev + 1);
+      } catch (err) {
+        if (!isStale()) console.warn('Unpacker encountered an issue resolving map media channels:', err);
+      }
+      return;
+    }
 
     // Tier 2: full audio/video unpack, debounced so rapid navigation
     // coalesces into a single decompress for the settled selection.
@@ -1016,6 +1031,19 @@ export default function SongSelect({
     previewPlayer.setVolume(settings.musicVolume * settings.previewVolume * settings.masterVolume);
   }, [settings.musicVolume, settings.previewVolume, settings.masterVolume]);
 
+  // Pre-decode the neighbouring tracks' audio so the next Now Playing step
+  // starts from a warm buffer (the cache holds current + both neighbours).
+  useEffect(() => {
+    if (!settings.enableSongPreview || filteredCustomMaps.length < 2) return;
+    const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapId);
+    if (currentIdx < 0) return;
+    for (const dir of [-1, 1] as const) {
+      const neighbour = filteredCustomMaps[(currentIdx + dir + filteredCustomMaps.length) % filteredCustomMaps.length];
+      const src = neighbour?.audioUrl;
+      if (src && src.startsWith('blob:')) void previewPlayer.warm(src);
+    }
+  }, [selectedCustomMapId, filteredCustomMaps, settings.enableSongPreview]);
+
   // Stop preview when leaving Song Select
   useEffect(() => () => previewPlayer.stop(), []);
 
@@ -1040,17 +1068,20 @@ export default function SongSelect({
   // steps move to the adjacent entry (wrapping); shuffle draws a random
   // entry that differs from the current one (see utils/nowPlaying, lazer
   // MusicController parity). Selection recentres + expands like manual picks.
-  const stepSelection = useCallback((dir: 1 | -1, shuffle: boolean) => {
-    if (filteredCustomMaps.length === 0) return;
+  const stepSelection = useCallback((dir: 1 | -1, shuffle: boolean): boolean => {
+    if (filteredCustomMaps.length === 0) return false;
     const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapIdRef.current);
     const nextIdx = pickAdjacentIndex(filteredCustomMaps.length, currentIdx, dir, shuffle);
-    if (nextIdx < 0) return;
+    if (nextIdx < 0) return false;
     const next = filteredCustomMaps[nextIdx];
-    if (!next) return;
+    if (!next) return false;
+    const changed = next.id !== selectedCustomMapIdRef.current;
     const nextKey = getMapSongKey(next);
     if (nextKey !== expandedSongKey) setManualExpandedSongKey(nextKey);
-    void handleSelectCustomMap(next);
+    // Immediate unpack: panel buttons skip the navigation debounce.
+    void handleSelectCustomMap(next, false, true);
     requestCarouselCenter(nextKey);
+    return changed;
   }, [filteredCustomMaps, expandedSongKey, getMapSongKey, handleSelectCustomMap, requestCarouselCenter]);
 
   useEffect(() => {
@@ -1510,7 +1541,10 @@ export default function SongSelect({
               { key: 'sort' as const, label: 'Sort', value: sortBy, options: ['Title', 'Artist', 'Difficulty', 'BPM', 'Length', 'Date Added'] },
               { key: 'group' as const, label: 'Group', value: groupBy, options: ['None', 'Artist', 'Creator'] },
               { key: 'collection' as const, label: 'Collection', value: collectionFilter, options: ['All beatmaps', 'Downloaded', 'Favorites'] },
-            ]).map((dd) => (
+            ]).map((dd) => {
+              // S for this menu's clip + per-row hug offsets below.
+              const s = menuSlantFor(dd.options.length);
+              return (
               <div key={dd.key} className="relative flex items-center gap-0">
                 <span className="lazer-filter-tab">{dd.label}</span>
                 <button
@@ -1526,12 +1560,13 @@ export default function SongSelect({
                     <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
                     <div
                       className="absolute left-0 right-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 py-1 min-w-[150px] lazer-filter-menu"
-                      style={{ '--dd-slant': `${menuSlantFor(dd.options.length)}px` } as React.CSSProperties}
+                      style={{ '--dd-slant': `${s}px` } as React.CSSProperties}
                     >
-                      {dd.options.map((opt) => (
+                      {dd.options.map((opt, i) => (
                         <button
                           key={opt}
                           type="button"
+                          style={{ paddingLeft: 12 + Math.round(s * (1 - (i + 0.5) / dd.options.length)) }}
                           onClick={() => {
                             if (dd.key === 'sort') setSortBy(opt);
                             else if (dd.key === 'group') setGroupBy(opt);
@@ -1549,8 +1584,9 @@ export default function SongSelect({
                   </>
                 )}
               </div>
-            ))}
-          </div>
+              );
+            })}
+           </div>
           </div>
 
           {/* CAROUSEL SETS AND DIFFICULTY PILLS (TASK-V-021) */}

@@ -68,7 +68,14 @@ function sanitizeCount(value: unknown): number {
 }
 
 function hasMod(mods: readonly string[], id: string): boolean {
-  return mods.some((mod) => typeof mod === 'string' && mod.toUpperCase() === id);
+  // Single pass without a `.some()` closure alloc (this runs on the HUD
+  // flush tier). Comparison stays case-insensitive: callers pass both
+  // canonical ('NF') and raw ('nf') ids.
+  for (let i = 0; i < mods.length; i++) {
+    const mod = mods[i];
+    if (typeof mod === 'string' && mod.toUpperCase() === id) return true;
+  }
+  return false;
 }
 
 /**

@@ -8,1165 +8,298 @@
 | **Author** | Design (draft) |
 | **Date** | 2026-09-12 |
 | **Status** | Draft |
-| **App version** | `v0.9.8` (`metadata.json` / `index.html`); `package.json` `"version": "latest"`. Visual target for session chrome. |
-| **Visual SoT** | Every still under `visual-refs/` (measured). Not the previous `DESIGN.md`. Not the current React chrome. |
+| **App version** | `package.json` `"version": "latest"`; `metadata.json` / `index.html` title `v1 Beta`. `api/config.ts` + `api/health.ts` fall back to `0.9.8` only when metadata is missing |
+| **Visual SoT** | Every still under `visual-refs/` (measured). Not the previous `DESIGN.md`. Not the current React chrome |
 | **Behaviour SoT** | Shipped behaviour in `src/` (gameplay, scoring, storage), except where this document records a **user-locked override** |
 | **Audience** | Senior engineers implementing the lazer visual rebuild |
 
-This is a **visual and interaction specification**, not a backend architecture document. Gameplay windows, scoring, holds, HP, and mods multipliers are already shipped and must not be reopened here. Catalog **chrome** is in this spec; catalog **search/download hosts** are not — see Key Decisions.
+Visual + interaction spec only. Gameplay windows, scoring, holds, HP, and mod multipliers are shipped — do not reopen them. Catalog **chrome** is in scope; catalog **hosts** are settled (unauthenticated catboy.best → Nekoha, no token) and only summarised here.
 
 ---
 
 ## Overview
 
-RhythmMania is an **offline osu!(lazer)-style mania client in the browser**. The current screens are product-complete enough to play, import, score locally, and download from mirrors, but their chrome is not the lazer client. This spec rebuilds every session surface from the captures in `visual-refs/` so an engineer can implement layout, colour, type, motion, and states **without opening osu!**.
+RhythmMania is an **offline osu!(lazer)-style mania client in the browser**: play, import, local scores, mirror downloads. This spec rebuilds every session surface from `visual-refs/` so an engineer can implement layout, colour, type, motion, and states **without opening osu!**.
 
-The proposed solution **extends the in-tree lazer UI module** (`html[data-ui="lazer"]` via `applyLazerChrome`, `src/ui/lazer/tokens.css`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts`). It recreates osu!(lazer) geometry in original CSS/canvas: sheared parallelograms, the RhythmMania cookie (never the osu! mark), Argon playfield (WebGL2 source of truth), Local-only ranking, and a PENAR slot where lazer shows PP. Official artwork, the pink-circle osu! logo, Torus, “ppy”, and osu-resources bitmaps are **not shipped**. Brand text is **RhythmMania**. Performance rating is **PENAR**, never labelled “pp”.
+Extend the in-tree lazer module (`html[data-ui]="lazer"`, `src/ui/lazer/tokens.css`, `motion.ts`, `LazerCookie`, `Shear`, `FooterBackButton`, `LazerToolbar`, `NowPlayingPanel`, `ButtonSystem`, `MenuButton`, `TriangleField`, `SongSelect*`, `ComingSoonNotifications`). Recreate lazer geometry in original CSS/canvas: sheared parallelograms, the RhythmMania cookie (never the osu! mark), WebGL2 Argon playfield (sole renderer), Local-only ranking, PENAR where lazer shows PP. Never ship official artwork, the osu! logo, Torus, "ppy", osu-resources bitmaps, or mascots. Brand text is **RhythmMania**; rating is **PENAR**, never "pp".
 
 ---
 
 ## Background & Motivation
 
-The mechanical target is current lazer mania and the visual target is `visual-refs/`. The previous `DESIGN.md` described an arcade/indigo/cyan language that is **not** this product. `docs/lazer-visual-plan.md` does not exist. This spec covers the session surfaces (global toolbar, PlayerLoader, in-client listing overlay, coming-soon wedges) alongside the screen chrome.
+Mechanical target: current lazer mania. Visual target: `visual-refs/`. The old arcade/indigo/cyan language is not this product. `docs/` contains only `rmr-format.md`; there is no `lazer-visual-plan.md`.
 
-Pain points this spec removes:
+Removes: pixel-guessing from memory, product-IA drift (global boards, osu! API search, Google login) leaking into chrome, trademarked marks, treating anything but WebGL2 Argon as playfield truth.
 
-- Implementers guessing pixels from memory or mixing stills of different resolutions.
-- Product-IA drift (Global boards, osu! API search, Google login) leaking back into chrome.
-- Shipping trademarked marks, mascots, or Torus.
-- Treating Babylon 3D as the Argon source of truth.
-
-Current implementation files (reference, not visual truth): `src/components/MainMenu.tsx`, `SongSelect.tsx`, `ManiaHud.tsx`, `ModSelectOverlay.tsx`, `OnlineBeatmapCatalog.tsx`, `PauseOverlay.tsx`, `ResultsScreen.tsx`, `GameplayCanvas.tsx`, `src/render/WebGL2PlayfieldRenderer.ts`, `src/render/argonSkin.ts`, `src/render/flashlight.ts`, `src/index.css`. Shared chrome already lives in `src/ui/lazer/` (imported from `src/index.css`; `App.tsx` calls `applyLazerChrome`). Extend that module; do not duplicate files.
+Reference (not visual truth): `MainMenu`, `SongSelect`, `ManiaHud`, `ModSelectOverlay`, `OnlineBeatmapCatalog`, `PauseOverlay`, `ResultsScreen`, `GameplayCanvas`, `WebGL2PlayfieldRenderer`, `argonSkin`, `flashlight`, `src/index.css`. `applyLazerChrome` lives in `src/ui/lazer/motion.ts` and is called from `App.tsx`; extend the module, don't duplicate files.
 
 ---
 
 ## Goals & Non-Goals
 
-### Goals
+**Goals**
 
-1. Recreate lazer **session chrome** from the stills, including idle motion, hover, enter/exit, and reduced-motion.
-2. Give every surface: layout regions + z-order, 1366×768 design units **and** a CSS mapping rule, sampled colour tokens, type, geometry, states, motion, and a “what is not copied” list.
-3. Keep the offline product: Local ranking only, device history (`rhythm_mania_v1_play_history` / IndexedDB). Listing **chrome** matches lazer; search/download stay on the live helper until a non-visual catalog task lands.
-4. Keep WebGL2 Argon as the playfield visual/latency source of truth.
-5. Preserve equal-width mania lanes, 64-bin density histogram, judgement display names Perfect → Great → Good → Ok → Meh → Miss, and the PENAR counter (`—` when uncalculated).
+1. Recreate lazer **session chrome** from stills, incl. idle motion, hover, enter/exit, reduced-motion.
+2. Per surface: layout regions + z-order, 1366×768 design units **and** a CSS mapping rule, sampled tokens, type, geometry, states, motion, "not copied" list.
+3. Keep the offline product: Local ranking only, device history (`rhythm_mania_v1_play_history` / IndexedDB v6). Listing chrome matches lazer; data stays on the live unauthenticated helper.
+4. Keep WebGL2 Argon as playfield visual/latency SoT.
+5. Preserve equal-width 1K–10K lanes, 64-bin density histogram (`computeSongDensityBins`), six judgements (internal `marvelous/perfect/great/good/bad/miss` → display `Perfect/Great/Good/Ok/Meh/Miss`), PENAR counter (`—` when uncalculated).
 
-### Non-Goals
+**Non-Goals**
 
-- Playable osu! / taiko / catch, editor, multiplayer, playlists, storyboards, chat, wiki, medals, skin JSON editor.
+- Playable osu!/taiko/catch, editor, multiplayer, playlists, storyboards, chat, wiki, medals, skin JSON editor.
 - Google OAuth, RM accounts, PostgreSQL, global/RM leaderboards, replay upload.
-- Mixing catalog **backend** (hosts, auth, failover) into overlay chrome. Live search is still Bearer + `/api/catalog/search`; live download is Catboy then osudl.org on 404. Planned unauthenticated hinai / osu.direct / Catboy hosts are **not** part of overlay chrome.
-- Restyling Settings / Skins / History chrome (no stills; keep routes working). Those surfaces are specified only as an appendix.
-- Copying `osu-resources` bitmaps, samples, the osu! wordmark, official mascots, or Torus.
-- Redesigning `limitDprToOne` (sanitizers always write `false`).
-- Reopening shipped gameplay mechanics (timing, scoring, holds, HP, mods).
-- Pixel-identical match to `osu.exe` GPU output. Fail the review if HUD corners, note construction, chrome family, or branding are wrong.
+- Restyling Settings / Skins / History chrome (no stills; appendix only).
+- Copying osu-resources bitmaps, wordmark, mascots, Torus. Redesigning `renderDpr` (1/1.5/2, default 1.5; legacy `limitDprToOne` only migrates, never ships).
+- Reopening shipped mechanics. Pixel-identical GPU match to `osu.exe` (fail review only on wrong HUD corners, note construction, chrome family, branding).
 
 ---
 
 ## Key Decisions
 
-User-locked (do not re-open) plus architectural choices this spec had to make.
-
-| Decision | Choice | Rationale |
-|---|---|---|
-| Catalog chrome vs data | **Chrome** (this spec): in-client overlay from `hud/beatmaplisting.jpg` + `beatmaplistingnosongs.jpg`. Ignore osu-web PNGs. Consumes **whatever search API exists**. **Live hosts:** `GET /api/catalog/search` (Bearer osu! token; 401 “Connect osu! to search the catalog”) and download `https://catboy.best/d/<id>` then, on HTTP 404 only, `https://osudl.org/s/<id>` (`osuTokenManager.ts`). **Planned hosts** (unauthenticated search hinai → osu.direct → Catboy; download Catboy → osu.direct → hinai; token-gate removed) are **not** part of overlay chrome. Overlay chrome **must ship** against the live helper; do not wait for hinai/osu.direct. | User lock on chrome. Do not mix catalog backend into overlay chrome. |
-| Main menu options | Show **all** lazer options (settings, play, edit, browse, exit; play → solo / multi / playlists). Unavailable items visible, slightly greyed, “Coming soon”. | User lock. Do not delete chrome to simplify. |
-| Global toolbar | Recreate the stills **except omit** ruleset icons, news, chat, social. Keep settings, home, changelog, wiki, beatmap listing, globe, now-playing, local name + avatar, clock, bell. Out-of-scope destinations: greyed / coming-soon unless a real route exists. | User lock. Rankings (people) is present in stills between wiki and listing; **keep it, coming-soon** — it was not in the omit list. |
-| Pause / fail red button | Label **Quit**, not Exit. Keep `onExit` / `pause-quit-btn` ids. | User lock; stills win over older copy. |
-| Song Select ranking | Lazer chrome (Details / Ranking, Scope / Sort / Selected Mods) but **Local only**. No Global tab. No “Please sign in to view online leaderboards!”. Empty copy **“No records yet!”**. | User lock. Stills that show Global + sign-in (`song-select/song select.png`) are layout references only for the rest of V2. |
-| Results | Layout from `visual-refs/results/osu_2026-09-12_19-51-20.jpg` and `19-51-31.jpg` (osu!standard captures). Adapt judgements to mania; PP cell → **PENAR** (`—` when uncalculated). After a just-finished play, add Retry / Replay without breaking the history-browse footer. | User lock. See §12 for the mapping. |
-| PlayerLoader | **Include**, matching `hud/pre game stage.png`. Replace osu! mark with RhythmMania cookie. | User lock. First paint of `/play`. |
-| Coordinate system | Stills are **1366×768 du**. Toolbar/footer **bars** are `100%` viewport. Listing **panel** is inset (x=102–1264 du desktop; 8px inset compact — not edge-to-edge). Only **inner** sizes multiply `--rm-u`. Desktop ≥721px: `--rm-u: min(100vw / 1366, 100vh / 768)` in CSS. ≤720px: `--rm-u: 1`. Chrome shear-off at **`max-width: 720px`** (axis-aligned compact band). | User-required dual labelling. 1365×767 PNGs are 1px crops of 1366×768. |
-| Coming-soon pattern | Opacity **0.50**, no grayscale wash that changes hue, `cursor: default`, click no-op, tooltip **“Coming soon”**. Hover captions still show the lazer title/subtitle. | One pattern for menu wedges, toolbar icons, mods, listing filters, and footer extras. |
-| Listing mode | **osu!mania locked selected**. Other modes visible, greyed, unclickable. Converts dropped (Show converts greyed on Song Select). | Product is mania-only. |
-| Empty listing art | Keep layout + copy **“… nope, nothing found.”** Do **not** copy the empty-listing character. Type-only empty state; optional original triangle-field motif in the illustration slot. | Legal: official mascots are not ours. |
-| Logo | Pink disc `#e967a1`, white ring, inner triangles, spectrum bars, **“RM”** (or RhythmMania wordmark if art exists). Never “osu!”. | Legal + still construction. |
-| Fonts | **Inter / Space Grotesk / JetBrains Mono**. Torus is forbidden. Space Grotesk stands in for Torus Alternate on large titles. The Google Fonts query includes Space Grotesk **600**. Score/combo use JetBrains Mono **700** (already loaded) — do not specify 800–900. | User lock + current `src/index.css` weights. |
-| Argon column colours | Cite `getArgonColumnColor` / `argonPaletteForKeyCount` in `src/render/argonSkin.ts`. Do **not** apply “UPDATED” mock rows from the colour-spec stills. | Live gameplay stills + shipped table. |
-| Results action mapping | History-browse footer from stills: Back, download (green), playlist (coming-soon), heart (favourite). **Just-finished play** inserts Retry + Replay (watch) in the gap between Back and the green cluster **without translating** Back or green. Exact widths in §12. Compact wrap/priority in §12 / §16. | User lock; stills lack Retry/Replay because they are history browse. |
-| Song Select V2 wedge | Decorative left metadata **500 du ±20** on desktop. No shear at 390×844. | User lock (~480–520). |
-| Density histogram | 64 bins in map time, rate-invariant (`computeSongDensityBins`). | Already shipped; HUD must keep it. |
-| WebGL2 Argon SoT | WebGL2 Argon is SoT. The two RhythmPlus bar skins render their own slim-bar geometry (filled classic / outlined dynamic) with legacy lane colors; they are not Argon SoT and not a visual review target. | Single WebGL2 renderer. |
-| Shared primitives | Extend `src/ui/lazer/` (`tokens.css`, `applyLazerChrome`, `LazerCookie`, `Shear`, `FooterBackButton`, `motion.ts` / `useLazerReducedMotion`). Add `ComingSoon` and `--rm-u`. Do not duplicate files. | The `src/ui/lazer/` primitives already exist. |
-| Display name | Persist `localDisplayName: ''`. Render fallback **`Guest`** (stills: menu chip, pause rank pill). One constant. | `defaultSettings.ts` empty; `SongSelect.tsx` already falls back to Guest. |
-| Parked cookie | **200 du** diameter (±20 du still-diff). Stills win; do not use the ~0.2× menu estimate (~96 du). | Measured clipped disc on Song Select stills. |
-| Rankings toolbar icon | Keep, **coming-soon** (no global boards). | Present in stills; not in the omit list. |
-| PlayerLoader fields | See §7 table. `backgroundDim` exists. Play blur: **coming-soon**. Hitsounds toggle = `hitsoundVolume > 0`. Per-map offset: App-owned **`playSessionOffsetMs: number`** (not `GameSettings`). PlayerLoader writes it; App passes `settings.audioOffset + playSessionOffsetMs` into `GameplayCanvas`; **clear on leaving `/play`**. Do not persist via `sanitizeSettings`. Auto-advance: **decode + 400ms**. | Still has no click-to-start; do not invent persistence for visual chrome. |
-| History entry | Keep route `/history`. Add Song Select Options → **View play history**. Results already browses local scores. **No** main-menu History wedge (lazer has none). Settings / Skins / History chrome restyle is out of scope (appendix). | Do not invent those screens without stills; menu chrome must not orphan History. |
-| Cinema | `CN` stays the shipped cinema/autoplay path (`GameplayCanvas` hides `.playfield-chassis-container`). Do **not** alias to `disableVideo`. | Still: “Watch the video without visual distractions.” |
-| Exit confirm | Copy **“Return to the title screen?”**. Confirm → menu **Initial**. Never `window.close()`. | User lock. No still. |
-| Details tab | Source, tags, mapper. Inter 13. Spacing unverified (no filled still). | User lock. |
-| Toolbar extras | Changelog, wiki, globe, **notifications bell**: **coming-soon**. Do **not** open osu! web. | User lock. Rankings already coming-soon. |
-| Results grade ticks | Infer from lazer MIT (`AccuracyCircle` / `GradedCircles` / `ScoreProcessor`). Stills remain SoT for A and C placement. SS/S/F from source. See §12. | User lock. |
-| Listing view | **Grid only.** No working list view. Omit the list-mode button (still shows grid + list icons; ship grid only, active). | User lock. |
-| Calibration copy | In-play overlay: keep still string **`Previous play: Previous play too short to use for calibration`** (red) when the offset wizard has no sample. | User lock. |
+| Decision | Choice |
+|---|---|
+| Catalog chrome vs data | Chrome from `hud/beatmaplisting.jpg` + `beatmaplistingnosongs.jpg` (ignore osu-web PNGs). Data: unauthenticated `GET /api/catalog/search` (catboy.best primary `?query=&mode=3&status=`, Nekoha fallback; `q` required ≤100, `s` = ranked/loved/graveyard/any) + download `catboy.best/d/<id>` → `mirror.nekoha.moe/api/download/<id>` on any Catboy failure (`osuTokenManager.ts`). No Bearer token, no 401 connect copy, no osudl.org/hinai/osu.direct. Ship chrome against this helper |
+| Menu options | Show all lazer options (settings, play, edit, browse, exit; play → solo/multi/playlists). Unavailable = visible, greyed, "Coming soon" |
+| Toolbar | Stills minus ruleset icons, news, chat, social. Keep settings, home, changelog, wiki, rankings (coming-soon, present in stills), listing, globe, now-playing, name+avatar, clock, bell. No-route destinations greyed/coming-soon |
+| Pause/fail red button | **Quit** (keep `onExit` / `pause-quit-btn` ids) |
+| Song Select ranking | Lazer chrome (Details/Ranking, Scope/Sort/Selected Mods) but **Local only**. No Global tab, no sign-in copy. Empty: **"No records yet!"** (`song-select/song select.png` Global is layout-only) |
+| Results | Layout from `results/osu_2026-09-12_19-51-20/31.jpg` (osu!standard captures). Mania judgements; PP cell → **PENAR**. Just-finished play inserts Retry/Replay between Back and the green cluster without translating either (§12) |
+| PlayerLoader | Include (`hud/pre game stage.png`). RM cookie, not osu! mark. First paint of `/play` |
+| Coordinates | Stills are **1366×768 du** (1365×767 PNGs = 1px crops). Bars = `100%` viewport; listing panel inset x=102–1264. Inner sizes × `--rm-u` (`min(100vw/1366, 100vh/768)` ≥721px; `1` ≤720px). Chrome shear-off `max-width: 720px` (proposal; in-tree `tokens.css` is still 480px) |
+| Coming-soon | Opacity **0.50**, no hue-shifting grayscale, `cursor: default`, click no-op + "Coming soon" toast/tooltip; hover captions still show |
+| Modes | **osu!mania locked selected**; others greyed/unclickable. Converts dropped on Song Select |
+| Empty listing | Copy **"… nope, nothing found."**, type-only; optional original triangle motif. No official character |
+| Logo | Pink disc `#e967a1`, white ring, inner triangles, spectrum bars, **"RM"**. Never "osu!" |
+| Fonts | Self-hosted only (`public/fonts`: Inter/Nunito/Orbitron/SpaceGrotesk variable TTFs + OFL txts, `@font-face` in `src/index.css`, precached in `sw.js`). No Google Fonts `@import`, no `fonts.googleapis.com`. No JetBrains Mono in-tree — score/combo/clocks use Space Grotesk / tabular system stack. Space Grotesk variable covers 300–700; do not add Torus or 800–900 |
+| Argon colours | Ship `getArgonColumnColor` / `argonPaletteForKeyCount` (`argonSkin.ts`). Ignore "UPDATED" mock rows in colour-spec stills |
+| Song Select wedge | Decorative left metadata **500 du ±20** desktop; no shear at 390×844 |
+| Primitives | Extend `src/ui/lazer/`; add `--rm-u`. New primitive is the existing `ComingSoonNotifications` pattern (there is no `ComingSoon.tsx`). Cookie sizes: idle **480**, top-level **220 ±8**, parked **200 ±20**, PlayerLoader **72 du**. Footer Back 240 du on Song Select (210px min floor until then) |
+| Display name | Persist `localDisplayName: ''` (max 32, copied to `playedBy`); render **`Guest`** |
+| History entry | Keep `/history`; add Song Select Options → **View play history**; Results browses local scores. No menu History wedge |
+| Cinema | `CN` stays shipped cinema/autoplay (`GameplayCanvas` hides `.playfield-chassis-container`). Not `disableVideo` |
+| Exit confirm | **"Return to the title screen?"** → menu Initial. Never `window.close()` |
+| Details tab | Source, tags, mapper; Inter 13; spacing unverified (no filled still) |
+| Toolbar extras | Changelog, wiki, globe, bell (+rankings): coming-soon, never open osu! web |
+| Results ticks | Lazer MIT (`AccuracyCircle`/`GradedCircles`/`ScoreProcessor`); stills SoT for A/C; SS/S/F from source (§12) |
+| Listing view | **Grid only**; omit list-mode button |
+| Calibration copy | In-play: **`Previous play: Previous play too short to use for calibration`** (red) when wizard has no sample |
+| Holds/replays | Live default hold v3 (`LAZER_HOLD_RULES_VERSION = 3`, 1.5× tail lenience); v2 tick default 50ms (10–100). Replays: lane frames + initial neutral frame, schema v3, local cap 1,000,000 frames; export envelope `rhythmmania-replay-export` (import caps 64 MiB/500 records, local-only). AT+CN = autoplay, never recorded. K-mods remap 1–10 via `convertBeatmapKeyCount`, id suffix `_converted_<N>k` |
 
 ---
 
 ## Stills inventory
 
-All paths relative to `visual-refs/`. Native sizes measured with Pillow. **1365×767 PNG** captures are treated as **1366×768 du** (1px crop). Cropped playfield screenshots are **not** full-frame; use the 1366×768 HUD JPEGs as HUD SoT and the crops as note/receptor close-ups.
+Paths relative to `visual-refs/`. 1365×767 PNGs read as 1366×768 du. Cropped playfield shots are close-ups only; 1366×768 HUD JPEGs are HUD SoT.
 
-| Still | Native px | Surface |
-|---|---|---|
-| `hud/first menu 1.png` | 1365×767 | Main menu idle |
-| `hud/first menu 2.png` | 1365×767 | Main menu top-level + toolbar |
-| `hud/first menu 3.png` | 1365×767 | Same top-level (clock tick) |
-| `hud/first menu on hover.png` | 1365×767 | Play submenu (filename is the submenu, not a Play hover) |
-| `hud/option menu.png` | 1365×767 | Song Select Options popover |
-| `hud/pre game stage.png` | 1365×767 | PlayerLoader |
-| `hud/mod menu.png` | 1365×767 | Mod Select (reduction + increase + automation) |
-| `hud/mods.jpg` | 1366×768 | Mod Select scrolled (conversion + fun + tooltip) |
-| `hud/mod2.jpg` | 1366×768 | Incompatibility tooltip |
-| `hud/mod3.jpg` | 1366×768 | Nightcore selected + rate slider |
-| `hud/modcustomise.jpg` | 1366×768 | Customise dropdown |
-| `hud/modunranked.jpg` | 1366×768 | Autoplay + UNRANKED badge |
-| `hud/songselect.jpg` | 1366×768 | Song Select V2 expanded + Local empty |
-| `hud/songslect.jpg` | 1366×768 | Carousel collapsed |
-| `hud/songslect (2).jpg` | 1366×768 | Graveyard set expanded, Local empty |
-| `hud/songselct onhober playing.jpg` | 1366×768 | Toolbar “now playing” hover caption |
-| `hud/songselct onhover playing songs.jpg` | 1366×768 | Now-playing popover |
-| `hud/on hover top bar smth.jpg` | 1366×768 | Toolbar “wiki” caption |
-| `hud/onhover smth else.jpg` | 1366×768 | Toolbar “beatmap listing” caption |
-| `hud/onhover smth.jpg` | 1366×768 | Now-playing popover (same as playing-songs) |
-| `hud/beatmaplisting.jpg` | 1366×768 | **In-client listing** (target) |
-| `hud/beatmaplistingnosongs.jpg` | 1366×768 | Empty listing (copy only; no character art) |
-| `pause/pausef.png` | 1365×767 | Pause |
-| `pause/failed.png` | 1365×767 | Fail |
-| `playfield-4k/lazer-argon-mania-gameplay.png` | 1287×1029 | Argon notes/holds/receptors close-up |
-| `playfield-4k/argon-column-colour-spec.png` | 2459×5668 | Geometry notes; **not** the colour table to ship |
-| `playfield-4k/argon-column-colours-1k-10k.png` | 2396×1600 | 1K–10K; ship **OK** rows only |
-| `playfield-4k/Screenshot 2026-09-12 192641.png` | 1114×646 | Cropped 4K HUD + miss |
-| `playfield-4k/Screenshot 2026-09-12 192820.png` | 1133×621 | Countdown |
-| `playfield-4k/Screenshot 2026-09-12 192855.png` | 1137×626 | Key overlay press |
-| `playfield-4k/osu_2026-09-12_19-55-36.jpg` … `19-56-12.jpg` | 1366×768 | Full Argon HUD, spectator, playback overlay |
-| `results/osu_2026-09-12_19-51-20.jpg` | 1366×768 | Results (this play) + side card |
-| `results/osu_2026-09-12_19-51-31.jpg` | 1366×768 | Results browsing another local score |
-| `song-select/song select.png` | 1365×767 | V2 shell (Global in still — **do not ship Global**) |
-| `song-select/osu_2026-09-12_19-53-*.jpg` | 1366×768 | Duplicates of hud song-select / toolbar hovers |
+| Still | Surface |
+|---|---|
+| `hud/first menu 1/2/3.png`, `first menu on hover.png` | Menu idle / top-level / play submenu |
+| `hud/option menu.png` | Song Select Options + Local empty |
+| `hud/pre game stage.png` | PlayerLoader |
+| `hud/mod menu.png`, `mods.jpg`, `mod2.jpg`, `mod3.jpg`, `modcustomise.jpg`, `modunranked.jpg` | Mod Select states |
+| `hud/songselect.jpg`, `songslect.jpg`, `songslect (2).jpg` | Select V2 expanded / collapsed / graveyard |
+| `hud/songselct onhober playing.jpg`, `songselct onhover playing songs.jpg`, `onhover smth.jpg`, `on hover top bar smth.jpg`, `onhover smth else.jpg` | Toolbar captions + now-playing popover |
+| `hud/beatmaplisting.jpg`, `beatmaplistingnosongs.jpg` | In-client listing + empty (target) |
+| `pause/pausef.png`, `failed.png` | Pause / fail |
+| `playfield-4k/lazer-argon-mania-gameplay.png`, `argon-column-colours-1k-10k.png` | Argon close-up / ship OK colour rows |
+| `playfield-4k/argon-column-colour-spec.png` | Geometry notes only, not colour table |
+| `playfield-4k/Screenshot … 192641/192820/192855.png` | Cropped HUD/miss/countdown/key-press |
+| `playfield-4k/osu_2026-09-12_19-55-36.jpg` … `19-56-12.jpg` | Full Argon HUD, spectator, playback overlay |
+| `results/osu_2026-09-12_19-51-20/31.jpg` | Results this-play / browsing |
+| `song-select/song select.png` | V2 shell (Global = layout-only) |
 
-**Ignore as implementation targets:** `hud/beatmaplisting.png`, `beatmaplistingonhover.png`, `beatmaplistingonhover2.png` if they remain (osu-web).
+Ignore osu-web listing PNGs if present. `settings/` stills exist but have no spec coverage yet.
 
 ---
 
 ## Design coordinate system
 
-osu!(lazer) stills in this repo are window captures at **1366×768**. Lazer source authors some overlays against `ScalingContainerTargetDrawSize = (1024, 768)` (`OsuGame.cs`); **this spec does not mix those spaces**. Every number labelled **du** is a pixel on a 1366×768 still.
-
-C# constants (`Toolbar.HEIGHT = 40`, `ButtonArea.BUTTON_AREA_HEIGHT = 100`, `ButtonSystem.BUTTON_WIDTH = 140`, `WEDGE_WIDTH = 20`) are **source defaults**. PNG measurements are **stills**. Where they disagree, stills win for still-diff; cite both (e.g. strip **96 du measured / 100 du C#**, ±4 du tolerance).
-
-### CSS mapping
-
-Extend `src/ui/lazer/tokens.css` (already imported from `src/index.css`). Existing `--lazer-shear: -11.31deg` is an angle, not a `skewX()` function — keep that shape.
+Numbers labelled **du** = pixels on a 1366×768 still. Do not mix lazer `ScalingContainerTargetDrawSize (1024,768)` space. C# constants (`Toolbar.HEIGHT=40`, `BUTTON_AREA_HEIGHT=100`, `BUTTON_WIDTH=140`, `WEDGE_WIDTH=20`) are source defaults; PNG measures are stills — cite both on conflict (e.g. strip 96 measured / 100 C#, ±4).
 
 ```css
-@media (min-width: 721px) {
-  html[data-ui="lazer"] {
-    --rm-u: min(100vw / 1366, 100vh / 768);
-  }
-}
-@media (max-width: 720px) {
-  html[data-ui="lazer"] {
-    --rm-u: 1; /* do not shrink hit targets */
-    --lazer-shear: 0deg;
-    --lazer-unshear: 0deg;
-  }
-}
+@media (min-width: 721px) { html[data-ui="lazer"] { --rm-u: min(100vw / 1366, 100vh / 768); } }
+@media (max-width: 720px) { html[data-ui="lazer"] { --rm-u: 1; --lazer-shear: 0deg; --lazer-unshear: 0deg; } }
 ```
 
-No JS or container-query fork. `--lazer-shear` remains an angle token (`-11.31deg` desktop).
-
-**What multiplies `--rm-u`:** inner widths/heights, font-size, padding, gap, cookie size, card size, icon glyphs. **What does not:** toolbar/footer **bar width** (`100%` viewport), overlay scrim, playfield canvas backing store. Listing **panel** is not 100% — inset 102–1264 du (§5).
-
-A size of `N` du becomes `calc(N * var(--rm-u))` on desktop. Compact (≤720px CSS or 390×844): **axis-aligned** (chrome shear-off at 720px), min tap **44 CSS px**, no `--rm-u` shrink.
-
-**Playfield canvas** sizes to the actual backing store (`desynchronized` 2D context). Never mix unlabeled px from the cropped 1114×646 screenshots with 1366×768 du. Remaining “ish” sizes in this spec are replaced with a **single du ± tolerance**.
+`--rm-u` scales inner sizes/type/padding/gaps/cookies/cards/glyphs (`calc(N * var(--rm-u))`). It does not scale bar widths (`100%`), scrims, or canvas backing stores. Compact (≤720px / 390×844): axis-aligned, no shear, min tap 44 CSS px. Never mix cropped-screenshot px with 1366×768 du.
 
 ---
 
 ## Proposed Design
 
-### 1. Design tokens & type scale
+### 1. Tokens & type
 
-Scope: chrome tokens on `html[data-ui="lazer"]` **in the existing** `src/ui/lazer/tokens.css`. Argon playfield tokens stay on `html[data-skin="argon"]`. Do not restyle legacy skins. Do not create a second tokens file.
+Scope chrome tokens to existing `src/ui/lazer/tokens.css`; Argon tokens stay on `html[data-skin="argon"]`.
 
-#### Motion (from osu!framework; do not substitute Tailwind `ease-out`)
+**Motion (osu!framework; not Tailwind `ease-out`):** OutQuint `cubic-bezier(0.22,1,0.36,1)` (settle), OutExpo `(0.16,1,0.3,1)` (logo return, contract, flash), InSine `(0.12,0,0.39,0)` (flatten), InOutSine `(0.37,0,0.63,1)` (beat tilt), OutElastic spring `{type:"spring",duration:0.5,bounce:0.35}` (menu hover width only). Overlay 200ms In (pause/fail `TRANSITION_DURATION`); toolbar 500ms OutQuint. Animate `transform`/`opacity` only; menu buttons collapse on width, never `scale(0)`; never `transition: all`.
 
-| Token | Value | Use |
-|---|---|---|
-| `--lazer-ease-out-quint` | `cubic-bezier(0.22, 1, 0.36, 1)` | Settle (overlays, logo scale, carousel) |
-| `--lazer-ease-out-expo` | `cubic-bezier(0.16, 1, 0.3, 1)` | Logo return; button contract; click flash |
-| `--lazer-ease-in-sine` | `cubic-bezier(0.12, 0, 0.39, 0)` | Button-bar flatten |
-| `--lazer-ease-in-out-sine` | `cubic-bezier(0.37, 0, 0.63, 1)` | Hover icon tilt on beat |
-| `--lazer-ease-out-elastic` | Motion spring `{ type: "spring", duration: 0.5, bounce: 0.35 }` | Menu button **hover width only** |
-| `--lazer-motion-overlay` | `200ms` + Easing.In | Pause/fail (`GameplayMenuOverlay.TRANSITION_DURATION`) |
-| `--lazer-motion-toolbar` | `500ms` OutQuint | Toolbar slide (`Toolbar` `transition_time`) |
+**Chrome colours:** pink `#e967a1` (cookie; menu2 `#ea5e9d` ±6 still-diff, no fork), pink-light `#ff7db7`, ring `#fff`, yellow `#ffcc22` (paused/failed), yellow-dark `#eeaa00`, green `#88b300`, quit `#aa1b27`, play `#6644cc`, multi `#5e3fba`, edit `#eeaa00`, browse `#a5cc00`, exit `#ee3399`, back `#333a5e`, settings `#555555`, strip `#323232`, toolbar `#191919`, footer-back mid `#e91e8a` + dark `#de31ae` + light `#ff86dd`, triangle field `#172639`–`#20324a`, scrim `rgba(0,0,0,0.75)`, coming-soon opacity `0.50`.
 
-Properties: `transform` and `opacity` only (shear is a transform). Never `transition: all`. Never `scale(0)` for menu buttons — they collapse on **width**.
+**Argon (cite, don't redesign):** `#a96aff/#ffc528/#fc6d01/#d5235a/#cb3cec/#48c6ff/#64c05c`, `NOTE_HEIGHT 42`, `ACCENT_RATIO 0.82`, `CORNER_RADIUS 3.4`, `COLUMN_GAP 1`, `--argon-accent #66ccff`. Old double-wedge is not in stills.
 
-#### Chrome colours (sampled + lazer source)
+**Type:** menu labels Space Grotesk 500/16 lowercase; `paused/failed` Space Grotesk 600/48, tracking 5, yellow; select title Space Grotesk 700/~30; artist Inter 500/14; toolbar captions Inter 700/14 + 400/12; footer Back Inter 500/18 (`Back`), Mods/Random/Options Space Grotesk 500/16; score/combo/clocks Space Grotesk 700 tabular (no JetBrains Mono); judgement popups Space Grotesk 600/24, tracking 0.35em, uppercase spaced; mod rows Inter 600/14 + 400/12 at 55%; listing title Inter 500/20 lowercase; grade letter Space Grotesk 700/**120 ±8**; tooltips Inter 500/12.
 
-| Token | Hex / rgb | Sample / source |
-|---|---|---|
-| `--lazer-pink` | `#e967a1` | Cookie fill (`--lazer-pink`; menu2 cookie `#ea5e9d`) |
-| `--lazer-pink-light` | `#ff7db7` | Cookie inner triangles |
-| `--lazer-cookie-ring` | `#ffffff` | Idle ring |
-| `--lazer-yellow` | `#ffcc22` | `paused` / `failed` titles |
-| `--lazer-yellow-dark` | `#eeaa00` | Retry; sampled pause retry `#eeaa00` / `#f4af00` |
-| `--lazer-green` | `#88b300` | Continue; sampled pause Continue |
-| `--lazer-quit` | `rgb(170, 27, 39)` `#aa1b27` | Quit; sampled |
-| `--lazer-play` | `rgb(102, 68, 204)` `#6644cc` | Play / Solo; sampled |
-| `--lazer-multi` | `rgb(94, 63, 186)` `#5e3fba` | Multi / Playlists |
-| `--lazer-edit` | `rgb(238, 170, 0)` `#eeaa00` | Edit; sampled |
-| `--lazer-browse` | `rgb(165, 204, 0)` `#a5cc00` | Browse; sampled |
-| `--lazer-exit` | `rgb(238, 51, 153)` `#ee3399` | Exit; sampled |
-| `--lazer-back` | `rgb(51, 58, 94)` `#333a5e` | Menu Back |
-| `--lazer-settings` | `rgb(85, 85, 85)` `#555555` | Settings parallelogram; sampled |
-| `--lazer-bar-gray` | `rgb(50, 50, 50)` `#323232` | Menu strip; sampled |
-| `--lazer-toolbar` | `#191919` | Toolbar; sampled (`OsuColour.Gray(0.1)`) |
-| `--lazer-back-footer` | In-tree `#e91e8a` | Keep as mid fill on `FooterBackButton` (min-width **210px**, height **50px** today) |
-| `--lazer-back-footer-dark` | `#de31ae` | Add. `ScreenBackButton` darker; sampled `#de31ac` |
-| `--lazer-back-footer-light` | `#ff86dd` | Add. `ScreenBackButton` lighter. Gradient/slab uses dark→light; still-diff vs `#de31ae` |
-| `--lazer-triangle-bg-dark` | `#172639` | Idle field corner |
-| `--lazer-triangle-bg` | `#182439` … `#20324a` | Idle field |
-| `--lazer-overlay-scrim` | `rgba(0,0,0,0.75)` | Pause/fail (`background_alpha = 0.75`) |
-| `--lazer-coming-soon-opacity` | `0.50` | Disabled chrome |
+**Delta on `src/ui/lazer/`:** add `--rm-u` + 720px shear-off; footer-back dark/light; cookie size props (see Key Decisions); Back 240 du on select. Reuse `applyLazerChrome`/`useLazerReducedMotion`. Shipped files include `motion`, `LazerCookie`, `Shear`, `FooterBackButton`, `LazerToolbar`, `NowPlayingPanel`, `ButtonSystem`, `MenuButton`, `TriangleField`, `SongSelectLeftPanel/Carousel/Footer`, `ComingSoonNotifications`, `LazerDebugSmoke` — do not recreate them.
 
-#### Argon playfield colours (`html[data-skin="argon"]` + `argonSkin.ts`)
-
-Do not redesign. Cite:
-
-```ts
-ARGON_COLOUR_SPECIAL = '#a96aff'
-ARGON_COLOUR_YELLOW  = '#ffc528'
-ARGON_COLOUR_ORANGE  = '#fc6d01'
-ARGON_COLOUR_PINK    = '#d5235a'
-ARGON_COLOUR_PURPLE  = '#cb3cec'
-ARGON_COLOUR_CYAN    = '#48c6ff'
-ARGON_COLOUR_GREEN   = '#64c05c'
-ARGON_NOTE_HEIGHT = 42
-ARGON_NOTE_ACCENT_RATIO = 0.82
-ARGON_CORNER_RADIUS = 3.4
-ARGON_COLUMN_GAP = 1
---argon-accent: #66ccff
-```
-
-`--argon-wedge-radius: 10px` remains for any leftover wedge math; the **HUD stills do not use the old double-wedge** — see §8.
-
-#### Type
-
-| Role | Family | Weight | Size (du) | Tracking | Colour | Transform |
-|---|---|---|---|---|---|---|
-| Menu button labels | Space Grotesk | 500 | 16 | 0 | `#ffffff` | lowercase |
-| `paused` / `failed` | Space Grotesk | **600** | 48 | 5 du | `#ffcc22` | lowercase |
-| Song title (select) | Space Grotesk | 700 | **30** | −0.02em | `#ffffff` | none |
-| Artist | Inter | 500 | 14 | 0 | `#ffffff` ~80% | none |
-| Toolbar icon captions | Inter | 700 / 400 | 14 / 12 | 0 | `#ffffff` | title lowercase |
-| Footer Back | Inter | 500 | 18 | 0 | `#ffffff` | none (`Back`) — matches in-tree `FooterBackButton` |
-| Footer Mods/Random/Options | Space Grotesk | 500 | 16 | 0 | `#ffffff` | none |
-| Score / combo / clocks | JetBrains Mono | **700** | see surface | tabular | `#ffffff` | none |
-| Judgement popups | Space Grotesk | **600** | 24 | 0.35em | judgement colour | uppercase, letter-spaced (`P E R F E C T`) |
-| Mod row title | Inter | 600 | 14 | 0 | `#ffffff` | none |
-| Mod row description | Inter | 400 | 12 | 0 | `#ffffff` 55% | none |
-| Listing title | Inter | 500 | 20 | 0 | `#ffffff` | lowercase `beatmap listing` |
-| Results grade letter | Space Grotesk | 700 | **120** ±8 | 0 | grade colour | uppercase |
-| Coming-soon tooltip | Inter | 500 | 12 | 0 | `#ffffff` | none |
-
-The Google Fonts query in `src/index.css` includes Space Grotesk **600** (titles). Inter 600 and JetBrains Mono 700 are already loaded. Do not add Torus. Do not specify 800–900.
-
-#### Shared primitives — **delta** on `src/ui/lazer/`
-
-Already shipped (do not recreate):
-
-| File | Role |
-|---|---|
-| `src/ui/lazer/tokens.css` | `--lazer-*` eases, colours, durations; **extend chrome shear-off to `max-width: 720px`** (in-tree is 480px); cookie default **280px**; footer-back min-width **210px** / height **50px** / fill `#e91e8a` |
-| `src/ui/lazer/motion.ts` | `LAZER_*` constants, `applyLazerChrome`, `useLazerReducedMotion`, `resolveLazerChrome` |
-| `src/ui/lazer/LazerCookie.tsx` | Disc, ring, triangles, spectrum, `RM` mark. Size is `--lazer-cookie-size` / prop, not a new component |
-| `src/ui/lazer/Shear.tsx` | `lazer-shear` / `lazer-unshear` classes |
-| `src/ui/lazer/FooterBackButton.tsx` | Pink sheared Back |
-| `src/ui/lazer/index.ts` | Public exports |
-| `src/App.tsx` | `applyLazerChrome(settings)` |
-
-**Add (delta only):**
-
-- `--rm-u: min(100vw / 1366, 100vh / 768)` at `min-width: 721px`; `--rm-u: 1` and **chrome shear-off** at `max-width: 720px` (move the in-tree 480px shear-off up so 481–720 is axis-aligned)
-- `--lazer-back-footer-dark` / `--lazer-back-footer-light`; keep `--lazer-back-footer: #e91e8a` as mid
-- `ComingSoon.tsx` — opacity 0.50, tooltip “Coming soon”, no hue-shifting grayscale
-- Cookie size **props**: idle **480 du**, top-level **220 du** (±8; PNG white box ~222, not 0.5×480=240), parked **200 du ±20**, PlayerLoader **72 du**
-- Footer Back target width **240 du** on Song Select (C# `BUTTON_WIDTH`); keep 210px min as a floor until that screen lands
-
-Point implementers at `applyLazerChrome` / `useLazerReducedMotion`. No `?debug=` requirement beyond existing `LazerDebugSmoke`.
-
-#### What is not copied
-
-osu! wordmark, pink-circle logo geometry as a trademark, ppy marks, Torus files, osu-resources bitmaps, official mascots (including the empty-listing character), osu! cursor bitmap.
+**Not copied:** osu! wordmark/logo geometry, ppy, Torus files, osu-resources bitmaps, mascots incl. empty-listing character, osu! cursor bitmap.
 
 ---
 
-### 2. Global toolbar + now-playing popover + hover captions
+### 2. Toolbar + now-playing + captions
 
-**Stills:** `hud/first menu 2.png` (idle strip), `hud/songselct onhober playing.jpg`, `on hover top bar smth.jpg`, `onhover smth else.jpg`, `songselct onhover playing songs.jpg` / `onhover smth.jpg`.
-
-**Lazer source:** `osu.Game/Overlays/Toolbar/Toolbar.cs` — `HEIGHT = 40`, `TOOLTIP_HEIGHT = 30`, `transition_time = 500`.
-
-#### Layout (1366×768)
+Stills: `first menu 2.png`, song-select hover JPEGs. Source: `Toolbar.cs` (`HEIGHT=40`, `TOOLTIP_HEIGHT=30`, 500ms).
 
 ```
-z20 Toolbar 40du, #191919, full width
-  LEFT:  [Settings] [Home]                         (no ruleset icons)
-  RIGHT: [Changelog] [Wiki] [Rankings*] [Listing] [Globe] [Music] | [Name] [Avatar] [Clock] [Bell]
-z21 Hover caption (30du tall, two lines) drops below the hovered icon
-z22 Now-playing popover (only if Music is active)
+z20 Toolbar 40du #191919 full width — LEFT: Settings Home | RIGHT: Changelog Wiki Rankings* Listing Globe Music | Name Avatar Clock Bell
+z21 Hover caption 30du two lines under icon | z22 Now-playing popover (Music active)
 ```
 
-\*Rankings = people icon in the stills; **coming-soon** (no global boards). Omitted entirely: ruleset selector, news, chat, social.
+Icon buttons 40×40 (glyph ~18); 1du cyan underline on active destination; listing icon pink-filled when listing open. User chip: Inter 13 + 28×28 avatar, `Guest` fallback. Clock JetBrains-free mono stack 11–12: `h:mm:ss AM/PM` + pink `running hh:mm:ss`. Bell 40×40, coming-soon click.
 
-| Region | Geometry (du) | Notes |
-|---|---|---|
-| Bar | 1366×40, y=0 | `#191919`. Gradient under captions: 80du tall black 70%→0 when any toolbar hover (`ToolbarBackground`) |
-| Icon button | 40×40 hit; glyph ~18 | White icons, 1du cyan underline on the **active destination** (home on menu, listing icon when listing open — stills show listing as `#e91e8a` fill when that overlay is open) |
-| User chip | name Inter 13 + 28×28 avatar | Persist `localDisplayName: ''`; display **`Guest`** |
-| Clock | JetBrains Mono 11–12 | `h:mm:ss AM/PM` + second line `running hh:mm:ss` in pink `#e967a1` (stills) |
-| Bell | 40×40 | Badge count if we ever have local notices; otherwise empty. **Coming-soon** click |
+Captions (title Inter 700/14, subtitle 400/12 at 70%): wiki `wiki/knowledge base`; listing `beatmap listing/browse for new beatmaps` (`CTRL-B`); now-playing `now playing/manage the currently playing track` (`F6`). Settings/Home/Changelog/Globe/Rankings/Bell captions unverified — use stills + generic "Coming soon" until sourced.
 
-#### Hover captions (measured from stills)
+Now-playing popover: top-right under music icon (pink while open), **320×90 ±12**, cover fills panel, title/artist top-right, shuffle/prev/pause/next/playlist row, yellow `#eeaa00` progress ~3du. Shuffle/playlist coming-soon without a queue model; prev/next/pause wire to `previewPlayer`.
 
-Two-line, right-aligned under the icon, white:
+States: hidden on menu Initial + gameplay (500ms OutQuint slide/fade); visible on top-level/submenu/select/listing/PlayerLoader/Results/overlays; coming-soon 0.50 + caption. Compact keeps Settings, Home, **Listing**, Music, Clock (+name/avatar if ≥44px/28px fit); only coming-soon icons overflow into a 40×40 `···` bottom sheet (44px rows). Never drop Listing.
 
-| Icon | Title | Subtitle | Shortcut in still |
-|---|---|---|---|
-| Wiki | `wiki` | `knowledge base` | (none visible) |
-| Beatmap listing | `beatmap listing` | `browse for new beatmaps` | `CTRL-B` |
-| Now playing | `now playing` | `manage the currently playing track` | `F6` |
+Wiring: Settings→drawer; Home→menu Initial; Listing→overlay; Music→popover; Clock→live; Name/avatar→Settings General (no profile); rest coming-soon. Shortcuts: `F6` popover, `Ctrl+B` listing, `Esc` closes topmost overlay (menu Esc: Play→TopLevel→Initial). Motion: show 200ms delay + 500ms OutQuint from y=−40; hide 500ms InQuint + fade.
 
-Unverified (no still; lazer knowledge — mark in implementation comments): Settings `settings` / `change settings`; Home `home` / `return to main menu`; Changelog `changelog` / `view the changelog`; Globe / Rankings / Bell — coming-soon titles matching lazer if we can cite source later; until then use the visible still captions only and a generic “Coming soon” on click.
+### 3. Main menu
 
-Caption type: title Inter 700 14 white; subtitle Inter 400 12 white 70%.
+Stills: `first menu 1/2/3/on hover.png`. Sources: `ButtonSystem/MainMenuButton/ButtonArea`.
 
-#### Now-playing popover
+States: `Initial --cookie/Enter/any non-modifier--> TopLevel --Play/cookie--> Play --Solo--> /select`; `Play --Back/Esc--> TopLevel`; `TopLevel --Esc/idle 15s--> Initial`. No `window.close()`.
 
-From `hud/songselct onhover playing songs.jpg`:
+Z: triangle canvas / spectrum / button strip (TopLevel/Play) / cookie / toolbar (not Initial) / exit modal.
 
-- Anchored top-right under the music icon (icon turns **pink filled** while open).
-- Size **320×90 du** (±12 du still-diff).
-- Cover fills the panel; title + artist top-right; transport row: shuffle, prev, pause/play, next, playlist (hamburger).
-- Yellow progress bar `#eeaa00` along the bottom (~3 du).
-- Shuffle and playlist: **coming-soon** if we have no queue model; prev/next/pause wire to `previewPlayer`.
+Idle: full-viewport field `#172639`–`#20324a` (cap browser spawn, e.g. ≤80 triangles / 50ms; lazer ~22ms spawn / 120ms fade is too hot). Cookie **480 ±16** (ring 478–501, inner ~434, ring ~22), `#e967a1`, ring white, faint `#ff7db7` triangles, **RM** Space Grotesk 700 ~64. Spectrum radiates (analyser or 60 BPM idle); pulse ±4% damped OutQuint; no toolbar/strip.
 
-#### States
+TopLevel: strip **100 du** (C#; 96 measured ±4) full width centred `#323232`; cookie **220 ±8** overlapping Settings/Play; buttons height=strip, expanded 140, wedge 20, spacing −20. Icon 32 above lowercase 16, white + shadow. Order: settings `#555555` (drawer) | cookie | play `#6644cc` (submenu) | edit `#eeaa00` (soon) | browse `#a5cc00` (listing) | exit `#ee3399` (confirm→Initial).
 
-| State | Behaviour |
-|---|---|
-| Hidden | Menu **Initial** (idle cookie). Gameplay. Fade/slide 500ms OutQuint (`MoveToY(-HEIGHT)`). |
-| Visible | Top-level menu, play submenu, Song Select, listing, PlayerLoader, Results, Settings/Skins/History overlays. |
-| Active destination | Pink fill on listing icon when listing open; pink fill on music when popover open; home when on menu. |
-| Coming-soon | Opacity 0.50 + tooltip. Hover caption still appears. |
-| Compact 390×844 | **Must keep (wired):** Settings, Home, **Listing**, Music, Clock. Name+avatar if they fit (≥44px leftover); otherwise name hides, avatar stays if 28px fits. **Overflow only coming-soon:** Changelog, Wiki, Rankings, Globe, Bell. Overflow control: 40×40 `···` button, axis-aligned, no shear, opens a **bottom sheet** (not a hover caption) listing those icons at 44px rows. Do **not** drop Listing. |
+Play submenu: Settings→Back `#333a5e`; solo `#6644cc`→`/select`; multi/playlists `#5e3fba` soon. No Daily Challenge.
 
-#### Wiring
-
-| Control | Destination |
-|---|---|
-| Settings | Existing `SettingsDrawer` |
-| Home | Main menu Initial |
-| Beatmap listing | Listing overlay (§5) |
-| Music | Now-playing popover |
-| Clock | Live, no click |
-| Name / avatar | No account. Opens Settings → General (display name). Do not invent a profile. |
-| Changelog, wiki, rankings, globe, bell | Coming soon |
-
-#### Shortcuts
-
-| Key | Action |
-|---|---|
-| `F6` | Toggle now-playing popover |
-| `Ctrl+B` | Open listing overlay |
-| `Esc` | Close the topmost overlay (listing, mods, settings, now-playing, options). Menu Esc still goes Play→TopLevel→Initial. |
-
-Coming-soon icons may **show** a shortcut in the caption; the key still no-ops.
-
-#### Motion
-
-Toolbar show: after logo impact, **200ms** delay then 500ms OutQuint slide from y=−40. Hide: 500ms InQuint + fade.
-
-#### What is not copied
-
-osu! ruleset icon artwork as trademarks; use simple geometric stand-ins if any ruleset glyph were ever shown (they are omitted). No osu! user cards.
-
----
-
-### 3. Main menu (idle logo, wedge bar, coming-soon)
-
-**Stills:** `hud/first menu 1.png`, `first menu 2.png`, `first menu 3.png`, `first menu on hover.png`.
-
-**Lazer source:** `ButtonSystem.cs`, `MainMenuButton.cs`, `ButtonArea.cs`.
-
-#### States
-
-```
-Initial  --click cookie / Enter / any non-modifier key-->  TopLevel
-TopLevel --Play or cookie-->  Play
-Play     --Solo-->  /select (EnteringMode)
-Play     --Back / Esc-->  TopLevel
-TopLevel --Esc / idle 15s-->  Initial
-```
-
-Idle timeout 15s is acceptable (lazer uses idle tracker). Do not `window.close()` on Exit.
-
-#### Z-order
-
-```
-z0  Triangle field canvas (full viewport)
-z1  Spectrum bars (behind cookie)
-z2  Button strip (TopLevel / Play only)
-z3  LazerCookie
-z4  Toolbar (not on Initial)
-z5  Exit confirm (modal)
-```
-
-#### Idle (Initial) — `first menu 1.png`
-
-| Element | Geometry | Colour / motion |
-|---|---|---|
-| Field | Full viewport | `#172639`–`#20324a`. Filled triangles drift; outline triangles spawn/fade. Lazer spawn ~every 22ms / fade ~120ms — **cap** browser spawn (e.g. max 80 triangles, spawn every 50ms) so it stays cheap. Density like the still. |
-| Cookie | Centre. Outer diameter **480 du ±16** (white ring measured 478–501). Inner pink ~434 du. Ring thickness ~22 du. Drive with `LazerCookie` size prop (in-tree default 280px is **not** idle). | Fill token `#e967a1` (`--lazer-pink`). PNG cookie in `first menu 2.png` samples `#ea5e9d` — **±6** still-diff, do not fork the token. Ring `#ffffff`. Inner faint triangles `#ff7db7` @ low alpha. **RM** in Space Grotesk 700 ~64 du white, never “osu!”. |
-| Spectrum | Radiate from ring | Audio analyser when menu music/preview plays; else idle **60 BPM** pulse. |
-| Pulse | Scale ±4% on beat, damped | OutQuint; disabled under reduced motion. |
-| Toolbar / strip | **Absent** | |
-
-Click cookie, Enter, or any non-modifier key → TopLevel. Custom cursor **not** required.
-
-#### TopLevel — `first menu 2.png` / `3.png`
-
-| Element | Geometry | Colour |
-|---|---|---|
-| Strip | **96 du measured** at x=40 on `first menu 2.png` (y=357–452). C# `BUTTON_AREA_HEIGHT = 100`. Implement **100 du** source default, **±4 du** still-diff. Full width, vertically centred. | `#323232` |
-| Cookie | Top-level diameter **220 du ±8** (PNG white box ~222, not 0.5×480). Sits **on** the strip, overlapping Settings (left) and Play (right) | Same disc |
-| Buttons | Parallelograms, height = strip, expanded width **140** (C# `BUTTON_WIDTH`), wedge 20 (C# `WEDGE_WIDTH`). **Negative spacing −20 du** so they nest. | See tokens |
-| Content | Icon 32 du above lowercase label 16 du | White, drop shadow |
-
-Button order, left → right of cookie:
-
-| Button | Colour | Wired | Notes |
-|---|---|---|---|
-| settings | `#555555` | Opens settings overlay | |
-| **cookie** | — | Play submenu while TopLevel | |
-| play | `#6644cc` | Play submenu | |
-| edit | `#eeaa00` | **Coming soon** | Visible |
-| browse | `#a5cc00` | Listing overlay | |
-| exit | `#ee3399` | Confirm → Initial | Do not `window.close()` |
-
-Measured strip colours at y≈383 match the table exactly (`#555555`, `#6644cc`, `#eeaa00`, `#a5cc00`, `#ee3399`, far-right `#323232`).
-
-#### Play submenu — `first menu on hover.png`
-
-Settings parallelogram **becomes** Back `#333a5e` (left arrow + `back`). Right of cookie: **solo** `#6644cc`, **multi** `#5e3fba`, **playlists** `#5e3fba`. Solo → `/select`. Multi and Playlists: coming-soon. No Daily Challenge (not in the still).
-
-#### Motion (lazer hard numbers)
-
-| Action | Duration | Ease |
-|---|---|---|
-| Expand contracted→expanded | 500ms | OutExpo. Width 0→140. Fade-in at 500/6 ≈ 83ms |
-| Contract | 500ms | OutExpo. Width → 0; fade 500ms |
-| Explode (leaving a submenu) | 200ms | OutExpo. Width ×2; fade-out 150ms |
-| Hover width | 500ms | OutElastic. Width × **1.5**, height unchanged |
-| Icon beat-bounce while hovered | half-beat | Out then In. `HOVER_SCALE = 1.2`, `BOUNCE_COMPRESSION = 0.9`, `BOUNCE_ROTATION = 8deg`, alternate direction |
-| Bar fade | 300ms | linear alpha |
-| Bar flatten (idle) | 300ms | InSine, scaleY → 0 |
-| Bar restore | 400ms | OutQuint, scaleY → 1 |
-| Logo idle → top-level | 200ms | In, scale 1→0.5 into the strip, then Impact overshoot |
-| Logo top-level → idle | 800ms | OutExpo to centre, scale 0.5→1. Delay = `barAlpha * 150` |
-| Initial → top-level bar delay | 150ms | buttons start after this |
-| Click flash | 800ms OutExpo from 0.9 alpha | additive white |
-
-Coming-soon wedges **do** hover-widen (personality) but clicks no-op + tooltip.
-
-#### Exit confirm (no still)
-
-Lazer-style two-click / hold. Copy **“Return to the title screen?”** Confirm → Initial. Never `window.close()`.
-
-#### Compact 390×844
-
-Cookie remains centred and tappable. Strip becomes a **vertical stack** of axis-aligned 48px-tall buttons (no shear) or a horizontally scrollable unsheared strip. Do not clip parallelograms off-screen.
-
-#### What is not copied
-
-“osu!” lettering, osu! icon on the Play button (use a generic play/person glyph), osu! cursor.
-
----
+Motion: expand/contract 500ms OutExpo (fade-in ≈83ms); explode 200ms (fade 150ms); hover width ×1.5 500ms OutElastic; beat-bounce half-beat (`HOVER_SCALE 1.2`, compression 0.9, rotation 8°, alternate); bar fade 300ms linear; flatten 300ms InSine; restore 400ms OutQuint; logo idle→strip 200ms In (1→0.5 + impact); strip→idle 800ms OutExpo (delay `barAlpha*150`); bar delay 150ms; click flash 800ms OutExpo from 0.9. Coming-soon wedges hover-widen, click no-ops. Exit confirm: "Return to the title screen?" → Initial. Compact: centred tappable cookie; unsheared 48px rows or scrolling strip.
 
 ### 4. Song Select V2
 
-**Stills:** `hud/songselect.jpg` (expanded + Local empty), `hud/songslect.jpg` (collapsed), `hud/songslect (2).jpg` (graveyard expanded), `hud/option menu.png` (options + Local empty), `song-select/song select.png` (shell / carousel only — **ignore Global / sign-in copy**).
-
-**Lazer source:** Song Select V2; `BACKGROUND_BLUR ≈ 20`; `ScreenFooter.HEIGHT = 50`; `ScreenFooterButton` 116×75, corner radius 10, shear `Vector2(0.2,0)`; `ScreenBackButton` width 240; logo facade `(-76, -36)` from bottom-right centre.
-
-#### Frame
-
-```
-z0  Beatmap background, full-bleed, blur 20 (CSS `filter: blur(20px)` on a scaled layer, not on the UI)
-z1  Dim / gradient so left metadata and right carousel read
-z2  Left metadata wedge (~480–520 du) + Details/Ranking
-z3  Right carousel
-z4  Top-right search / star / group / collection
-z5  Footer (50 du) + parked cookie
-z6  Toolbar
-z7  Options popover / Mod overlay / Listing (when open)
-```
-
-ASCII (desktop 1366×768):
-
-```
-┌ toolbar 40 ─────────────────────────────────────────────────────────┐
-│ RANKED  Title                          [search…]  [★ slider] [conv.]│
-│ Artist  ▶ ♥  length  BPM               Sort  Group  Collection      │
-│ ★ 1.46 Easy mapped by …                                             │
-│ Notes Holds  KC  OD  HP          ┌ expanded set ───────────────┐    │
-│ Details | Ranking  Scope Local    │ difficulty rows (selected)  │    │
-│                                   └─────────────────────────────┘    │
-│  i  No records yet!               collapsed sets…                    │
-│                                                                      │
-│ [ < Back ]  [Mods] [Random] [Options]                    (cookie)    │
-└ footer 50 ───────────────────────────────────────────────────────────┘
-```
+Stills: `songselect/songslect/songslect (2).jpg`, `option menu.png`, `song select.png` (Global layout-only).
 
-#### Left metadata
+Frame: `z0` BG full-bleed blur 20 (scaled layer) / `z1` dim-gradient / `z2` left wedge 500±20 + Details/Ranking / `z3` carousel / `z4` search/star/group/collection / `z5` footer 50 + parked cookie / `z6` toolbar / `z7` popovers.
 
-| Item | Notes |
-|---|---|
-| Status pill | `RANKED` green, `LOVED` pink, `GRAVEYARD` grey, `LOCAL` grey — Inter 700 10, uppercase, 4 du radius |
-| Title | Space Grotesk 700 ~30 du white |
-| Artist | Inter 500 14 white 80% |
-| Counts row | **Not preview transport.** Stills show `▶ {playcount}  ♥ {favourite count}  ⏱ {length}  🎵 {BPM}` (e.g. `▶ 89,299  ♥ 736  ⏱ 02:23  🎵 210`). Offline stand-in: **playcount** = local history rows for this chart (or `—` if zero — do not invent an osu! playcount). **♥** = favourite **toggle** on `rhythm_mania_v1_favorite_songs`; show local favourite state, not osu!’s 736. Length `m:ss`. BPM or BPM range `135-520 (mostly 270)` when the map has a range. Preview prev/pause/next live **only** in the toolbar now-playing popover (§2). |
-| Difficulty line | Star pill (cyan/green by rating) + `{diff} mapped by {mapper}` |
-| Stats | Notes, Hold Notes, Key Count, Accuracy (OD), HP Drain — Inter 12, muted labels, white values |
-| Tabs | `Details` \| `Ranking` (underline on active). Ranking is the default in the Local stills. |
-| Ranking toolbar | **Scope: Local only** (chip, not a Global dropdown). Sort: Score. Selected Mods chip. |
-| Empty | Info icon + **“No records yet!”** (white 70%). Person+lock / sign-in copy is forbidden. |
-| Filled | This-device history for beatmap id / hash / catalog chart id, score then accuracy. Click a row → Results for that record. |
+Left: status pill (RANKED green, LOVED pink, GRAVEYARD/LOCAL grey; Inter 700/10, r4); title Space Grotesk 700 ~30; artist Inter 500/14 at 80%; counts row `▶ {local plays|—} ♥ {favourite toggle} ⏱ {m:ss} 🎵 {BPM|range}` (no invented osu! counts; preview transport lives only in now-playing popover); star pill + `{diff} mapped by {mapper}`; stats Notes/Hold Notes/Key Count/OD/HP (Inter 12, muted labels); tabs Details|Ranking (Ranking default); ranking toolbar Scope **Local only**, Sort Score, Selected Mods chip; empty info icon + "No records yet!"; filled = device history (id/hash/chart-revision/catalog id; score→accuracy→time; click→Results). Details tab: source/tags/mapper, Inter 13, unverified spacing. Wedge: 500 du panel + soft right fade, not hard clip.
 
-Details tab (**user lock**): source, tags, mapper. Inter 13. No filled still — spacing unverified.
+Carousel (right): stacked set panels, wheel/keys/click scroll; collapsed (title/artist/pill/key dots/cover, dimmer); expanded (header + per-difficulty rows, selected = bright cyan right bar + left offset); row `[4K] {name} mapped by {mapper}` + star pill + 10-dot meter; OutQuint 200–400ms layout animation; Enter/cookie→PlayerLoader. No converts, no Global.
 
-Decorative wedge width **500 du ±20** on desktop (user lock 480–520). The stills show a dark translucent left panel that shears into the background around x≈500–640; implement a 500 du panel with a soft right fade, not a hard clip.
+Top-right: `search…` (live `N matches`); star slider `0.0…∞`; Show converts greyed/no-op; Sort actually sorts library; Group (None default); Collection (All beatmaps default, favorites only real collection).
 
-#### Carousel (right)
+Footer: Back 240 sheared pink `#de31ae/#ff86dd` (menu; cookie shared-element to centre); Mods/Random/Options 116×75 r10 sheared (Mods green while open; Options purple-tint when open); icon-over-label + 5×100 accent bar r3; hover lighten 0.2 150ms OutQuint; click flash 800ms. Bar `#1a1e27`–`#22272a`, 50 full width; buttons overlap by `CORNER_RADIUS`. Parked cookie 200±20 bottom-right, preview-BPM pulse, click starts chart, interruptible shared-element.
 
-- Right-aligned stacked set panels. Vertical scroll. Keyboard up/down, wheel, click.
-- **Collapsed:** title, artist, status pill, key-count colour dots, cover strip. Dimmer.
-- **Expanded:** group header + one row per difficulty. Selected difficulty has a **bright cyan right bar** and sits further left (selected offset).
-- Difficulty row: `[4K] {name} mapped by {mapper}`, star number on a coloured pill, 10-dot meter.
-- Selection layout-animates OutQuint 200–400ms, not a snap.
-- Enter / cookie starts the selected difficulty → PlayerLoader.
-- No convert difficulties. No Global ranking on the card.
+Options popover (`option menu.png`): dark rounded **280×520 ±16** at Options button, 200–250ms OutQuint 0.95→1 + fade. Rows in still order: Manage collections (soon); set line + Delete (existing confirm); Play / Edit (soon) / Details… / Copy link (soon without catalog id) / Remove from played / Clear all local scores; **View play history → /history** (required addition, under General); Hide (pink) closes. No menu History wedge.
 
-#### Search / star / group / collection (top-right)
+Compact: no shear; wedge→top stack; carousel full width; search stacks; cookie ≤96px or hidden behind footer Play; ranking full width; footer tappable ≥44px.
 
-From `hud/songselect.jpg`:
-
-| Control | Behaviour |
-|---|---|
-| Search `search…` | Filters carousel. Match count under field (`64 matches` in still — live count). |
-| Star Rating rainbow slider | `0.0` … `∞`. Hides out-of-range maps. |
-| Show converts | **Visible, greyed, coming-soon / no-op.** Product is mania-only (user: drop converts). |
-| Sort | Title / Artist / Difficulty / … — actually sorts local library. |
-| Group | None / … — Group None is the still default. |
-| Collection | Label as in the still. Only real collection is **favorites**. “All beatmaps” default. |
-
-#### Footer
+### 5. Listing overlay
 
-| Button | Size (du) | Colour | Wired |
-|---|---|---|---|
-| Back | 240 wide, sheared, pink `#de31ae`/`#ff86dd` | Menu (cookie shared-element to centre) | |
-| Mods | 116×75, radius 10, sheared | Dark; **green fill when overlay open** (see mod stills) | Opens Mod Select |
-| Random | 116×75 | Dark | Another set |
-| Options | 116×75 | Dark; purple-tint when open (`option menu.png`) | Options popover |
+Stills: `beatmaplisting.jpg/nosongs.jpg`. Opens from Browse or toolbar (pink active). Unauthenticated data contract above; chrome must not change failover or add hosts.
 
-Icon above label, accent bar along the sheared bottom (5×100 inner, radius 3). Hover lighten 0.2, 150ms OutQuint. Flash 800ms OutQuint on click (`ScreenFooterButton`).
+Layout: `z0` dimmed previous screen / `z1` panel x=**102–1264** (±8; 1162 wide) y=40–768 `#2d3236` / `z2` title/search/filters/sort/grid-or-empty / `z3` compact pink Back bottom-left / `z4` toolbar.
 
-Footer background: dark `#1a1e27`–`#22272a` (sampled), height 50, full width. Buttons sit with `Y = CORNER_RADIUS` so they overlap the bar (lazer).
+Title: original doc icon + `beatmap listing` Inter 500/20. Search full-width `type in keywords…` + loupe. Filter matrix (~90 label col + chips): Mode locks **osu!mania** (others greyed); Categories wires Ranked/Loved/Graveyard + Any, default **Ranked** (still's Has-Leaderboard selection is not copied; Has Leaderboard/Qualified/Favourites/Pending/WIP/My Maps greyed); General/Genre/Language/Extra/Rank-Achieved/Played/Explicit greyed (local-IndexedDB Played filter allowed only if cheap). Sort wires Title/Artist/Difficulty/Ranked if mirror supports; Rating/Plays/Favourites greyed otherwise. **Grid only** (3 cols at 1366; cover **80×56 ±4**; title/`by {artist}`/`mapped by {mapper}`/RANKED pill/mode dots/optional FEATURED ARTIST). Empty: **"… nope, nothing found."**, no character, optional 40% triangle motif. Cards use existing `downloadBeatmapsetArchive`; lazer-like cyan expand in pure CSS only.
 
-#### Parked cookie
+Motion: overlay fade 200–300ms OutQuint; panel unsheared; card expand 200ms. Compact: 1 col; filters in disclosure; panel 8px inset; Back tappable.
 
-Bottom-right, overlapping footer. Diameter **200 du ±20**, white ring and triangles, pulsing on preview BPM. Clicking it **starts** the selected chart. Shared-element from menu strip-centre, OutQuint, interruptible.
+### 6. Mods overlay
 
-#### Options popover — `hud/option menu.png`
+Stills: `mod*.png/jpg`. Keep `ModSelectOverlay.tsx` exclusivity; rebuild chrome. Dimmed select behind; sheared colour columns + horizontal scroll; banner, `tab to search…`, Customise; footer Back / Mods (green while owner) / Deselect All / chips.
 
-Dark rounded panel **280×520 du** (±16 du), origin at the Options button, 200–250ms OutQuint scale 0.95→1 + fade.
+Columns (~40 tall sheared headers): Presets yellow (`+` soon, no presets model) | Reduction lime (EZ NF HT **DC** NR) | Increase coral (HR SD PF DT NC FI HD Cover FL AC) | Automation cyan (AT, CN) | Conversion purple (RD DS MR DA CL IN CS HO + generated **K1–K10** via `handleToggleKeyMod`) | Fun pink (WU WD MU AS). Row: hex icon (redrawn SVG), name, one-liner; selected = column-accent fill (e.g. Nightcore).
 
-Rows in still order:
+Shipped vs soon: everything above except **DC + DS are in `ALL_MODS` with `comingSoon: true`** (greyed, never toggle; they are not absent). Presets `+` soon. No new mechanics or multiplier changes for chrome. `CN` keeps shipped cinema path (`isCinema` hides playfield chassis; `isAutoplay` includes CN) — never alias to `disableVideo`.
 
-- **General:** Manage collections… — coming-soon if no collections model (tooltip).
-- **For all difficulties:** `{set} - {title} ({mapper})` + Delete… (existing confirm, deletes set).
-- **For selected difficulty:** Play (starts), Edit (**coming-soon**), Details… (may scroll to Details tab), Copy link (disabled / coming-soon if no catalog id), Remove from played, Clear all local scores (existing history APIs).
-- **View play history** — navigates to `/history`. **Add this row** (not in the still; required so the menu rebuild does not orphan History; place under General).
-- **Hide** (pink text) closes.
+Search filters by name/acronym. Tooltip: dark r12 card ("Compatible with all mods" or "Incompatible with:" + hex chips). Customise dropdown green header: DA sliders wire to `DifficultyAdjustSettings` (OD/HP); Nightcore **Speed increase** is chrome — DT/NC/HT stay fixed 1.5/1.5/0.75, no variable-rate `GameSettings` field. Rate capsule above footer when HT/DT/NC: `0.75x`/`1.50x` (thumb fixed; `1.00x` only with none); footer BPM chip follows it. `UNRANKED` yellow badge when `isUnranked` (**AT/CN only** as coded); footer Mods grows to fit.
 
-Do not add a main-menu History wedge.
+Motion: fade 200ms; columns stagger 30–80ms OutQuint; reverse on close. Compact: scroll, unclipped footer, reduced/off shear.
 
-#### Compact 390×844
+### 7. PlayerLoader
 
-- No shear on footer or chips.
-- Wedge becomes a **top metadata stack** (full width, auto height).
-- Carousel full width below.
-- Search row stacks under toolbar.
-- Cookie shrinks (~96 CSS px) or hides behind the start path (footer Play). Footer buttons remain tappable (min 44px).
-- Ranking list full width.
+Still: `pre game stage.png`. First paint of `/play`; no skip. `z0` art blur 20 / `z1` centre column / `z2` right groups / `z3` Back / `z4` toolbar.
 
-#### What is not copied
+Centre: cookie **72 RM**; title Space Grotesk 600/**28**; artist Inter 500/14 uppercase-spaced; banner **280×64 ±8** cover crop; difficulty Inter 500/16; cyan star pill `★ 1.46`; muted Source/Mapper labels, white values.
 
-osu! cookie in the corner; Global tab; sign-in empty state; convert diffs as playable rows.
+Right cards (translucent dark; controls `#eeaa00/#ff22`-family yellow sliders/toggles): `backgroundDim` slider (exists 0–1); background blur **soon** (do not add `gameplayBackgroundBlur`); Storyboard/video toggle = `disableVideo` inverted (storyboard half soon); beatmap skins/colours, combo normalisation, disable-clicks: soon/none; hitsounds toggle = `hitsoundVolume > 0` (off writes 0; on restores last non-zero session value, default `DEFAULT_SETTINGS.hitsoundVolume`; no new boolean); per-map audio offset is a **proposal** (`playSessionOffsetMs`, App state, clamp ±1000, effective `audioOffset + session`, cleared on leaving `/play`) — **not in `GameSettings`/sanitizer/registry today, do not persist it**. Never alias CN to `disableVideo`.
 
----
-
-### 5. Beatmap listing overlay (lazer in-client)
-
-**Stills:** `hud/beatmaplisting.jpg`, `hud/beatmaplistingnosongs.jpg`. **Not** osu-web PNGs.
-
-Opened from menu Browse **or** toolbar listing icon (highlights pink).
-
-**Chrome vs data (do not mix backend into overlay chrome):**
-
-| Layer | Contract |
-|---|---|
-| Chrome (this spec) | Overlay layout, filters greyed table, empty copy, cards. Consumes the search function already imported by `OnlineBeatmapCatalog.tsx`. |
-| Live data | Search: `GET /api/catalog/search` with Bearer osu! token (`api/catalog/_search.ts`; 401 copy “Connect osu! to search the catalog”). Download: `https://catboy.best/d/<id>` then **only on HTTP 404** `https://osudl.org/s/<id>` (`downloadBeatmapsetArchive` in `osuTokenManager.ts`). |
-| No token | Keep listing chrome; show the existing connect-osu! / empty panel. Do not invent a second search client for overlay chrome. |
-| Planned (not overlay chrome) | Unauthenticated search hinai → osu.direct → Catboy; download Catboy → osu.direct → hinai; token-gate removed. That is a **dependency of the listing product**, not of overlay chrome. Chrome **must ship** before those hosts exist. |
-
-Overlay chrome must not change mirror failover or add hinai/osu.direct.
-
-#### Layout
-
-```
-z0  Dimmed previous screen (menu or select)
-z1  Panel x=**102** to x=**1264** (±8; width **1162 du**), y=40–768.
-    Background ~#2d3236
-z2  Title row, search, filter matrix, sort row, card grid / empty
-z3  Footer Back (pink, bottom-left, same family as ScreenBackButton but compact in still)
-z4  Toolbar (listing icon active)
-```
-
-| Region | Geometry / content |
-|---|---|
-| Title | Document icon (original geometry, **not** osu! mark) + `beatmap listing` Inter 500 20 white |
-| Search | Full-width field, placeholder `type in keywords…`, magnifying glass |
-| Filter matrix | Label column ~90 du + option chips. See wiring table |
-| Sort row | `Sort by` Title Artist Difficulty Ranked Rating Plays Favourites + **grid icon only** (active). **Omit** the list-mode button. |
-| Cards | **3 columns** on 1366. Cover **80×56 du** (±4). Title, `by {artist}`, `mapped by {mapper}`, RANKED pill, mode dots, optional FEATURED ARTIST chip |
-| Empty | Centre copy **“… nope, nothing found.”** (ellipsis + nope). **No character.** Optional original triangle motif at ~40% opacity behind the type. |
-
-#### Filter wiring (mania-only offline mirrors)
-
-| Row | Visible options (from still) | Behaviour |
-|---|---|---|
-| General | Recommended difficulty, Include converted beatmaps, Subscribed mappers, Spotlighted beatmaps, Featured Artists | **All greyed / no-op.** Mirrors do not expose these. |
-| Mode | Any, osu!, osu!taiko, osu!catch, **osu!mania** | **Lock osu!mania selected.** Others visible, greyed, unclickable. |
-| Categories | Any, Has Leaderboard, Ranked, Qualified, Loved, Favourites, Pending, WIP, Graveyard, My Maps | **Wired:** Ranked, Loved, Graveyard (and Any = those three). **Greyed:** Has Leaderboard, Qualified, Favourites, Pending, WIP, My Maps. Default **Ranked** (still shows Has Leaderboard selected — do **not** copy that selection; we have no RM board). |
-| Genre | Any + list | Greyed / no-op |
-| Language | Any + list | Greyed / no-op |
-| Extra | Has Video, Has Storyboard | Greyed / no-op |
-| Rank Achieved | Silver SS … D | Greyed / no-op (no global ranks) |
-| Played | Any, Played, Unplayed | Greyed / no-op (mirror has no play graph). Local-only filter against IndexedDB is allowed if cheap; otherwise greyed. |
-| Explicit Content | Hide, Show | Greyed / no-op unless a mirror param exists — **no-op**. |
-
-Sort: Title / Artist / Difficulty / Ranked wire if the mirror query supports them; Rating / Plays / Favourites greyed if the current helper cannot. **Grid only** — no list view, no list toggle.
-
-Cards: click/download uses existing `downloadBeatmapsetArchive`. Hover/expand like lazer (cyan outline + difficulty rows) **if** we can do it without osu-web assets — recreate with CSS. No osu-web PNG target.
-
-#### Motion
-
-Overlay fade 200–300ms OutQuint. Panel does not shear. Card expand 200ms OutQuint height.
-
-#### Compact
-
-Single column cards. Filter rows stack or collapse into a “Filters” disclosure. Back remains tappable. Panel inset **8 CSS px** (not edge-to-edge); toolbar/footer stay `100%`.
-
-#### What is not copied
-
-osu! logo in the title, peppy/mascot empty art, osu-web card bitmaps.
-
----
-
-### 6. Mod select overlay
-
-**Stills:** `hud/mod menu.png`, `mods.jpg`, `mod2.jpg`, `mod3.jpg`, `modcustomise.jpg`, `modunranked.jpg`.
-
-**Existing module:** `src/components/ModSelectOverlay.tsx` (`ALL_MODS`, exclusivity). Rebuild chrome; keep exclusivity rules.
-
-#### Layout
-
-Dimmed Song Select behind. Sheared colour columns, horizontal scroll. Top banner, search, Customise. Footer: Back, Mods (green while this overlay is the footer owner), Deselect All, chart chips.
-
-Column headers (left → right), sheared, ~40 du tall:
-
-| Column | Header colour (still) | Contents |
-|---|---|---|
-| Personal Presets | Yellow | `+` add — **coming-soon** (no presets model) |
-| Difficulty Reduction | Lime | EZ, NF, HT, DC, NR, … |
-| Difficulty Increase | Coral red | HR, SD, PF, DT, NC, FI, HD, Cover, FL, AC, … |
-| Automation | Cyan | AT, Cinema |
-| Conversion | Purple | RD, Dual Stages, MR, DA, Classic, Invert, CS, Hold Off, K1–K10 |
-| Fun | Pink | WU, WD, MU, AS |
-
-Each row: hex icon, name, one-line description. Selected row uses the column accent as a filled background (Nightcore in `mod3.jpg`).
-
-#### Shipped vs coming-soon
-
-**Clickable `ALL_MODS` rows:** NF, EZ, HT, NR, HR, SD, PF, AC, HD, FI, Cover, FL, DT, NC, AT, CN, MR, RD, CS, IN, HO, CL, DA, WU, WD, AS, MU.
-
-**Conversion column** = those conversion `ALL_MODS` rows **plus** K1–K10 **generated** rows via existing `handleToggleKeyMod` (K-mods are **not** in the `ALL_MODS` array).
-
-**Cinema (`CN`):** keep the shipped path. `GameplayCanvas.tsx` sets `isCinema` and hides `.playfield-chassis-container` (`opacity-0 pointer-events-none`); `isAutoplay` includes CN. **Do not** alias CN to `disableVideo` (that flag only suppresses background video; PlayerLoader “Storyboard / video” is `!disableVideo`).
-
-**Visible, greyed, coming-soon:**
-
-- **Dual Stages** (user lock)
-- **Daycore (DC)** — in stills, not in `ALL_MODS`
-- Any other still row we do not own
-- Personal Presets `+`
-
-Do not add unowned mechanics. Do not change score multipliers for visual chrome.
-
-#### Search / tooltips / customise / rate / unranked
-
-| Still | Spec |
-|---|---|
-| Search `tab to search…` / `search…` | Filters rows by name/acronym |
-| Tooltip (`mods.jpg`, `mod2.jpg`) | Dark 12-radius card: title, “Compatible with all mods” **or** “Incompatible with:” + hex chips |
-| Customise (`modcustomise.jpg`) | Dropdown, green header. DA sliders wire to existing `DifficultyAdjustSettings` (OD/HP). Nightcore **Speed increase** slider is **chrome**: DT/NC/HT stay **fixed** 1.5 / 1.5 / 0.75. Do not invent a variable rate `GameSettings` field for visual chrome |
-| Rate slider (`mod3.jpg`) | Show above footer when HT/DT/NC selected: capsule + icon + `0.75x` / `1.50x` (not a free 1.00× custom rate). Footer BPM chip uses that multiplier (180 → 270 DT / 405 if the still’s map is 270 BPM at 1.5×). Thumb is non-adjustable until a real rate setting exists |
-| Unranked (`modunranked.jpg`) | Yellow `UNRANKED` badge when `isUnranked` is true: **AT or CN only** (current `ModSelectOverlay.tsx`). Do **not** mark WU/WD/AS unranked in visual chrome (that would be a ruleset change). Footer Mods button grows to fit |
-
-#### Footer chips
-
-Star, BPM, KC, OD, HP, Ranked/Unranked, rate. Values live from the selected chart × mods. **Rate chip = same multiplier as the capsule:** `0.75x` (HT), `1.50x` (DT/NC), **`1.00x` only when no HT/DT/NC**.
-
-#### Motion
-
-Overlay fade 200ms; columns stagger in 30–80ms left→right, OutQuint. Closing reverses. Compact: horizontal scroll, footer not clipped, shear reduced/off.
-
-#### What is not copied
-
-osu! hex bitmaps — redraw hexes in SVG. No Torus.
-
----
-
-### 7. PlayerLoader pre-game
-
-**Still:** `hud/pre game stage.png`. **Include** (user lock). First paint of `/play`; do not skip.
-
-#### Layout
-
-```
-z0  Full-bleed beatmap art, heavily blurred (same 20 as select)
-z1  Centre column: cookie, title, artist, cropped banner, difficulty, star, Source / Mapper
-z2  Right column: Visual / Audio / Input groups
-z3  Footer Back
-z4  Toolbar
-```
-
-| Centre | Spec |
-|---|---|
-| Cookie | **72 du**, **RM**, not osu! (`LazerCookie` size prop) |
-| Title | Space Grotesk 600 **28** white (`Mach Roger`) |
-| Artist | Inter 500 14, letter-spaced uppercase (`MYUKKE.`) |
-| Banner | **280×64 du** crop of the set cover (±8) |
-| Difficulty | `Easy` Inter 500 16 |
-| Star pill | Cyan capsule `★ 1.46` |
-| Meta | `Source` / `Mapper` labels muted, values white |
-
-#### Right groups (translucent dark cards, yellow controls `#eeaa00`)
-
-Yellow sliders: track dark, fill + thumb `#eeaa00` / `#ffcc22`. Toggles: yellow capsules.
-
-**PlayerLoader field table (no invented persistence except as noted)**
-
-| Still row | Control | Wire | Persistence |
-|---|---|---|---|
-| Background dim | Slider | `GameSettings.backgroundDim` (exists, 0–1) | Existing sanitizer |
-| Background blur | Slider | **Coming soon** (greyed). Do not add `gameplayBackgroundBlur`; `menuBackgroundDim` is menus-only | None |
-| Storyboard / video | Toggle | `disableVideo` **inverted** (on = allow video). Storyboard half is no-op / coming-soon | Existing |
-| Beatmap skins | Toggle | Coming soon | None |
-| Beatmap colours | Toggle | Coming soon | None |
-| Combo colour normalisation | Slider | Coming soon | None |
-| Beatmap hitsounds | Toggle | **On** ⇔ `hitsoundVolume > 0`. Off writes `0`. On restores last non-zero volume held in **component session memory** (default `DEFAULT_SETTINGS.hitsoundVolume` if none). Not a new boolean | Existing volume key |
-| Audio offset (this beatmap) | Slider | Writes App-owned **`playSessionOffsetMs`** (number, clamp −1000…1000). Gameplay uses `settings.audioOffset + playSessionOffsetMs`. Not `onPatchSettings` | **Not persisted**; App clears on leaving `/play` |
-| Disable clicks during gameplay | Toggle | Coming soon unless a real input flag exists | None |
-
-**Do not alias Cinema (`CN`) to `disableVideo`.**
-
-#### Motion / flow
-
-Metadata fade in; settings groups slide from the right 300–400ms OutQuint. Back → Song Select.
-
-**Start gameplay:** auto-advance after **audio decode + 400ms** (still has no click-to-start). Cookie click may start **early** but is not required. Then countdown (§9).
-
-Compact: settings stack **below** metadata, full width, no right column.
+Flow: metadata fade; groups slide right 300–400ms OutQuint; Back→select; auto-advance **decode + 400ms** (no click-to-start; cookie early-start optional). Compact: settings stack below metadata, full width.
 
 ---
 
 ### 8. Gameplay HUD
 
-**SoT (full frame):** `playfield-4k/osu_2026-09-12_19-55-36.jpg` through `19-56-12.jpg`.  
-**Close crops:** `Screenshot 2026-09-12 192641.png`, `192855.png`.  
-**Existing:** `src/components/ManiaHud.tsx` — rebuild; the current sheared double-wedge (`ArgonWedgePieces`, shear 0.8) is **not** in the live stills.
-
-HUD is a DOM overlay, `pointer-events: none` during play (except the settings gear). Do not add a second scene graph.
-
-#### Regions (1366×768)
+SoT: `19-55-36…19-56-12.jpg`; close-ups `192641/192855`; countdown `192820`. Rebuild `ManiaHud.tsx`; current sheared double-wedge is not in stills. DOM overlay, `pointer-events: none` except gear; no second scene graph.
 
 ```
-z20 Health capsule + score digits          top-left
-    Judgement boxes (5 diamonds + 1 square)
-    Rank pill #1 + avatar + name + acc + combo
-z20 ACCURACY segment boxes + PENAR boxes   top-right
-    Spectator line + settings gears
-z15 Combo (centre playfield, outlined digits)
-    Judgement text (PERFECT / MISS)
-z15 Hit-error meters                       left and right of playfield
-z15 Key overlay ovals + 3-dot clusters     under receptors (playfield canvas)
-z20 Key counters B1..Bn                    bottom-right
-z20 Song progress + density                bottom
-    Time m:ss left / remaining right
+z20 health capsule + score | judgement diamonds | rank pill + avatar/name/acc/combo || ACCURACY boxes + PENAR boxes | spectator + gears
+z15 centre combo + judgement text | dual hit-error meters | key ovals + 3-dot clusters (canvas) 
+z20 key counters B1..Bn bottom-right | progress + density bottom
 ```
 
-| Piece | Geometry / look (from 19-55-36 and siblings) |
-|---|---|
-| Health | Horizontal **capsule + tail**, **280×28 du** (±8), y=12, x=8. White fill; red when draining (`192855` shows a red sliver). Not a sheared card. |
-| Score | **Inside** the capsule. Outlined JetBrains Mono / Space Grotesk 700, ~36 du, tabular, 6+ digits. Wireframe leading zeros in the Argon style. |
-| Judgement boxes | Directly under the capsule, five rotated squares + one axis-aligned square (last). Fill as judgements occur. |
-| Rank pill | Green-left capsule: `#1`, 28 du avatar, name, score, `100.00%`, `{n}x`. |
-| ACCURACY | Tiny label `ACCURACY` Inter 9 uppercase. Row of ~5 hollow boxes that fill with accuracy (Argon segment display). **Do not** put a big `%` number in this corner — the pill already has accuracy. |
-| PENAR | Tiny label **must not be `PP`**. Use `PENAR` (Inter 9). Two boxes as in the PP slot. Numeric value via `formatPenar` (`—` when uncalculated). Never print “pp”. |
-| Combo | **Centre of the playfield**, large outlined digits (`21`, `92`, `132`, `783` in stills), ~48–64 du, white stroke. Current `ArgonComboCounter` bottom-left is wrong vs stills. |
-| Hit error | Vertical rainbow bar + centre arrow, both sides in full HUD stills; left-only in some crops. Keep dual meters as in 19-55-*. |
-| Progress | Bottom 8 du track, white fill. Optional density histogram (64 bins) sitting on the track (`19-56-07` shows a thick white bar + `4:32 (67%)`). Times: elapsed left `m:ss`, remaining right. |
-| Key counters | `B1`…`Bn` labels + hit counts, bottom-right, Inter 11 / JetBrains Mono 16. |
-| Spectator | `Watching {name} play {artist} - {title} ({version}) [{diff}] on {date}` Inter 12 white 80%, top-centre/right. Live play: hide. |
-| Settings gear | Blue hex-circle ~40 du + smaller gear; opens in-play overlay (§10). `pointer-events: auto`. |
-
-Judgement popup: centre, spaced tracking (`P E R F E C T` cyan `#48c6ff` / `#7ED7FD`, `M I S S` red). Particles on Perfect (close-up still). Fade/scale OutQuint.
-
-Compact: hide key counters and spectator line; keep health, score, combo, hit error, progress. Do not cover receptors.
-
----
+Health: capsule+tail **280×28 ±8** at (8,12), white fill, red when draining. Score inside, outlined tabular ~36, 6+ digits, Argon wireframe zeros. Judgement boxes under capsule: five rotated squares + one axis square, fill on hit. Rank pill green-left: `#1`, 28 avatar, name, score, `100.00%`, `{n}x`. ACCURACY: Inter 9 label + ~5 hollow fill boxes (no big %; pill already has it). PENAR: label `PENAR` Inter 9 (never PP) + two boxes, `formatPenar` (`—` uncalculated). Combo centre-playfield outlined ~48–64 (not bottom-left). Hit-error: vertical rainbow + arrow, dual meters per full stills. Progress: 8du track + optional 64-bin histogram; elapsed `m:ss` left, remaining right. Counters `B1…Bn` Inter 11 / mono 16. Spectator `Watching {name} play {artist} - {title} ({version}) [{diff}] on {date}` Inter 12 at 80% (live: hidden). Gear: blue hex ~40 + small gear, `pointer-events: auto` → §10. Popup centre spaced (`P E R F E C T` cyan `#48c6ff/#7ED7FD`, `M I S S` red) + Perfect particles, OutQuint fade/scale. Compact: keep health/score/combo/error/progress; hide counters/spectator; never cover receptors.
 
 ### 9. Argon playfield
 
-**Stills:** `lazer-argon-mania-gameplay.png`, `192641`, `192820`, `192855`, 19-55-* HUD frames, colour charts.  
-**Code:** `src/render/WebGL2PlayfieldRenderer.ts`, `argonSkin.ts`, `flashlight.ts`. Do not change judgement timing or hold rules.
+Stills + `WebGL2PlayfieldRenderer`/`argonSkin`/`flashlight`. No timing/hold changes. WebGL2 is SoT; RhythmPlus skins draw their own slim bars (filled classic / outlined dynamic, legacy lane colours) and are not review targets.
 
-#### Column colours (ship `getArgonColumnColor` / `argonPaletteForKeyCount`)
+Ship `getArgonColumnColor` palette (L→R): 1 Yellow; 2 Green,Cyan; 3 Green,Special,Cyan; 4 Yellow,Orange,Pink,Purple; 5 Pink,Orange,Yellow,Green,Cyan; 6 Pink,Orange,Green,Cyan,Orange,Pink; 7 Pink,Orange,Pink,Special,Pink,Orange,Pink; 8 Purple,Pink,Orange,Green,Cyan,Orange,Pink,Purple; 9 Purple,Pink,Orange,Yellow,Special,Yellow,Orange,Pink,Purple; 10 Purple,Pink,Orange,Yellow,Green,Cyan,Yellow,Orange,Pink,Purple. Ignore "UPDATED" mocks. 4K stills: translucent tints alpha ~0.25–0.40, gap 1, equal widths.
 
-OK rows from `argon-column-colours-1k-10k.png` already match `ARGON_LAYOUT`:
+Rice: rounded rect h`42×noteSizeMultiplier` r3.4; filled chevron toward receptor; white foot ~18% on hit edge; never stroke-only. Hold: darker/opaque body with gradient separation; minus icon on head (+body ticks); white tail foot; rice-like head. Receptor: pale rounded cap; pressed = white/gold bloom (cite 4K col 4 in `19-55-36`, pressed oval `192855`; not colour-spec cols 5–6). Key overlay: hollow oval in column colour + 3-dot cluster (`192820`); pressed `×` (`192855` col 2). Lane dim = column colour over art at `backgroundDim`. Countdown: centre disc ~120 + draining beat arc, 3-2-1-go (`192820` = 2). Skip chip: keep functional, no new language. No osu-resources textures — canvas geometry.
 
-| K | Columns L→R |
-|---|---|
-| 1 | Yellow |
-| 2 | Green, Cyan |
-| 3 | Green, Special, Cyan |
-| 4 | Yellow, Orange, Pink, Purple |
-| 5 | Pink, Orange, Yellow, Green, Cyan |
-| 6 | Pink, Orange, Green, Cyan, Orange, Pink |
-| 7 | Pink, Orange, Pink, Special, Pink, Orange, Pink |
-| 8 | Purple, Pink, Orange, Green, Cyan, Orange, Pink, Purple |
-| 9 | Purple, Pink, Orange, Yellow, Special, Yellow, Orange, Pink, Purple |
-| 10 | Purple, Pink, Orange, Yellow, Green, Cyan, Yellow, Orange, Pink, Purple |
+### 10. In-play settings / replay overlay
 
-Do **not** apply 1k/3k/6k/7k/8k/10k “UPDATED” mock rows.
+Still `19-55-50.jpg` (open) / `19-55-41/36` (gears). Blue hex gear; right-docked dark cards + yellow sliders (same Visual/Audio rows as PlayerLoader). Replay/spectator-only top card `PLAYBACK`: skip-start/rewind/prev-frame/pause/next-frame/fast-forward/skip-end + speed slider `1.00x` + hamburger (soon); wire to `GameplayCanvas`/`replayCursor`; live: hidden. Calibration red line when wizard has no sample (§Key Decisions). Motion 200–300ms OutQuint from right; Esc/gear closes. Compact: bottom sheet.
 
-4K lane tints in live stills: translucent yellow / orange / pink / purple columns (alpha ~0.25–0.40 over the dimmed BG). `ARGON_COLUMN_GAP = 1`. Equal widths 2K–10K.
+### 11. Pause & fail
 
-#### Rice (tap)
+Stills `pausef/failed.png`. Source `GameplayMenuOverlay.cs` (200ms, 80px bars, 0.75 scrim). Keep `PauseOverlay.tsx`.
 
-- Rounded rect, height `42 * noteSizeMultiplier`, corner `3.4`.
-- **Filled** chevron pointing **to the receptor** (down in downscroll), white.
-- **White foot** along the hit edge (~18% of height = `ARGON_NOTE_ACCENT_RATIO` inverse band).
-- Not a stroke-only arrow.
+Shared: visible playfield + black 0.75; lowercase Space Grotesk 600/48 tracking 5 `#ffcc22`; full-width sheared bars h**80**, gap 2, inset 50; triangle pattern (original geometry, not cards); stats Inter 18 centred with exact labels `Retry count: / Song progress: / Accuracy:` (bold values); measured pause y@683: Continue 262–340 `#88b300`, Retry 344–423 `#eeaa00`, Quit 426–506 `#aa1b27` (±2). Fade 200ms In; reduced-motion fade only.
 
-#### Hold
-
-- Body darker/more opaque than rice; gradient so stacked LNs separate (spec still “transparent gradient shadow”).
-- **Minus** icon on the head (and on body ticks as in close-up).
-- White foot on the tail.
-- Head uses the same rounded-rect language as rice.
-
-#### Receptors / keys / countdown
-
-| Element | Spec |
-|---|---|
-| Receptor | Pale rounded cap per column; pressed column **flashes** white/gold bloom. Cite `osu_2026-09-12_19-55-36.jpg` **column 4** (rightmost of 4K) and `192855` pressed oval (`×`). Do not cite colour-spec “column 5–6” |
-| Key overlay | Hollow oval in column colour + **3-dot cluster** below (`192820`). Pressed: `×` in the oval (`192855` column 2) |
-| Lane dim | Translucent column colour; playfield BG is the beatmap art at `backgroundDim` |
-| Countdown | Centre dark disc ~120 du, white arc draining with the beat, number 3-2-1 then go (`192820` shows `2`) |
-| Skip intro | Existing skip control; visual: small skip chip if present — **no still**, keep functional, do not invent a second language |
-
-WebGL2 is SoT for the playfield.
-
-#### What is not copied
-
-osu-resources note textures. Draw geometry in canvas.
-
----
-
-### 10. In-play settings / replay playback overlay
-
-**Still:** `playfield-4k/osu_2026-09-12_19-55-50.jpg` (open), `19-55-41.jpg` / `19-55-36.jpg` (collapsed gears).
-
-Opened from the blue hex gear. Same Visual / Audio groups as PlayerLoader, docked **right**, dark cards, yellow sliders.
-
-#### PLAYBACK (replay / spectator only)
-
-Top-right card, label `PLAYBACK`:
-
-- Transport: skip-to-start, rewind, previous-frame, pause, next-frame, fast-forward, skip-to-end
-- `Playback speed` slider + `1.00x`
-- Hamburger: coming-soon unless we have extra replay menus
-
-Wire to existing replay seek/speed in `GameplayCanvas` / `replayCursor.ts`. Live play: **hide** this card.
-
-#### Visual / Audio
-
-Same rows as PlayerLoader. Extra line in still: `Previous play: Previous play too short to use for calibration` (red) — show when offset wizard has no sample; otherwise hide.
-
-Motion: 200–300ms OutQuint from the right. Esc / gear again closes. Compact: bottom sheet, no shear.
-
----
-
-### 11. Pause and fail
-
-**Stills:** `pause/pausef.png`, `pause/failed.png`.  
-**Lazer:** `GameplayMenuOverlay.cs` — `TRANSITION_DURATION = 200`, `button_height = 80`, `background_alpha = 0.75`, padding horizontal 50, spacing 2, title Torus Alternate 48 / spacing 5 / yellow.
-
-Existing: `src/components/PauseOverlay.tsx`.
-
-#### Shared
-
-- Playfield remains visible, black **0.75**.
-- Title lowercase Space Grotesk 600 48, tracking 5 du, `#ffcc22`. **No** extra artist/title/mod chips.
-- Full-width **sheared** bars, height **80**, gap **2**, horizontal inset **50 du**. Triangle pattern inside (same family as the menu field). **Not** rounded cards.
-- Stats, Inter 18, centred:
-
-```
-Retry count: **N**
-Song progress: **N%**
-Accuracy: **N.NN%**
-```
-
-Exact labels from the still (`Retry count:`, not `retries:`). Bold on the values.
-
-Measured pause y at x=683: Continue 262–340 (`#88b300`), Retry 344–423 (`#eeaa00`), Quit 426–506 (`#aa1b27`). **80 du** C# `button_height` (±2 du).
-
-Fade **200ms Easing.In** (not Out). Reduced motion: fade only.
-
-#### Pause
-
-Buttons: **Continue** green `#88b300`, **Retry** `#eeaa00`, **Quit** `#aa1b27`. Esc = Continue. R = Retry. Title `paused`.
-
-#### Fail
-
-Title `failed`. **Retry** + **Quit** only. Esc = Quit. Bottom strip **`#333333`** (sampled y=717–726 on `failed.png`), with a centred save control fill **`#4f4f4f`** and white download glyph. Do **not** use `#8d8d8d` (mis-sample of the icon). Wire the control to existing replay export if cheap; else visible coming-soon.
-
-Compact: drop shear; bars remain 80 CSS px tall, 16px horizontal inset, text not clipped.
-
-#### What is not copied
-
-osu! wordmark in the playfield art (that's beatmap art). Triangle **pattern** is original geometry.
-
----
+Pause: Continue/Esc, Retry (`R`), Quit. Fail: `failed` + Retry/Quit only (Esc=Quit); bottom strip `#333333` (sampled y717–726) with centred `#4f4f4f` save control + white download glyph (not `#8d8d8d` icon mis-sample); wire to replay export if cheap else soon. Compact: unsheared 80px bars, 16px inset, unclipped text.
 
 ### 12. Results
 
-**Stills:** `results/osu_2026-09-12_19-51-20.jpg` (this play in centre, older local on the right), `19-51-31.jpg` (browsing: older play in centre, this play on the left as `#1`).
+Stills `19-51-20.jpg` (this play centre) / `19-51-31.jpg` (browsing; this play `#1` left). osu!standard captures — adapt: no slider rows, no PP.
 
-Captures are **osu!standard** (Great/OK/Meh/Miss + slider tick/end + PP). Adapt as locked.
+`z0` blurred BG / `z1` side cards (other locals, clickable) / `z2` centre card + overlapping avatar / `z3` footer / `z4` toolbar. Centre: `#3a3a3c`–`#454545`, **500 ±24** wide, r20, centred; avatar **72** overlapping top; name (`Guest` fallback); title Space Grotesk 600/18, artist Inter 12 uppercase; grade ring **200 ±8**, letter Space Grotesk **120**; score mono ~40 tabular with commas; `★ {n} {creator}'s {diff} mapped by {mapper}`; `Played on {date}` Inter 11 muted.
 
-#### Layout
+Ring ticks (lazer MIT; 0°=12 o'clock CW; 2° gaps; SS virtual 1%/3.6°): D 0–0.70 → 0–252° (badge 126°); C 0.70–0.80 → 252–288° (badge 270°; still SoT); B 0.80–0.90 → 288–324° (306°); A 0.90–0.95 → 324–342° (badge 328.5°; still SoT); S 0.95–0.99 → 342–356.4° (345.6°); SS 0.99–1.00 → 356.4–360° (badge 0°); F no tick, letter only. Silver S/SS same angles.
 
-```
-z0  Blurred beatmap BG
-z1  Side score card(s) — other local scores, clickable
-z2  Centre results card + overlapping avatar
-z3  Footer actions
-z4  Toolbar
-```
+Stats: `ACCURACY {96.49%} | MAX COMBO {119/227} | PENAR {formatPenar}` + six mania rows `PERFECT/GREAT/GOOD/OK/MEH/MISS` (`JUDGEMENT_COLORS`); side cards compact with `#1/#2` + grade chip; click swaps centre. Local chart history only.
 
-Centre card (visual): dark `#3a3a3c`–`#454545`, **500 du ±24** wide, radius **20**, vertically centred. Avatar **72 du** overlaps the top edge. Player name under avatar (display **Guest** if `localDisplayName` is empty).
+Footer (1366 du; Back x=0 **94×50** → select (or `/history`); green download+check x=**462** **288×50 ±8** → `replayTransfer` export or soon; playlist 48×48 soon; heart 48×48 favourite): just-finished inserts Retry + Replay **108×50** in x≈102–450 gap without moving Back/green; History-browse hides them. 390×844 wrap (≥44px, no shear): row1 Back+Retry/Replay (flex wrap); row2 green (flex, min 120)+heart; drop playlist first; never shrink Back <44 or off left.
 
-| Block | Spec |
-|---|---|
-| Title / artist | Space Grotesk 600 18 / Inter 12 uppercase |
-| Grade ring | **200 du ±8**. Centre letter Space Grotesk **120**. Inner graded arc + outer rank badges. Stills (`19-51-20` A, `19-51-31` C) SoT for A/C. SS/S/D/F from lazer MIT — see table below. |
-| Score | JetBrains Mono 700 ~40, tabular, with commas |
-| Diff line | Star pill + `{creator}'s {diff}` + `mapped by {mapper}` |
-| Stats grid | See mania mapping |
-| Date | `Played on {date}` Inter 11 muted |
-
-#### Grade ring ticks (lazer source)
-
-Cite `osu.Game/Screens/Ranking/Expanded/Accuracy/AccuracyCircle.cs`, `GradedCircles.cs`, `osu.Game/Rulesets/Scoring/ScoreProcessor.cs` (mania uses these default cutoffs). Do not copy samples.
-
-`CircularProgress` / `GradedCircle.Rotation = startProgress * 360`: **0° = 12 o’clock, clockwise**. `GRADE_SPACING_PERCENTAGE = 2/360` (~2° gap). `VIRTUAL_SS_PERCENTAGE = 0.01` (SS is a 1% / 3.6° band so it is visible).
-
-Mania cutoffs (`accuracy_cutoff_*`): D **0**, C **0.70**, B **0.80**, A **0.90**, S **0.95**, SS/X **1.00**.
-
-| Grade | Accuracy band | Arc start–end (CW from 12) | Badge (source) | Notes |
-|---|---|---|---|---|
-| D | 0.00–0.70 | 0°–252° | Mid-band 0.35 → **126°** (~4 o’clock). Still D chip on the right. | Large red/orange arc |
-| C | 0.70–0.80 | 252°–288° | Mid 0.75 → **270°** (9 o’clock). Still SoT. | |
-| B | 0.80–0.90 | 288°–324° | Mid 0.85 → **306°** | |
-| A | 0.90–0.95 | 324°–342° | `Lerp(A,S,0.25)` = 0.9125 → **328.5°**. Still SoT (upper-left). | Pulled down to miss SS |
-| S | 0.95–0.99 | 342°–356.4° | `Lerp(S, X−0.01, 0.25)` = 0.96 → **345.6°** | Same pull-down |
-| SS | 0.99–1.00 | 356.4°–360° | Badge at **1.00 → 0° / 12 o’clock** | Virtual 1% band |
-| F | — | **No tick** | Centre letter **F** only | `ScoreRank.F` / fail. `AccuracyCircle` skips badges when rank is F. Inner D–SS bands still draw. |
-
-Silver S/SS (HD/FL/FI) use the same angles as S/SS (`AdjustRank`). Fail does not add an F notch.
-
-#### Mania stats mapping
-
-Stills:
-
-```
-ACCURACY | MAX COMBO | PP
-GREAT    | OK        | MEH     | MISS
-SLIDER TICK            | SLIDER END
-```
-
-Ship:
-
-```
-ACCURACY | MAX COMBO | PENAR
-PERFECT  | GREAT     | GOOD    | OK
-MEH                  | MISS
-```
-
-- ACCURACY `96.49%` (two decimals)
-- MAX COMBO `119/227` (current / map max)
-- PENAR via `formatPenar` (never `PP`)
-- Six mania judgements, colours from `JUDGEMENT_COLORS` in `src/ruleset/mania/judgements.ts`
-- **No slider tick/end rows.** Do not invent hold-tick rows unless a still appears.
-
-Side cards: same judgement list, compact. Rank `#1` / `#2` top-left. Grade chip on the score. Clicking a card **swaps** it into the centre (still 19-51-31). List is local history for this chart only, score then accuracy.
-
-#### Footer actions (1366 du)
-
-Measured on `19-51-20.jpg` at y≈735–748: Back pink x=**0–93** (width ~94), green ~465–746.
-
-**History-browse (match still — no Retry/Replay):**
-
-| Control | x origin | Width × height (du) | Mapping |
-|---|---|---|---|
-| Back | **x=0** | **94 × 50** | Song Select, or `/history` if opened from History |
-| Green download+check | **462** (do not translate) | **288 × 50** (±8) | Export replay (`replayTransfer`) when a replay exists; else coming-soon |
-| Playlist | after green + 8 | **48 × 48** | Coming soon |
-| Heart | after playlist + 8 | **48 × 48** | Favourite set (`rhythm_mania_v1_favorite_songs`) |
-
-**Just-finished play:** insert Retry + Replay **in the gap** (x≈102–450) **without translating** Back or the green cluster.
-
-| Control | Width × height (du) | Action |
-|---|---|---|
-| Retry | **108 × 50** | Restart chart (same as pause Retry) |
-| Replay (watch) | **108 × 50** | Watch this run |
-
-Hide Retry/Replay when browsing History.
-
-**390×844 wrap / priority** (min 44 CSS px, no shear):
-
-1. Row 1: Back (94) + Retry + Replay if just-finished (flex, wrap).
-2. Row 2: Green (flex 1, min 120) + Heart (48).
-3. **Drop first:** Playlist (coming-soon).
-4. If still overflow: Heart stays on row 2; never shrink Back below 44px or move it off the left edge.
-
-#### Motion
-
-Card enter: 400ms OutQuint scale 0.96→1 + fade. Side cards stagger 60ms. Compact: single column, side cards as a horizontal scroller under the main card; footer uses the wrap rule above.
-
-#### What is not copied
-
-osu!standard slider rows; `PP` label; osu! grade assets — draw the ring in SVG/CSS.
+Motion: card 400ms OutQuint 0.96→1 + fade; sides stagger 60ms. Compact: main full width; sides horizontal scroll.
 
 ---
 
-### 13–15. Settings, Skins, History — **appendix (no stills; keep working)**
+### 13–15. Settings, Skins, History — appendix (no stills; keep working)
 
-No dedicated stills; **do not restyle** the global settings drawer, skins page, or history screen until stills exist. This appendix is reference only. Keep existing routes working.
+**13. Settings** (`SettingsDrawer` + registry; IA unchanged). Actual rows: General `localDisplayName, menuCursorEnabled, enableSongPreview`; Visual `playfieldWidthPercent, backgroundDim, songSelectBackgroundDim, disableVideo, videoOffset, disableComboBurst, showFpsCounter, uncappedMenuMotion, renderDpr`; Gameplay `scrollSpeed, lockScrollSpeedDuringPlay, showPenarDuringPlay, upsurfaceNoteMode, visualOffset, enableMapSV`; Audio `musicVolume, previewVolume, launchMusicVolume, masterVolume, hitsoundVolume, audioOffset, compensateOutputLatency, offsetWizard(button)`; Input `bindings`; Misc `restoreDefaults`. There is no `progressBarTop/menuBackgroundDim/disableParticles/babylonFloor/limitDprToOne/gameplayBackgroundBlur` row (limitDprToOne only migrates to `renderDpr`).
 
-#### 13. Settings overlay (unverified-no-still)
+**14. Skins** (`/skins`, `SkinScreen`). `skinId` is `argon` (default) or `custom` + `squareRenderStyle` (`rhythmplus` filled slim bars / `rhythmplus-dynamic` outlined); `rhythmmania-3d` collapses to argon. Classic/3D/circular as separate ids are removed. No listing-like overlay without a still.
 
-Opens from toolbar gear and menu Settings. Keep `SettingsDrawer` behaviour and **every registry id** (restyle-in-place only if a still arrives):
-
-| Section | Registry ids |
-|---|---|
-| General | `localDisplayName`, `progressBarTop`, `enableSongPreview` |
-| Graphics | `playfieldWidthPercent`, `backgroundDim`, `menuBackgroundDim`, `disableVideo`, `videoOffset`, `disableParticles`, `showFpsCounter`, `babylonFloor` |
-| Gameplay | `scrollSpeed`, `lockScrollSpeedDuringPlay`, `showPenarDuringPlay`, `upsurfaceNoteMode`, `visualOffset`, `enableMapSV` |
-| Audio | `musicVolume`, `previewVolume`, `masterVolume`, `hitsoundVolume`, `audioOffset`, `offsetWizard` |
-| Input | `bindings` |
-| Maintenance | `restoreDefaults` |
-
-`limitDprToOne` is not a user-facing row. Until a still exists: keep the drawer as-is.
-
-#### 14. Skins screen (unverified-no-still)
-
-Keep `/skins` and `SkinScreen.tsx`. One row per `SkinStyleId`:
-
-| id | Label | Badge |
-|---|---|---|
-| `argon` | Argon | DEFAULT (WebGL2 SoT) |
-| `rhythmplus` | RhythmPlus Classic | LEGACY (slim filled bars) |
-| `rhythmplus-dynamic` | RhythmPlus Dynamic | LEGACY (outlined bars) |
-
-RhythmMania Classic, RhythmMania 3D, and the circular skin were removed; stored `skinId`/`squareRenderStyle` values for them collapse to Argon.
-
-Do not invent a listing-like overlay until a still exists.
-
-#### 15. History (unverified-no-still + locked **entry**)
-
-Keep `/history` and `PersonalHistoryScreen.tsx` **working as-is**. Empty copy may already say enough; if touched later, use **“No records yet!”**.
-
-**Entry points after the menu rebuild (locked):**
-
-1. Route `/history` (bookmarkable).
-2. Song Select Options → **View play history**.
-3. Results side cards already browse local scores.
-
-**No** main-menu History wedge (lazer has none). Do not restyle History into results-cards until a still exists.
+**15. History** (`/history`, `PersonalHistoryScreen`). Entries: `/history` route, Options "View play history", Results side cards. No menu wedge. Untouched empty copy otherwise; if touched, "No records yet!".
 
 ---
 
 ### 16. Mobile 390×844
 
-Mandatory checks (Playwright). Shear **must not** clip hit targets.
-
-| Surface | Compact behaviour |
-|---|---|
-| Toolbar | **Keep:** Settings, Home, **Listing**, Music, Clock; name if it fits. Overflow **only** coming-soon (Changelog, Wiki, Rankings, Globe, Bell) via 40×40 `···` → 44px bottom sheet. Never drop Listing. Chrome **no shear** at `max-width: 720px`. |
-| Menu wedges | Unsheared 48px rows or horizontal scroll. Cookie tappable. |
-| Song Select | No shear. Wedge → top stack. Carousel full width. Cookie ≤96px or hidden. |
-| Listing | 1 column. Filters in a disclosure. |
-| Mods | Horizontal scroll. Footer unclipped. |
-| PlayerLoader | Settings below metadata. |
-| HUD | Health, score, combo, hit error, progress. Hide B-counters / spectator. |
-| Pause/fail | Unsheared 80px bars, 16px inset. |
-| Results | Main card full width; side cards horizontal scroll. Footer wrap: see §12 (drop playlist first). |
-| Settings / skins / history | Full-screen sheets. |
-
-Minimum tap **44 CSS px**. Decorative wedge **no shear**.
+Playwright-mandatory; shear never clips targets. Toolbar keeps Settings/Home/Listing/Music/Clock (+name/avatar if fit); rest via `···` sheet. Menu: unsheared 48px rows/scroll, tappable cookie. Select: no shear, top stack, full-width carousel, cookie ≤96px/hidden. Listing: 1 col + filter disclosure. Mods: horizontal scroll, unclipped footer. PlayerLoader: settings below metadata. HUD: health/score/combo/error/progress only. Pause/fail: unsheared 80px bars, 16px inset. Results: full-width main, sides scrolled, §12 wrap. Settings/skins/history: full sheets. Min tap 44 CSS px.
 
 ---
 
 ### 17. Reduced motion
 
-`prefers-reduced-motion` + `useReducedMotion`.
-
-**Keep:** colour, opacity fades ≤200ms, overlay presence.
-
-**Drop:** triangle drift, logo pulse scale, elastic hover width, icon beat-bounce, spectrum idle animation (static bars OK), carousel overshoot.
-
-Menu buttons may snap to expanded width. Pause/fail may still fade 200ms.
-
-Use existing `useLazerReducedMotion()` and the `prefers-reduced-motion` block already in `src/ui/lazer/tokens.css` (durations → 0ms except `--lazer-dur-overlay: 200ms`). `html[data-skin="argon"] { --argon-motion: 0ms }` stays for playfield.
+`prefers-reduced-motion` + `useLazerReducedMotion`. Keep colour/opacity fades ≤200ms + overlay presence. Drop triangle drift, logo pulse, elastic hover width (snap), beat-bounce, spectrum idle (static OK), carousel overshoot. Pause/fail fade stays. Tokens already zero durations except `--lazer-dur-overlay: 200ms`; `html[data-skin="argon"]{--argon-motion:0ms}`.
 
 ---
 
@@ -1174,175 +307,104 @@ Use existing `useLazerReducedMotion()` and the `prefers-reduced-motion` block al
 
 | Piece | Owns it |
 |---|---|
-| `html[data-ui="lazer"]`, chrome CSS variables, reduced-motion | **Existing** `src/ui/lazer/tokens.css` (extend) + `applyLazerChrome` in `App.tsx` |
-| Eases, durations | **Existing** `src/ui/lazer/motion.ts` |
-| `Shear`, `LazerCookie`, `FooterBackButton` | **Existing** `src/ui/lazer/*.tsx` |
-| `ComingSoon` | **New** `src/ui/lazer/ComingSoon.tsx` (only new primitive) |
-| Toolbar + captions + now-playing | `src/ui/lazer/Toolbar.tsx` (new), mounted from `App.tsx` |
-| Main menu states | `src/components/MainMenu.tsx` |
-| Song Select V2 | `src/components/SongSelect.tsx` |
-| Options popover | `SongSelect.tsx` or `src/ui/lazer/BeatmapOptionsPopover.tsx` |
-| Mod overlay | `src/components/ModSelectOverlay.tsx` |
-| Listing | `src/components/OnlineBeatmapCatalog.tsx` (replace chrome; keep download helper) |
+| `data-ui`, chrome vars, reduced-motion | `src/ui/lazer/tokens.css` + `applyLazerChrome` (`motion.ts`, called from `App.tsx`) |
+| Eases/durations | `src/ui/lazer/motion.ts` |
+| `Shear`, `LazerCookie`, `FooterBackButton`, `LazerToolbar`, `NowPlayingPanel`, `ButtonSystem`, `MenuButton`, `TriangleField`, `SongSelectLeftPanel/Carousel/Footer`, `ComingSoonNotifications` | `src/ui/lazer/*.tsx` (no `ComingSoon.tsx`) |
+| Menu states | `src/components/MainMenu.tsx` |
+| Select V2 / options | `src/components/SongSelect.tsx` (+ `BeatmapOptionsPopover` if split) |
+| Mods | `src/components/ModSelectOverlay.tsx` (`ALL_MODS` incl. coming-soon DC/DS; K-mods generated) |
+| Listing | `src/components/OnlineBeatmapCatalog.tsx` (chrome only; helper stays) |
 | PlayerLoader | new `src/components/PlayerLoader.tsx`, first paint of `/play` |
-| HUD | `src/components/ManiaHud.tsx` |
-| Playfield notes | `src/render/WebGL2PlayfieldRenderer.ts`, `argonSkin.ts`, `flashlight.ts` |
-| In-play overlay | `GameplayCanvas.tsx` + PlayerLoader settings groups shared module |
-| Pause / fail | `src/components/PauseOverlay.tsx` |
-| Results | `src/components/ResultsScreen.tsx` |
-| Settings | `src/components/settings/SettingsDrawer.tsx` + registry (IA unchanged) |
-| Skins | `src/components/SkinScreen.tsx` |
-| History | `src/components/PersonalHistoryScreen.tsx` |
-| Argon CSS | `src/index.css` `html[data-skin="argon"]` |
-| Judgement names/colours | `src/ruleset/mania/judgements.ts` (do not rename internals in `scoreProcessor.ts`) |
-| PENAR | `src/utils/penar.ts` |
-| Density 64-bin | `src/render/argonSkin.ts` `computeSongDensityBins` |
-| Preview audio | `src/utils/previewPlayer.ts` |
+| HUD / notes / in-play | `ManiaHud.tsx` / `WebGL2PlayfieldRenderer.ts`, `argonSkin.ts`, `flashlight.ts` / `GameplayCanvas.tsx` + shared PlayerLoader groups |
+| Pause/fail, Results, Settings, Skins, History | `PauseOverlay.tsx` / `ResultsScreen.tsx` / `settings/*` / `SkinScreen.tsx` / `PersonalHistoryScreen.tsx` |
+| Argon CSS, judgements, PENAR, density, preview | `src/index.css` / `ruleset/mania/judgements.ts` (display names) / `utils/penar.ts` / `argonSkin.computeSongDensityBins` / `utils/previewPlayer.ts` |
 
-**Never copy `visual-refs/` into `public/`.**
+Never copy `visual-refs/` into `public/`.
 
 ---
 
 ## API / Interface Changes
 
-No HTTP API changes for overlay chrome. Listing chrome consumes the **live** `GET /api/catalog/search` + Catboy/osudl helper. Changing hosts or dropping the token gate is **not** overlay chrome.
-
-UI-level interfaces this spec adds:
+No HTTP changes. Listing consumes live `GET /api/catalog/search` + Catboy/Nekoha helper.
 
 ```ts
 type LazerMenuState = 'initial' | 'topLevel' | 'play';
-
 type ComingSoonReason = 'coming-soon';
-
-interface ToolbarProps {
-  visible: boolean;
-  active: 'home' | 'listing' | 'music' | 'none';
-  displayName: string;
-  onSettings(): void;
-  onHome(): void;
-  onListing(): void;
-}
-
-interface PlayerLoaderProps {
-  beatmap: Beatmap;
-  settings: GameSettings;
-  playSessionOffsetMs: number;
-  onPlaySessionOffsetChange(ms: number): void; // clamp −1000…1000; App-owned
-  onBack(): void;
-  onReady(): void; // countdown
-  onPatchSettings(patch: Partial<GameSettings>): void; // dim, hitsoundVolume only — not offset
-}
+interface ToolbarProps { visible: boolean; active: 'home'|'listing'|'music'|'none'; displayName: string; onSettings(): void; onHome(): void; onListing(): void; }
+interface PlayerLoaderProps { beatmap: Beatmap; settings: GameSettings; onBack(): void; onReady(): void; onPatchSettings(patch: Partial<GameSettings>): void; }
+// Proposed only: playSessionOffsetMs + onPlaySessionOffsetChange — not in types/sanitize/registry today.
 ```
 
-Settings patches still flow through `sanitizeSettings`. Do **not** add `gameplayBackgroundBlur` or a persisted per-map offset map. **`playSessionOffsetMs` is App React state**, not `GameSettings`. `GameplayCanvas` effective offset = `settings.audioOffset + playSessionOffsetMs`. Clear `playSessionOffsetMs` to `0` when leaving `/play`.
+Patches flow through `sanitizeSettings`. No `gameplayBackgroundBlur`, no persisted per-map offset map.
 
 ---
 
 ## Data Model Changes
 
-None for server. Client:
-
-- No new persistent keys for chrome.
-- Favourites already `rhythm_mania_v1_favorite_songs`.
-- History already `rhythm_mania_v1_play_history`.
-- PlayerLoader per-map offset: App-owned **`playSessionOffsetMs: number`**, not persisted, cleared when leaving `/play`. GameplayCanvas consumes `settings.audioOffset + playSessionOffsetMs`.
-- Hitsounds: existing `hitsoundVolume` only.
+None server-side. Client: no new persistent keys; favourites `rhythm_mania_v1_favorite_songs`; history `rhythm_mania_v1_play_history`; per-map offset + hitsound-restore are session-only proposals on existing `hitsoundVolume`/`audioOffset` (not new booleans/keys).
 
 ---
 
 ## Alternatives Considered
 
-**1. Keep current chrome, only restyle colours.**  
-Rejected. Stills require different layout (cookie button system, V2 carousel, Argon HUD capsule, results ring). Colour tokens alone cannot get there.
-
-**2. Embed a 1024×768 lazer-style design canvas and letterbox.**  
-Closer to `ScalingContainerTargetDrawSize`, but every still is 1366×768 and C# constants already match those pixels. Letterboxing wastes mobile height. Chosen: 1366×768 du on desktop, a real compact layout at 390×844.
-
-**3. Hide unavailable features (Edit, Multi, Playlists, wiki, …).**  
-Rejected by user lock. Visible + coming-soon.
-
-**4. Use osu-web listing PNGs as the visual target.**  
-Rejected by user lock. Chrome is `beatmaplisting.jpg`.
-
-**5. Treat Babylon as Argon SoT.**  
-Rejected. WebGL2 is the latency/visual SoT for the playfield.
-
-**6. Listing data: keep osu! token search vs ship hinai/osu.direct in overlay chrome vs local-only listing.**  
-Chosen: **chrome-only** overlay against the live Bearer + Catboy/osudl helper. Planned unauthenticated hinai → osu.direct → Catboy is not a visual dependency. Local-only listing would make Browse a no-op.
-
-**7. History entry: menu wedge vs route-only vs Options row.**  
-Chosen: keep `/history` + Options “View play history” + Results local browse. **No** menu wedge (lazer has none). Chrome restyle waits for a still.
-
-**8. Greenfield `src/ui/lazer/` vs extend in-tree module.**  
-Chosen: extend the existing `tokens.css` / `applyLazerChrome` / primitives. Duplicating files would clobber the existing module.
+1. **Restyle colours only** — rejected: stills need new layout (button system, V2 carousel, HUD capsule, results ring).
+2. **1024×768 letterboxed canvas** — rejected: stills are 1366×768 and C# constants already match; letterbox wastes mobile height. Chosen: 1366 du desktop + real 390×844 compact.
+3. **Hide unavailable features** — rejected (user lock): visible + coming-soon.
+4. **osu-web listing PNGs** — rejected: chrome is `beatmaplisting.jpg`.
+5. **Anything but WebGL2 as Argon SoT** — rejected: single WebGL2 renderer.
+6. **Token search / osudl / hinai / osu.direct in chrome scope** — rejected: unauthenticated catboy→Nekoha already ships; chrome consumes it. Local-only listing would make Browse a no-op.
+7. **Menu History wedge** — rejected: `/history` + Options row + Results browse; lazer has no wedge.
+8. **Greenfield lazer module** — rejected: extend in-tree `tokens.css`/`motion.ts`/primitives.
 
 ---
 
-## Security & Privacy Considerations (brand + assets)
+## Security & Privacy (brand + assets)
 
 | Threat | Mitigation |
 |---|---|
-| Trademark / brand confusion | No osu! logo, wordmark, ppy, Torus, official mascots, osu-resources bitmaps. Cookie is original geometry + “RM”. Listing icon is original. |
-| Shipping stills | `visual-refs/` stays out of `public/`. Playwright compares at dev-time only. |
-| Asset XSS | Imported beatmap media still goes through `isSafeAssetUrl`. Catalog covers are a separate path (existing); do not loosen. |
-| Offline privacy | No Google login, no RM accounts, no replay upload. Local display name is device-local (max 32). |
-| Coming-soon destinations | Must not deep-link to osu.ppy.sh in a way that implies we are osu!. Wiki/changelog coming-soon; do not open osu! web as a substitute. |
+| Trademark confusion | No osu! logo/wordmark/ppy/Torus/mascots/bitmaps; RM cookie + original listing icon |
+| Shipping stills | `visual-refs/` never in `public/`; Playwright dev-time only |
+| Asset XSS | Beatmap media via `isSafeAssetUrl`; don't loosen catalog covers |
+| Offline privacy | No login/accounts/upload; display name device-local ≤32 |
+| Coming-soon links | Never deep-link osu.ppy.sh as a substitute; wiki/changelog stay soon |
 
-Severity: **High** if a shipped build contains the osu! mark or mascot. Mitigation is the cookie/empty-state rules above.
+Severity **High** if a build ships the osu! mark or mascot.
 
 ---
 
 ## Observability (visual regression)
 
-This is a visual spec; “observability” is **regression against stills**, not APM.
-
 | Check | How |
 |---|---|
-| Layout | Playwright 1280×720 screenshot vs mapped still (scale still to 1280×720 for diff). Fail on HUD corner / missing cookie / Global tab / “pp” / osu! wordmark |
-| Compact | Playwright **390×844**. Assert hit targets ≥44px, no sheared clip |
-| Motion | Hover Play at 2× duration; elastic width not CSS `ease`. Reduced-motion: no pulse/elastic |
-| Tokens | `/` has `html[data-ui="lazer"]`. Cookie tokens present |
-| Unit | Existing Vitest stays green (`npm run lint`, `npm test`). Chrome changes must not claim “looks like lazer” from unit tests alone |
+| Layout | Playwright 1280×720 vs mapped still (scale still). Fail on wrong HUD corner, missing cookie, Global tab, "pp", osu! wordmark |
+| Compact | Playwright 390×844: targets ≥44px, no shear clip |
+| Motion | Hover Play at 2×; elastic width not CSS ease. Reduced-motion: no pulse/elastic |
+| Tokens | `/` has `html[data-ui="lazer"]`; cookie tokens present |
+| Unit | `npm run lint`, `npm test` stay green; units never prove "looks like lazer" |
 
-No production metrics required for chrome. Optional: count coming-soon clicks in local debug only — not a product analytics pipeline.
+No prod metrics for chrome. Optional local-only coming-soon click counts.
 
 ---
 
 ## Rollout Plan
 
-Lazer chrome is the **default Argon path**. Escape hatch: the RhythmPlus skins keep `data-skin=legacy` and render their slim-bar playfield geometry.
-
-`applyLazerChrome` already sets `data-ui="lazer"` for Argon. Mixed chrome across surfaces (lazer menu + old select) is **expected** during restyle work; keep each surface change self-contained. Settings/Skins/History restyles are out of scope here.
-
-Rollback: revert the chrome change; mechanics are untouched. Do not feature-flag individual pixels beyond `data-ui`.
+Lazer chrome is the default Argon path (`data-ui="lazer"`; RhythmPlus keeps `data-skin=legacy` slim-bar geometry). Mixed chrome across surfaces is expected mid-migration; keep each surface self-contained. Settings/Skins/History restyles out of scope. Rollback: revert chrome change; mechanics untouched; no per-pixel flags beyond `data-ui`.
 
 ---
 
 ## Open Questions
 
-None. Remaining leftovers were locked by the user on 2026-09-12.
+None. Leftovers locked 2026-09-12.
 
 ---
 
 ## References
 
-- Stills: `visual-refs/**` (this spec’s visual SoT)
-- Product surface: offline client, Local ranking, mirrors
-- Lazer MIT source (numbers only, no assets):
-  - `osu.Game/Screens/Ranking/Expanded/Accuracy/AccuracyCircle.cs` — `VIRTUAL_SS_PERCENTAGE`, `GRADE_SPACING_PERCENTAGE`, badge lerp
-  - `osu.Game/Screens/Ranking/Expanded/Accuracy/GradedCircles.cs` — D–SS arc bands, `Rotation = startProgress * 360`
-  - `osu.Game/Rulesets/Scoring/ScoreProcessor.cs` — mania grade cutoffs 1.00 / 0.95 / 0.90 / 0.80 / 0.70 / 0
-  - `osu.Game/Screens/Menu/ButtonSystem.cs` — `BUTTON_WIDTH = 140`, `WEDGE_WIDTH = 20`
-  - `osu.Game/Screens/Menu/MainMenuButton.cs` — hover ×1.5 OutElastic 500ms, bounce constants
-  - `osu.Game/Screens/Menu/ButtonArea.cs` — `BUTTON_AREA_HEIGHT = 100`
-  - `osu.Game/Overlays/Toolbar/Toolbar.cs` — `HEIGHT = 40`, `TOOLTIP_HEIGHT = 30`
-  - `osu.Game/OsuGame.cs` — `SHEAR = (0.2, 0)`, `SCREEN_EDGE_MARGIN = 12`
-  - `osu.Game/Screens/Footer/ScreenFooter.cs` — `HEIGHT = 50`, logo facade `(-76, -36)`
-  - `osu.Game/Screens/Footer/ScreenFooterButton.cs` — 116×75, radius 10
-  - `osu.Game/Screens/Footer/ScreenBackButton.cs` — width 240, `#DE31AE` / `#FF86DD`
-  - `osu.Game/Screens/Play/GameplayMenuOverlay.cs` — 200ms In, 80px bars, 0.75 scrim
-- In-tree: `src/ui/lazer/*` (extend), `src/render/argonSkin.ts`, `src/ruleset/mania/judgements.ts`, `src/utils/penar.ts`, `src/utils/osuTokenManager.ts`, `src/components/*`
-- Fonts: Inter, Space Grotesk, JetBrains Mono via `src/index.css`
+- Stills: `visual-refs/**`
+- Offline product: Local ranking, mirrors
+- Lazer MIT (numbers only): `AccuracyCircle` (`VIRTUAL_SS_PERCENTAGE`, `GRADE_SPACING_PERCENTAGE`, badge lerp), `GradedCircles` (D–SS bands, `Rotation=startProgress*360`), `ScoreProcessor` (mania 1.00/0.95/0.90/0.80/0.70/0), `ButtonSystem` (140/20), `MainMenuButton` (hover ×1.5 elastic, bounce consts), `ButtonArea` (100), `Toolbar` (40/30), `OsuGame` (shear 0.2, margin 12), `ScreenFooter` (50, facade −76,−36), `ScreenFooterButton` (116×75 r10), `ScreenBackButton` (240, `#DE31AE/#FF86DD`), `GameplayMenuOverlay` (200ms In, 80px, 0.75)
+- In-tree: `src/ui/lazer/*`, `argonSkin.ts`, `judgements.ts`, `penar.ts`, `osuTokenManager.ts`, `src/components/*`
+- Fonts: self-hosted Inter/Nunito/Orbitron/SpaceGrotesk (`src/index.css`, `public/fonts`, `public/sw.js`)
 
 ---
 
@@ -1350,12 +412,11 @@ None. Remaining leftovers were locked by the user on 2026-09-12.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Mixed chrome across surfaces | Low (expected) | Restyle one surface at a time; do not “fix” other surfaces inside a change |
-| Elastic hover + triangle field cost | Medium | Cap triangles; Motion only on menu width; playfield stays WebGL2 |
-| Shear clipping at 390×844 | High | Compact layout, Playwright 390×844 gate |
-| PENAR looking like a bug | Medium | Intentional `—` + `PENAR` label, never `pp` |
-| Trademark slip | High | Cookie/empty-state/listing icon rules; screenshot CI for “osu!” text in chrome |
-| Colour-spec “UPDATED” rows | Medium | Cite `argonSkin.ts` only |
-| Catalog filters over-promising | Medium | Greyed table in §5 |
-| Mixing catalog backend into overlay chrome | High | Chrome-only change; live Catboy/osudl + token search |
-
+| Mixed chrome mid-migration | Low | One surface per change |
+| Elastic hover + triangle cost | Medium | Cap triangles; Motion on menu width; WebGL2 playfield |
+| Shear clipping at 390×844 | High | Compact layout + Playwright gate |
+| PENAR reads as bug | Medium | Intentional `—` + `PENAR`, never `pp` |
+| Trademark slip | High | Cookie/empty-state/icon rules + screenshot CI |
+| "UPDATED" colour rows | Medium | Cite `argonSkin.ts` only |
+| Filters over-promising | Medium | §5 greyed table |
+| Backend creep into chrome | High | Chrome-only; live catboy/Nekoha helper |

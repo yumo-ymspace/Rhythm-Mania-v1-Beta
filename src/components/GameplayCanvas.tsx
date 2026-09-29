@@ -309,12 +309,15 @@ interface HitErrorTick {
 // Vertical hit-error meters are owned by the ManiaHud overlay module
 // (drawVerticalHitErrorMeter). The playfield canvas never draws HUD meters.
 
-// All ManiaHud overlay work (React score/accuracy/PENAR/combo/HP/judgement/
-// burst, progress/time/FPS DOM, key-counter DOM, hit-error meters) flushes on
-// this single cadence so the overlay costs a stable 6Hz instead of per-hit or
-// per-frame. The playfield canvas itself still renders every rAF; only the
-// DOM/React overlay is throttled.
-export const MANIA_HUD_UPDATE_INTERVAL_MS = 166;
+// All ManiaHud overlay work flushes on two tiers so the overlay stays cheap
+// while feeling live. The fast tier (12.5Hz) owns React score/combo/HP/
+// accuracy/judgement/burst, progress + time labels, key-counter DOM, and
+// hit-error meters. The slow tier (3Hz) owns the live PENAR counter (slow
+// moving, costs a difficulty-table lookup), the FPS readout, and the
+// combo-pop animation generation. The playfield canvas itself still renders
+// every rAF; only the DOM/React overlay is throttled.
+export const MANIA_HUD_UPDATE_INTERVAL_MS = 80;
+export const MANIA_HUD_SLOW_UPDATE_INTERVAL_MS = 333;
 
 export default function GameplayCanvas({
   beatmap: originalBeatmap,
@@ -654,6 +657,13 @@ export default function GameplayCanvas({
   // prefixes and reset on any backwards timeline move.
   const missCursorRef = useRef<number>(0);
   const autoplayCursorRef = useRef<number>(0);
+  // Per-column head pointers for the input path: notes are time-sorted at
+  // initialize, so each lane keeps an index into its own column list and the
+  // press path scans only a few candidates instead of the whole chart.
+  // Rebuilt on initialize; .find() remains as the fallback for holds that
+  // resolve out of order (re-presses, grace, salvage).
+  const columnNotesRef = useRef<HitObject[][]>([]);
+  const columnCursorRef = useRef<number[]>([]);
   // Holds that actually own v2 tail ticks. Rebuilt on initialize; the hot
   // tick advance then iterates hundreds of holds instead of all notes.
   const tickHoldsRef = useRef<HitObject[]>([]);
@@ -702,14 +712,18 @@ export default function GameplayCanvas({
 
   const [uiScore, setUiScore] = useState<number>(0);
   const [uiCombo, setUiCombo] = useState<number>(0);
+  // Combo pop animation generation: bumped at most at the 3Hz slow tier so
+  // the number itself stays live at 12.5Hz while the remount + pop animation
+  // never restarts faster than ~333ms.
+  const [uiComboPop, setUiComboPop] = useState<number>(0);
   const [uiHp, setUiHp] = useState<number>(100);
   const [uiAccuracy, setUiAccuracy] = useState<number>(100);
   const [uiPenar, setUiPenar] = useState<PenarBreakdown | null>(null);
   const [uiJudgement, setUiJudgement] = useState<{ text: string; color: string; time: number } | null>(null);
   const [comboBurst, setComboBurst] = useState<number | null>(null);
   // Throttled HUD sync: applyJudgement only writes these refs (no setState in
-  // the input path). The rAF loop flushes to React at 6Hz, so per-note
-  // reconciliation never blocks judgement or audio.
+  // the input path). The rAF loop flushes to React on the fast 12.5Hz tier,
+  // so per-note reconciliation never blocks judgement or audio.
   const hudPendingRef = useRef({ score: 0, combo: 0, hp: 100, accuracy: 100 });
   // Lazer-accurate PENAR difficulty, computed once per chart+rate at setup.
   const penarDifficultyRef = useRef<{ starRating: number; maxCombo: number } | null>(null);
@@ -720,6 +734,9 @@ export default function GameplayCanvas({
   const hudJudgementRef = useRef<{ text: string; color: string; time: number } | null>(null);
   const hudBurstRef = useRef<{ value: number; time: number } | null>(null);
   const lastHudFlushRef = useRef<number>(0);
+  const lastHudSlowFlushRef = useRef<number>(0);
+  const lastComboPopRef = useRef<number>(0);
+  const lastMeterSigRef = useRef<string>('');
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [unpauseCountdown, setUnpauseCountdown] = useState<number>(0);
   const [retryCount, setRetryCount] = useState<number>(0);
@@ -736,9 +753,21 @@ export default function GameplayCanvas({
   const hasKeyPressedOnceRef = useRef<boolean[]>([]);
   const keyPressCountsRef = useRef<number[]>([]);
 
-  // Key-counter DOM flushes at the 6Hz HUD cadence. Input paths only bump
+  // Key-counter DOM flushes at the fast HUD cadence. Input paths only bump
   // refs here; the rAF flush owns `innerText`/class writes. Canvas lane glow
-  // stays per-frame so presses still feel instant.
+  // stays per-frame so presses still feel instant. Element handles are cached
+  // per keyCount so the flush never pays getElementById at 12.5Hz.
+  const keyCounterElsRef = useRef<Array<{ count: HTMLElement | null; box: HTMLElement | null }>>([]);
+  const cacheKeyCounterEls = () => {
+    const cached: Array<{ count: HTMLElement | null; box: HTMLElement | null }> = [];
+    for (let i = 0; i < beatmap.keyCount; i++) {
+      cached.push({
+        count: document.getElementById(`argon-key-count-${i}`),
+        box: document.getElementById(`argon-key-box-${i}`),
+      });
+    }
+    keyCounterElsRef.current = cached;
+  };
   const updateKeyCounterUi = (colIndex: number, _isPressed: boolean, incrementCount: boolean = false) => {
     if (colIndex < 0 || colIndex >= beatmap.keyCount) return;
     if (incrementCount) {
@@ -749,13 +778,29 @@ export default function GameplayCanvas({
   const flushKeyCounterUi = () => {
     const counts = keyPressCountsRef.current;
     const pressed = keysPressedRef.current;
+    let cached = keyCounterElsRef.current;
+    if (cached.length !== beatmap.keyCount) {
+      cacheKeyCounterEls();
+      cached = keyCounterElsRef.current;
+    }
     for (let i = 0; i < beatmap.keyCount; i++) {
-      const countEl = document.getElementById(`argon-key-count-${i}`);
+      const els = cached[i];
+      // First flush after mount can race the HUD render: fall back to a
+      // one-time lookup and keep the handle for subsequent flushes.
+      let countEl = els?.count ?? null;
+      if (!countEl) {
+        countEl = document.getElementById(`argon-key-count-${i}`);
+        if (els) els.count = countEl;
+      }
       if (countEl) {
         const next = String(counts[i] || 0);
         if (countEl.innerText !== next) countEl.innerText = next;
       }
-      const boxEl = document.getElementById(`argon-key-box-${i}`);
+      let boxEl = els?.box ?? null;
+      if (!boxEl) {
+        boxEl = document.getElementById(`argon-key-box-${i}`);
+        if (els) els.box = boxEl;
+      }
       if (boxEl) {
         const shouldActive = !!pressed[i];
         const isActive = boxEl.classList.contains('argon-key-active');
@@ -769,16 +814,18 @@ export default function GameplayCanvas({
 
   const resetKeyCounterUi = () => {
     keyPressCountsRef.current = new Array(beatmap.keyCount).fill(0);
+    cacheKeyCounterEls();
+    const cached = keyCounterElsRef.current;
     for (let i = 0; i < beatmap.keyCount; i++) {
-      const countEl = document.getElementById(`argon-key-count-${i}`);
+      const countEl = cached[i]?.count ?? document.getElementById(`argon-key-count-${i}`);
       if (countEl) countEl.innerText = '0';
-      const boxEl = document.getElementById(`argon-key-box-${i}`);
+      const boxEl = cached[i]?.box ?? document.getElementById(`argon-key-box-${i}`);
       if (boxEl) boxEl.classList.remove('argon-key-active');
     }
   };
   const progressBarRef = useRef<HTMLElement | HTMLInputElement | null>(null);
   const isScrubbingRef = useRef<boolean>(false);
-  // Last flushed overlay values so the 6Hz HUD flush skips redundant DOM writes.
+  // Last flushed overlay values so the fast HUD flush skips redundant DOM writes.
   const lastProgressPercentRef = useRef<number>(-1);
   const lastScrubberBgRef = useRef<string>('');
   const lastElapsedSecRef = useRef<number>(-1);
@@ -879,6 +926,11 @@ export default function GameplayCanvas({
   const visibleNotesBufferRef = useRef<import('../render/types').VisibleNote[]>([]);
   const keyLabelsBufferRef = useRef<string[]>([]);
   const autoplayHoldKeysRef = useRef<boolean[]>([]);
+  // Per-lane autoplay hold refcounts: incremented on hold-head events,
+  // decremented on tail events. Lets the per-frame lane-state update run in
+  // O(keys) instead of scanning every note for holding holds.
+  const autoplayHoldCountRef = useRef<number[]>([]);
+  const lastAutoplayTimeRef = useRef<number>(0);
   const [loadingAudioProgress, setLoadingAudioProgress] = useState<number>(0);
   const [isAudioLoaded, setIsAudioLoaded] = useState<boolean>(false);
   // Hard renderer failure (WebGL2 unavailable). Surfaced as an overlay
@@ -1044,6 +1096,18 @@ export default function GameplayCanvas({
     notesRef.current.sort((a, b) => a.time - b.time);
     missCursorRef.current = 0;
     autoplayCursorRef.current = 0;
+    autoplayHoldCountRef.current = new Array(beatmap.keyCount).fill(0);
+    lastAutoplayTimeRef.current = 0;
+    // Per-column views share the same note object identities, so judgement
+    // flags stay in sync; each lane list stays time-sorted via the global sort.
+    {
+      const perColumn: HitObject[][] = Array.from({ length: beatmap.keyCount }, () => []);
+      for (const n of notesRef.current) {
+        if (n.column >= 0 && n.column < beatmap.keyCount) perColumn[n.column].push(n);
+      }
+      columnNotesRef.current = perColumn;
+      columnCursorRef.current = new Array(beatmap.keyCount).fill(0);
+    }
     tickHoldsRef.current = notesRef.current.filter(
       (n) => n.type === 'hold' && n.nextTailTickTime !== undefined,
     );
@@ -1104,7 +1168,7 @@ export default function GameplayCanvas({
     currentComboPortionRef.current = 0;
 
     // Lazer-accurate PENAR difficulty: strain passes run once per chart+rate;
-    // live PP reuses the progressive table on the 6Hz HUD tick so per-frame
+    // live PP reuses the progressive table on the slow HUD tick so per-frame
     // rendering stays free.
     const penarRate = getSpeedMultiplier(settings.selectedMods);
     penarDifficultyRef.current = calculateManiaDifficultyAttributes(
@@ -1145,8 +1209,12 @@ export default function GameplayCanvas({
     hudJudgementRef.current = null;
     hudBurstRef.current = null;
     lastHudFlushRef.current = 0;
+    lastHudSlowFlushRef.current = 0;
+    lastComboPopRef.current = 0;
+    lastMeterSigRef.current = '';
     setUiScore(0);
     setUiCombo(0);
+    setUiComboPop(0);
     setUiHp(100);
     setUiAccuracy(100);
     setUiJudgement(null);
@@ -1802,6 +1870,48 @@ export default function GameplayCanvas({
 
   // Judgement scoring evaluator. explicitTime is the corrected event-time
   // audio clock; falls back to the last render-loop time for rAF-driven callers.
+  // Per-column head lookup: the lane list is time-sorted, so advance the
+  // cursor past settled heads and scan only a small window. Falls back to a
+  // full scan when holds resolve out of order (re-press, grace, salvage).
+  const findEarliestInColumn = (
+    colIndex: number,
+    isHeadOpen: (n: HitObject) => boolean,
+  ): HitObject | undefined => {
+    const lane = columnNotesRef.current[colIndex];
+    if (!lane || lane.length === 0) {
+      return notesRef.current.find((n) => n.column === colIndex && isHeadOpen(n));
+    }
+    let cursor = columnCursorRef.current[colIndex] || 0;
+    if (cursor < 0) cursor = 0;
+    if (cursor >= lane.length) cursor = Math.max(0, lane.length - 1);
+    // Settle the cursor: heads that can never be hit again are skipped. Holds
+    // with an open tail stay pinned so re-presses still find them.
+    while (cursor < lane.length && !isHeadOpen(lane[cursor])) {
+      const n = lane[cursor];
+      const tailOpen = n.type === 'hold' && (
+        (n.holdState && n.holdState.isHeadJudged && !n.holdState.isTailJudged) ||
+        (n.isHit && !n.isReleased && !n.isHoldFailed) ||
+        (n.isMissed && !n.isHit && !n.isReleased && !n.isHoldFailed)
+      );
+      if (tailOpen) break;
+      cursor++;
+    }
+    columnCursorRef.current[colIndex] = cursor;
+    // Bounded window first (covers chords + near neighbours without O(n)).
+    const windowEnd = Math.min(lane.length, cursor + 16);
+    for (let i = cursor; i < windowEnd; i++) {
+      if (isHeadOpen(lane[i])) return lane[i];
+    }
+    // Out-of-order fallback: an earlier hold may have reopened, or the target
+    // sits beyond the window on very dense lanes.
+    for (let i = 0; i < cursor; i++) {
+      if (isHeadOpen(lane[i])) return lane[i];
+    }
+    for (let i = windowEnd; i < lane.length; i++) {
+      if (isHeadOpen(lane[i])) return lane[i];
+    }
+    return undefined;
+  };
   const triggerHitEvent = (colIndex: number, explicitTime?: number) => {
     const playTime = typeof explicitTime === 'number' && Number.isFinite(explicitTime)
       ? explicitTime
@@ -1810,7 +1920,11 @@ export default function GameplayCanvas({
     // Version 3 Lazer hold rules
     if (holdRulesVersion === LAZER_HOLD_RULES_VERSION) {
       // 1. Check if an in-progress hold in this column is being re-pressed mid-body
-      const activeHold = notesRef.current.find(
+      const activeHold = findEarliestInColumn(
+        colIndex,
+        (n) => n.type === 'hold' && n.holdRulesVersion === LAZER_HOLD_RULES_VERSION &&
+          !!n.holdState && n.holdState.isHeadJudged && !n.holdState.isTailJudged,
+      ) ?? notesRef.current.find(
         (n) => n.column === colIndex && n.type === 'hold' && n.holdRulesVersion === LAZER_HOLD_RULES_VERSION &&
           n.holdState && n.holdState.isHeadJudged && !n.holdState.isTailJudged
       );
@@ -1820,12 +1934,11 @@ export default function GameplayCanvas({
       }
 
       // 2. Find earliest unjudged note in column (or hold note whose head is unjudged)
-      const note = notesRef.current.find(
-        (n) => n.column === colIndex && (
-          n.type === 'hold'
-            ? (n.holdState ? !n.holdState.isHeadJudged : (!n.isHit && !n.isMissed))
-            : (!n.isHit && !n.isMissed)
-        )
+      const isHeadOpenV3 = (n: HitObject) => n.type === 'hold'
+        ? (n.holdState ? !n.holdState.isHeadJudged : (!n.isHit && !n.isMissed))
+        : (!n.isHit && !n.isMissed);
+      const note = findEarliestInColumn(colIndex, isHeadOpenV3) ?? notesRef.current.find(
+        (n) => n.column === colIndex && isHeadOpenV3(n)
       );
 
       if (!note) return;
@@ -1912,10 +2025,10 @@ export default function GameplayCanvas({
       return;
     }
 
-    const earlyReleasedHold = notesRef.current.find(
-      (n) => n.column === colIndex && n.type === 'hold' && n.holdRulesVersion === HOLD_TICK_RULES_VERSION &&
-        n.isHit && !n.isReleased && !n.isHoldFailed && n.earlyReleaseTime !== undefined,
-    );
+    const isEarlyReleasedOpen = (n: HitObject) => n.type === 'hold' && n.holdRulesVersion === HOLD_TICK_RULES_VERSION &&
+      n.isHit && !n.isReleased && !n.isHoldFailed && n.earlyReleaseTime !== undefined;
+    const earlyReleasedHold = findEarliestInColumn(colIndex, isEarlyReleasedOpen) ??
+      notesRef.current.find((n) => n.column === colIndex && isEarlyReleasedOpen(n));
     if (earlyReleasedHold) {
       if (earlyReleasedHold.endTime !== undefined && playTime >= earlyReleasedHold.endTime - missJudg.windowMs) {
         markHoldReleaseZonePressed(earlyReleasedHold, playTime);
@@ -1926,9 +2039,9 @@ export default function GameplayCanvas({
     }
     
     // Check if we are currently in a grace period for a hold note in this column
-    const activeHoldAndReleased = notesRef.current.find(
-      (n) => n.column === colIndex && n.type === 'hold' && n.isHit && !n.isReleased && !n.isHoldFailed && n.releaseGraceUntil !== undefined
-    );
+    const isGraceOpen = (n: HitObject) => n.type === 'hold' && n.isHit && !n.isReleased && !n.isHoldFailed && n.releaseGraceUntil !== undefined;
+    const activeHoldAndReleased = findEarliestInColumn(colIndex, isGraceOpen) ??
+      notesRef.current.find((n) => n.column === colIndex && isGraceOpen(n));
     if (activeHoldAndReleased) {
       if (isHoldGraceActive(playTime, activeHoldAndReleased.releaseGraceUntil)) {
         activeHoldAndReleased.releaseGraceUntil = undefined;
@@ -1942,13 +2055,10 @@ export default function GameplayCanvas({
     }
 
     // Find earliest hittable note, or a head-missed LN that can still be salvaged for the tail
-    const note = notesRef.current.find(
-      (n) =>
-        n.column === colIndex &&
-        (
-          (!n.isHit && !n.isMissed) ||
-          (n.type === 'hold' && n.isMissed && !n.isHit && !n.isReleased && !n.isHoldFailed)
-        )
+    const isHittableOpen = (n: HitObject) => (!n.isHit && !n.isMissed) ||
+      (n.type === 'hold' && n.isMissed && !n.isHit && !n.isReleased && !n.isHoldFailed);
+    const note = findEarliestInColumn(colIndex, isHittableOpen) ?? notesRef.current.find(
+      (n) => n.column === colIndex && isHittableOpen(n)
     );
     
     if (!note) return;
@@ -2037,10 +2147,10 @@ export default function GameplayCanvas({
 
     // Version 3 Lazer hold release rules:
     if (holdRulesVersion === LAZER_HOLD_RULES_VERSION) {
-      const holdNote = notesRef.current.find(
-        (n) => n.column === colIndex && n.type === 'hold' && n.holdRulesVersion === LAZER_HOLD_RULES_VERSION &&
-          n.holdState && n.holdState.isHeadJudged && !n.holdState.isTailJudged && n.holdState.isHolding
-      );
+      const isHoldingOpen = (n: HitObject) => n.type === 'hold' && n.holdRulesVersion === LAZER_HOLD_RULES_VERSION &&
+        !!n.holdState && n.holdState.isHeadJudged && !n.holdState.isTailJudged && n.holdState.isHolding;
+      const holdNote = findEarliestInColumn(colIndex, isHoldingOpen) ??
+        notesRef.current.find((n) => n.column === colIndex && isHoldingOpen(n));
 
       if (!holdNote || !holdNote.endTime || !holdNote.holdState) return;
 
@@ -2055,7 +2165,7 @@ export default function GameplayCanvas({
         if (scoreStateRef.current.comboBreakCount !== undefined) {
           scoreStateRef.current.comboBreakCount++;
         }
-        // Route through the 6Hz HUD queue; force the next rAF tick to flush
+        // Route through the fast HUD queue; force the next rAF tick to flush
         // so the combo break surfaces without per-event reconciliation.
         // (Pending HP is synced below after the health judgement.)
         lastHudFlushRef.current = 0;
@@ -2069,7 +2179,7 @@ export default function GameplayCanvas({
           'body_break',
         );
         scoreStateRef.current.hp = healthToDisplayPercent(healthStateRef.current.health);
-        // Route through the 6Hz HUD queue; force the next rAF tick to flush
+        // Route through the fast HUD queue; force the next rAF tick to flush
         // so the combo break surfaces without per-event reconciliation.
         hudPendingRef.current.combo = 0;
         hudPendingRef.current.hp = scoreStateRef.current.hp;
@@ -2134,10 +2244,12 @@ export default function GameplayCanvas({
     }
     
     // Find active hold note currently marked "Hit" but not yet "Released" or "HoldFailed"
-    const holdNote = notesRef.current.find((n) => n.column === colIndex && n.type === 'hold' && !n.isReleased &&
+    const isActiveHoldOpen = (n: HitObject) => n.type === 'hold' && !n.isReleased &&
       (n.holdRulesVersion === HOLD_TICK_RULES_VERSION
         ? (n.isHeadHit || n.tailEngagedTime !== undefined || n.releaseZoneArmedTime !== undefined)
-        : (n.isHit && !n.isHoldFailed)));
+        : (n.isHit && !n.isHoldFailed));
+    const holdNote = findEarliestInColumn(colIndex, isActiveHoldOpen) ??
+      notesRef.current.find((n) => n.column === colIndex && isActiveHoldOpen(n));
     
     if (!holdNote || !holdNote.endTime) return;
 
@@ -2300,7 +2412,7 @@ export default function GameplayCanvas({
       modMultiplier,
     });
 
-    // Live PENAR is refreshed at 6Hz by the HUD flush loop reusing the
+    // Live PENAR is refreshed at the slow tier by the HUD flush loop reusing the
     // cached chart difficulty; per-judgement PP would waste frame budget.
 
     // Muted (MU) mod: fade audio as combo builds, restore on break/miss
@@ -2317,7 +2429,7 @@ export default function GameplayCanvas({
     }
 
     // Update canvas visual trackers (no React setState here — the rAF loop
-    // flushes hudPendingRef at 6Hz so input never waits on reconciliation).
+    // flushes hudPendingRef at the fast tier so input never waits on reconciliation).
     const now = Date.now();
     currentJudgementRef.current = {
       text: judg.name,
@@ -2542,18 +2654,22 @@ export default function GameplayCanvas({
         }
       }
 
-      // Frame counter for the FPS readout; the DOM write happens in the 6Hz
+      // Frame counter for the FPS readout; the DOM write happens in the slow
       // HUD flush below so per-frame work stays an integer increment.
       fpsFramesRef.current++;
 
-      // Single 6Hz HUD flush: owns every ManiaHud/DOM update (React score/
-      // accuracy/PENAR/combo/HP/judgement/burst, progress + time labels, break
-      // label, FPS label, key-counter DOM, hit-error meters). The playfield
+      // Two-tier HUD flush: the fast 12.5Hz tier owns every live
+      // ManiaHud/DOM update (React score/combo/HP/accuracy/judgement/burst,
+      // progress + time labels, break label, key-counter DOM, hit-error
+      // meters). The slow 3Hz tier owns the live PENAR counter, the FPS
+      // readout, and the combo-pop animation generation. The playfield
       // canvas above still renders every rAF.
       {
         const nowMs = performance.now();
         const forceFlush = isPausedRef.current || !isPlayingRef.current;
-        if (forceFlush || nowMs - lastHudFlushRef.current >= MANIA_HUD_UPDATE_INTERVAL_MS) {
+        const fastDue = forceFlush || nowMs - lastHudFlushRef.current >= MANIA_HUD_UPDATE_INTERVAL_MS;
+        const slowDue = forceFlush || nowMs - lastHudSlowFlushRef.current >= MANIA_HUD_SLOW_UPDATE_INTERVAL_MS;
+        if (fastDue) {
           lastHudFlushRef.current = nowMs;
 
           if (breakLabelRef.current) {
@@ -2645,6 +2761,63 @@ export default function GameplayCanvas({
             }
           }
 
+          const pending = hudPendingRef.current;
+          setUiScore((prev) => (prev === pending.score ? prev : pending.score));
+          setUiCombo((prev) => (prev === pending.combo ? prev : pending.combo));
+          // Quantize HP to 0.5 steps so fractional health churn between
+          // judgements never re-renders the bar at 12.5Hz for no visual gain.
+          const quantizedHp = Math.round(pending.hp * 2) / 2;
+          setUiHp((prev) => (prev === quantizedHp ? prev : quantizedHp));
+          setUiAccuracy((prev) => (prev === pending.accuracy ? prev : pending.accuracy));
+          const wallNow = Date.now();
+          const j = hudJudgementRef.current;
+          if (j && wallNow - j.time < 600) {
+            setUiJudgement((prev) => (prev && prev.time === j.time ? prev : j));
+          } else {
+            if (j) hudJudgementRef.current = null;
+            setUiJudgement((prev) => (prev === null ? prev : null));
+          }
+          const b = hudBurstRef.current;
+          if (b && wallNow - b.time < 900) {
+            setComboBurst((prev) => (prev === b.value ? prev : b.value));
+          } else {
+            if (b) hudBurstRef.current = null;
+            setComboBurst((prev) => (prev === null ? prev : null));
+          }
+
+          // Key-counter DOM (counts + active classes) at the fast tier. Flush
+          // unconditionally with cached handles: press/release states change
+          // without count bumps.
+          flushKeyCounterUi();
+
+          // Hit-error running average + dual meters at the fast tier. Skips
+          // the canvas redraw when neither the tick list nor the average
+          // moved since the last flush.
+          let hitErrorAvgMs: number | null = null;
+          {
+            const ticks = hitErrorTicksRef.current;
+            const count = Math.min(30, ticks.length);
+            if (count > 0) {
+              let sum = 0;
+              for (let i = ticks.length - count; i < ticks.length; i++) {
+                sum += ticks[i].error;
+              }
+              hitErrorAvgMs = sum / count;
+            }
+          }
+          if (leftHitErrorCanvasRef.current || rightHitErrorCanvasRef.current) {
+            const roundedAvg = hitErrorAvgMs === null ? 'n' : String(Math.round(hitErrorAvgMs * 4) / 4);
+            const meterSig = `${hitErrorTicksRef.current.length}:${hitErrorTickIdRef.current}:${roundedAvg}`;
+            if (meterSig !== lastMeterSigRef.current) {
+              lastMeterSigRef.current = meterSig;
+              drawVerticalHitErrorMeter(leftHitErrorCanvasRef.current, hitErrorTicksRef.current, hitErrorAvgMs, 150);
+              drawVerticalHitErrorMeter(rightHitErrorCanvasRef.current, hitErrorTicksRef.current, hitErrorAvgMs, 150);
+            }
+          }
+        }
+        if (slowDue) {
+          lastHudSlowFlushRef.current = nowMs;
+
           // FPS readout averaged since the last sample (500ms window).
           if (fpsLabelRef.current) {
             if (fpsLastSampleRef.current === 0) {
@@ -2663,12 +2836,7 @@ export default function GameplayCanvas({
             }
           }
 
-          const pending = hudPendingRef.current;
-          setUiScore((prev) => (prev === pending.score ? prev : pending.score));
-          setUiCombo((prev) => (prev === pending.combo ? prev : pending.combo));
-          setUiHp((prev) => (prev === pending.hp ? prev : pending.hp));
-          setUiAccuracy((prev) => (prev === pending.accuracy ? prev : pending.accuracy));
-          // Live PENAR refresh on the same 6Hz flush: same PP formula,
+          // Live PENAR refresh on the slow 3Hz tier: same PP formula,
           // evaluated with the progressive difficulty at the current progress
           // time, exactly like lazer's live PP counter.
           const live = scoreStateRef.current;
@@ -2688,43 +2856,13 @@ export default function GameplayCanvas({
           });
           const flushedPenar = scoreStateRef.current.penar ?? null;
           setUiPenar((prev) => (prev === flushedPenar ? prev : flushedPenar));
-          const wallNow = Date.now();
-          const j = hudJudgementRef.current;
-          if (j && wallNow - j.time < 600) {
-            setUiJudgement((prev) => (prev && prev.time === j.time ? prev : j));
-          } else {
-            if (j) hudJudgementRef.current = null;
-            setUiJudgement((prev) => (prev === null ? prev : null));
-          }
-          const b = hudBurstRef.current;
-          if (b && wallNow - b.time < 900) {
-            setComboBurst((prev) => (prev === b.value ? prev : b.value));
-          } else {
-            if (b) hudBurstRef.current = null;
-            setComboBurst((prev) => (prev === null ? prev : null));
-          }
 
-          // Key-counter DOM (counts + active classes) at 6Hz. Flush
-          // unconditionally: ≤10 columns × 2 lookups at 6Hz is trivial, and
-          // press/release states change without count bumps.
-          flushKeyCounterUi();
-
-          // Hit-error running average + dual meters at 6Hz.
-          let hitErrorAvgMs: number | null = null;
-          {
-            const ticks = hitErrorTicksRef.current;
-            const count = Math.min(30, ticks.length);
-            if (count > 0) {
-              let sum = 0;
-              for (let i = ticks.length - count; i < ticks.length; i++) {
-                sum += ticks[i].error;
-              }
-              hitErrorAvgMs = sum / count;
-            }
-          }
-          if (leftHitErrorCanvasRef.current || rightHitErrorCanvasRef.current) {
-            drawVerticalHitErrorMeter(leftHitErrorCanvasRef.current, hitErrorTicksRef.current, hitErrorAvgMs, 150);
-            drawVerticalHitErrorMeter(rightHitErrorCanvasRef.current, hitErrorTicksRef.current, hitErrorAvgMs, 150);
+          // Combo-pop generation at 3Hz: the number itself updates on the
+          // fast tier, but the remount + pop animation only re-fires here.
+          const liveCombo = scoreStateRef.current.combo;
+          if (liveCombo !== lastComboPopRef.current) {
+            lastComboPopRef.current = liveCombo;
+            setUiComboPop((prev) => (prev === liveCombo ? prev : liveCombo));
           }
         }
       }
@@ -2887,6 +3025,17 @@ export default function GameplayCanvas({
                 updateKeyCounterUi(n.column, true, true);
                 if (n.type !== 'hold') {
                   setTimeout(() => updateKeyCounterUi(n.column, false, false), 60);
+                } else {
+                  // Track the held lane incrementally so the per-frame
+                  // receptor update stays O(keys) (see below).
+                  const counts = autoplayHoldCountRef.current;
+                  if (counts.length !== beatmap.keyCount) {
+                    autoplayHoldCountRef.current = new Array(beatmap.keyCount).fill(0);
+                  }
+                  autoplayHoldCountRef.current[n.column] =
+                    (autoplayHoldCountRef.current[n.column] || 0) + 1;
+                  keysPressedRef.current[n.column] = true;
+                  activeColumnsRef.current[n.column] = true;
                 }
                 mainAudio.playBeatmapHitsound(n.hitSound, n.hitSample?.filename);
                 laneGlowRef.current[n.column] = 1.0;
@@ -2903,6 +3052,17 @@ export default function GameplayCanvas({
                   n.holdState.isComplete = true;
                 }
                 markHoldReleaseHit(n);
+                // Release one held-lane refcount; the lane clears only when
+                // no overlapping hold in the same column remains.
+                {
+                  const counts = autoplayHoldCountRef.current;
+                  const next = Math.max(0, (counts[n.column] || 1) - 1);
+                  counts[n.column] = next;
+                  if (next === 0) {
+                    keysPressedRef.current[n.column] = false;
+                    activeColumnsRef.current[n.column] = false;
+                  }
+                }
 
                 applyJudgement(marvelousJudg, n.column);
                 recordHitErrorSample(0);
@@ -2936,24 +3096,32 @@ export default function GameplayCanvas({
             }
           }
 
-          // Maintain active receptor/lane state for holds, including chords.
-          // Single O(n) pass instead of O(keys*n) `.some` per column.
+          // Maintain active receptor/lane state from the incremental hold
+          // refcounts (O(keys)). A backwards timeline move (seek/restart)
+          // rebuilds the counts once instead of scanning every frame.
           {
-            const holdingByColumn = keysPressedRef.current;
-            holdingByColumn.fill(false);
-            const allNotes = notesRef.current;
-            for (let i = 0; i < allNotes.length; i++) {
-              const n = allNotes[i];
-              if (n.type !== 'hold') continue;
-              const holding = n.holdState
-                ? (n.holdState.isHolding && !n.holdState.isTailJudged)
-                : (n.isHit && !n.isReleased && !n.isHoldFailed);
-              if (holding) holdingByColumn[n.column] = true;
+            if (judgeTime < lastAutoplayTimeRef.current - 1) {
+              const rebuilt = new Array(beatmap.keyCount).fill(0);
+              for (const n of notesRef.current) {
+                if (n.time > judgeTime) break;
+                if (n.type !== 'hold') continue;
+                if (n.endTime !== undefined && n.endTime <= judgeTime) continue;
+                const holding = n.holdState
+                  ? (n.holdState.isHolding && !n.holdState.isTailJudged)
+                  : (n.isHit && !n.isReleased && !n.isHoldFailed);
+                if (holding) rebuilt[n.column] = (rebuilt[n.column] || 0) + 1;
+              }
+              autoplayHoldCountRef.current = rebuilt;
+              for (let col = 0; col < beatmap.keyCount; col++) {
+                const held = rebuilt[col] > 0;
+                keysPressedRef.current[col] = held;
+                activeColumnsRef.current[col] = held;
+              }
             }
+            lastAutoplayTimeRef.current = judgeTime;
+            const counts = autoplayHoldCountRef.current;
             for (let col = 0; col < beatmap.keyCount; col++) {
-              const isHolding = !!holdingByColumn[col];
-              activeColumnsRef.current[col] = isHolding;
-              if (isHolding) {
+              if ((counts[col] || 0) > 0) {
                 laneGlowRef.current[col] = Math.max(laneGlowRef.current[col] || 0, 0.8);
               }
             }
@@ -3040,7 +3208,7 @@ export default function GameplayCanvas({
 
         // Compact expired hit ticks (> 2000ms old) in place. Ticks are
         // push-ordered, so expiry is a prefix that can be spliced once.
-        // (Average + meter draws live in the 6Hz HUD flush above.)
+        // (Average + meter draws live in the fast HUD flush above.)
         {
           const ticks = hitErrorTicksRef.current;
           const nowScale = Date.now();
@@ -3080,7 +3248,7 @@ export default function GameplayCanvas({
           breaks: songBreaks
         });
 
-        // Hit-error meters draw in the 6Hz HUD flush above, never per-frame.
+        // Hit-error meters draw in the fast HUD flush above, never per-frame.
       }
 
       // Check if song completed naturally or run loops (audio truth, not the
@@ -3288,7 +3456,7 @@ export default function GameplayCanvas({
     maxComboPortionRef.current =
       holdRulesVersion === HOLD_TICK_RULES_VERSION ? 0 : computeMaxComboPortion(totalJudgementsRef.current);
 
-    // Keep live PENAR consistent after scrub resets; the 6Hz flush loop
+    // Keep live PENAR consistent after scrub resets; the slow flush tier
     // recomputes it from these counts on its next tick.
     scoreStateRef.current.penar = computePenar({
       starRating: penarDifficultyRef.current ? penarDifficultyRef.current.starRating : null,
@@ -3308,8 +3476,12 @@ export default function GameplayCanvas({
       hudPendingRef.current.hp = 100;
       hudPendingRef.current.accuracy = 100;
       lastHudFlushRef.current = 0;
+      lastHudSlowFlushRef.current = 0;
+      lastComboPopRef.current = 0;
+      lastMeterSigRef.current = '';
       setUiScore(0);
       setUiCombo(0);
+      setUiComboPop(0);
       setUiHp(100);
       setUiAccuracy(100);
       return;
@@ -3379,8 +3551,8 @@ export default function GameplayCanvas({
         modMultiplier,
       });
 
-      // Live PENAR for replay simulation also flows through the 6Hz HUD
-      // flush loop; see the live applyJudgement path above.
+      // Live PENAR for replay simulation also flows through the slow HUD
+      // flush tier; see the live applyJudgement path above.
     };
 
     const simTriggerHit = (colIndex: number, frameTime: number) => {
@@ -3680,8 +3852,12 @@ export default function GameplayCanvas({
     hudPendingRef.current.hp = scoreStateRef.current.hp;
     hudPendingRef.current.accuracy = scoreStateRef.current.accuracy;
     lastHudFlushRef.current = 0;
+    lastHudSlowFlushRef.current = 0;
+    lastComboPopRef.current = scoreStateRef.current.combo;
+    lastMeterSigRef.current = '';
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
+    setUiComboPop(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
     setUiAccuracy(scoreStateRef.current.accuracy);
   };
@@ -3719,12 +3895,18 @@ export default function GameplayCanvas({
       note => applyJudgement(missJudg, note.column),
     );
 
-    for (let col = 0; col < beatmap.keyCount; col++) {
-      const isHolding = notesRef.current.some(
-        note => note.column === col && note.type === 'hold' && note.isHit && !note.isReleased && !note.isHoldFailed,
-      );
-      keysPressedRef.current[col] = isHolding;
-      activeColumnsRef.current[col] = isHolding;
+    // Single O(n) pass instead of O(keys*n) `.some` per column.
+    {
+      const holdingByColumn = new Array(beatmap.keyCount).fill(false);
+      for (const note of notesRef.current) {
+        if (note.type === 'hold' && note.isHit && !note.isReleased && !note.isHoldFailed) {
+          if (note.column >= 0 && note.column < beatmap.keyCount) holdingByColumn[note.column] = true;
+        }
+      }
+      for (let col = 0; col < beatmap.keyCount; col++) {
+        keysPressedRef.current[col] = holdingByColumn[col];
+        activeColumnsRef.current[col] = holdingByColumn[col];
+      }
     }
 
     audioTimeRef.current = boundedTime;
@@ -3736,8 +3918,12 @@ export default function GameplayCanvas({
     hudPendingRef.current.hp = scoreStateRef.current.hp;
     hudPendingRef.current.accuracy = scoreStateRef.current.accuracy;
     lastHudFlushRef.current = 0;
+    lastHudSlowFlushRef.current = 0;
+    lastComboPopRef.current = scoreStateRef.current.combo;
+    lastMeterSigRef.current = '';
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
+    setUiComboPop(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
     setUiAccuracy(scoreStateRef.current.accuracy);
   };
@@ -4393,6 +4579,7 @@ export default function GameplayCanvas({
             penar={uiPenar}
             showPenar={settings.showPenarDuringPlay !== false}
             combo={uiCombo}
+            comboPopKey={uiComboPop}
             keyCount={beatmap.keyCount}
             keyLabels={settings.bindings[beatmap.keyCount] || []}
             playfieldWidthPercent={settings.playfieldWidthPercent ?? 40}
@@ -4717,11 +4904,11 @@ export default function GameplayCanvas({
                         {comboBurst}x
                       </div>
                     )}
-                    <div key={`combo-${uiCombo}`} className="flex flex-col items-center justify-center animate-combo-pop">
-                      <span className="text-6xl font-[900] tracking-tighter text-slate-100 drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">
+                    <div key={`combo-${uiComboPop}`} className="flex flex-col items-center justify-center animate-combo-pop">
+                      <span className="text-6xl font-[900] tracking-tighter text-slate-100 [text-shadow:0_2px_6px_rgba(0,0,0,0.95)]">
                         {uiCombo}
                       </span>
-                      <span className="text-[10px] font-black tracking-[0.25em] text-cyan-400 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] uppercase mt-1">
+                      <span className="text-[10px] font-black tracking-[0.25em] text-cyan-400 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] uppercase mt-1">
                         COMBO
                       </span>
                     </div>

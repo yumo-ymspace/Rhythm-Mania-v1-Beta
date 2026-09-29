@@ -678,6 +678,11 @@ export function SongSelectCarousel({
   const centersCache = useRef(new Map<string, number>());
   const taperRaf = useRef(0);
   const progScrollRaf = useRef(0);
+  // True while the one-time centre glide is driving scrollTop. While set,
+  // the taper skips its diff-row rect pass (rows are mid height-animation
+  // so their centres are meaningless) — group indents + thumb still track
+  // via scroll events, rows settle once at the end.
+  const progScrollActiveRef = useRef(false);
   // Cleared 160ms after the last scroll event; while set, the container
   // carries .is-scrolling so diff-row margin transitions stay off and the
   // taper tracks instantly.
@@ -766,7 +771,9 @@ export function SongSelectCarousel({
     // coordinate space than the container-space viewport centre.
     const expandedKey = expandedKeyRef.current;
     const selMapId = selectedMapIdRef.current;
-    if (expandedKey) {
+    // Skipped while the centre glide is active (see progScrollActiveRef):
+    // rows are mid height-animation and per-row rects are the hottest cost.
+    if (expandedKey && !progScrollActiveRef.current) {
       const groupEl = itemEls.current.get(expandedKey);
       if (groupEl) {
         const rows = groupEl.querySelectorAll<HTMLElement>(':scope .lazer-carousel-diff-row');
@@ -900,9 +907,10 @@ export function SongSelectCarousel({
 
   // One-time selection glide: move the selected difficulty row to the
   // viewport middle, then leave the scroll alone — it is not sticky.
-  // Damped tracking keeps it snappy; user input cancels it so it never
-  // fights manual scrolling. A settle correction re-runs after the expand
-  // animation grows the opened group.
+  // Live-tracking damping keeps it snappy and lands centred in one motion;
+  // user input cancels it so it never fights manual scrolling. The settle
+  // check after the expand animation is only a safety net (no-op when
+  // already centred).
   useEffect(() => {
     if (!centerSignal) return;
     const container = containerRef?.current;
@@ -916,6 +924,7 @@ export function SongSelectCarousel({
     const onUserInput = () => {
       cancelled = true;
       expectedTop = null;
+      progScrollActiveRef.current = false;
       cancelProgScroll();
     };
     container.addEventListener('wheel', onUserInput, { passive: true });
@@ -924,35 +933,45 @@ export function SongSelectCarousel({
 
     // Damped glide toward a live-recomputed target (osu!framework-style
     // exponential damping, frame-rate independent). The destination is
-    // re-read every frame, so expand/collapse height changes mid-flight
-    // (e.g. the old group collapsing above the new one) are tracked in a
-    // single smooth motion instead of landing wrong and jumping twice.
+    // re-read every frame (one row + one container rect — cheap), so
+    // expand/collapse height shifts mid-flight are tracked and the glide
+    // lands centred in a single motion instead of landing stale and
+    // correcting 420ms later. The taper follows via scroll events
+    // (diff-row rects skipped while active), so no extra work per frame.
     const glideTo = (getDest: () => number | null, onDone?: () => void) => {
       cancelProgScroll();
+      progScrollActiveRef.current = true;
       const t0 = performance.now();
       let last = t0;
       const step = (now: number) => {
-        if (cancelled) return;
+        if (cancelled) {
+          progScrollActiveRef.current = false;
+          return;
+        }
         const dest = getDest();
-        if (dest === null) return;
+        if (dest === null) {
+          progScrollRaf.current = 0;
+          progScrollActiveRef.current = false;
+          return;
+        }
         const dt = Math.min(64, Math.max(1, now - last));
         last = now;
         const cur = container.scrollTop;
         const diff = dest - cur;
-        if ((Math.abs(diff) < 0.75 && now - t0 > 120) || now - t0 > 1000) {
-          if (Math.abs(diff) < 0.75) container.scrollTop = dest;
+        if ((Math.abs(diff) < 1.5 && now - t0 > 80) || now - t0 > 600) {
+          if (Math.abs(diff) < 1.5) container.scrollTop = dest;
           progScrollRaf.current = 0;
+          progScrollActiveRef.current = false;
           expectedTop = container.scrollTop;
           measureCenters();
           scheduleTaper();
           onDone?.();
           return;
         }
-        const a = 1 - Math.exp(-15 * dt / 1000);
+        const a = 1 - Math.exp(-32 * dt / 1000);
         container.scrollTop = cur + diff * a;
-        // Scroll events drive the taper; just ensure a tick is queued so
-        // the highlight follows even if events coalesce mid-glide.
-        scheduleTaper();
+        // No explicit scheduleTaper here: programmatic scrollTop writes
+        // fire scroll events which already queue the (group-only) taper.
         progScrollRaf.current = requestAnimationFrame(step);
       };
       progScrollRaf.current = requestAnimationFrame(step);
@@ -963,8 +982,8 @@ export function SongSelectCarousel({
     // too high up settles at the top and one too low settles at the
     // bottom — the row centres whenever the range allows it. Falls back
     // to the group top while its diff list isn't mounted. Re-read live
-    // every frame, so expand/collapse height changes mid-flight are
-    // tracked in a single smooth motion.
+    // every frame, so expand/collapse height shifts mid-flight are tracked
+    // in a single smooth motion.
     const selectionDest = (): number | null => {
       const groupEl = itemEls.current.get(centerSignal.key);
       if (!groupEl) return null;
@@ -1040,6 +1059,7 @@ export function SongSelectCarousel({
     run();
     return () => {
       cancelled = true;
+      progScrollActiveRef.current = false;
       window.clearTimeout(settleTimer);
       container.removeEventListener('wheel', onUserInput);
       container.removeEventListener('touchstart', onUserInput);

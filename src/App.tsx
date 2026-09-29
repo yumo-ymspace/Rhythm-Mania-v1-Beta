@@ -49,7 +49,7 @@ import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTok
 import { resolveSkinTheme } from './render/skinTheme';
 import { cssColorToHex, parseCssColor } from './render/color';
 import { applyLazerChrome, LazerDebugSmoke, LazerToolbar, NowPlayingPanel } from './ui/lazer';
-import { clampSeekTarget, resolveNowPlayingTrack, shouldRestartTrack, type NowPlayingTrack } from './utils/nowPlaying';
+import { clampSeekTarget, pickAdjacentIndex, resolveNowPlayingTrack, shouldRestartTrack, type NowPlayingTrack } from './utils/nowPlaying';
 import type { LazerMenuPhase } from './components/MainMenu';
 import LazerCursor from './components/LazerCursor';
 import GlobalFpsOverlay from './components/GlobalFpsOverlay';
@@ -109,6 +109,21 @@ function isRemovedProfilePath(pathname: string): boolean {
 function launchMusicLevel(s: GameSettings): number {
   const slider = Number.isFinite(s.launchMusicVolume) ? s.launchMusicVolume : 0.1;
   return s.musicVolume * slider * s.masterVolume;
+}
+
+/** Parsed maps only carry raw art filenames until unpacked — only pass
+    through URLs the panel can actually load (cache blobs win separately). */
+function usableArtUrl(url: string | undefined): string {
+  if (!url) return '';
+  if (
+    url.startsWith('blob:') ||
+    url.startsWith('data:') ||
+    url.startsWith('/') ||
+    /^https?:\/\//i.test(url)
+  ) {
+    return url;
+  }
+  return '';
 }
 
 function resolveRoute(pathname: string): AppRoute {
@@ -276,16 +291,24 @@ export default function App() {
   const [nowPlayingShuffle, setNowPlayingShuffle] = useState<boolean>(true);
   const [nowPlayingPreviewPaused, setNowPlayingPreviewPaused] = useState<boolean>(false);
   const [nowPlayingTick, setNowPlayingTick] = useState<number>(0);
+  // True from a switch click until the new track is actually audible.
+  const [nowPlayingLoading, setNowPlayingLoading] = useState<boolean>(false);
+  const nowPlayingLoadingTimer = useRef<number | null>(null);
   const [previewTrack, setPreviewTrack] = useState<{
     id: string; title: string; artist: string; bgUrl?: string; audioUrl?: string;
   } | null>(null);
-  const songSelectStepRef = useRef<((dir: 1 | -1, shuffle: boolean) => void) | null>(null);
+  const songSelectStepRef = useRef<((dir: 1 | -1, shuffle: boolean) => boolean) | null>(null);
   // Explicit menu-music pause from the Now Playing bar (mirrors lazer
   // MusicController.UserPauseRequested): the menu effect must not auto-resume
   // until the user presses play again.
   const nowPlayingUserPausedRef = useRef(false);
   const lastMenuSrcRef = useRef<string | null>(null);
   const previewTrackIdRef = useRef<string | null>(null);
+  // Menu-track background art (blob URL) for the Now Playing panel. Parsed
+  // maps only carry raw filenames until unpacked, so art is resolved from
+  // the media cache after a background-only unpack.
+  const [menuTrackArt, setMenuTrackArt] = useState<{ id: string; url: string } | null>(null);
+  const menuArtEnsuredRef = useRef<string | null>(null);
 
   // Performance history states
   const [playHistory, setPlayHistory] = useState<PlayHistoryRecord[]>([]);
@@ -371,6 +394,19 @@ export default function App() {
   // Resolve a menu-track map's audio (cached blob, parsed URL, or unpack)
   // and start it on the menu player. Shared by the menu effect and the Now
   // Playing random-start.
+  const ensureMenuTrackArt = useCallback(async (map: Beatmap) => {
+    if (menuArtEnsuredRef.current === map.id) return;
+    menuArtEnsuredRef.current = map.id;
+    try {
+      await unpackBeatmap(map, false, { backgroundOnly: true });
+    } catch {
+      /* art is best-effort; audio already plays */
+    }
+    if (menuChoiceRef.current.mapId !== map.id) return;
+    const url = storageManager.lruMediaCache.get(map.id)?.bgUrl || '';
+    setMenuTrackArt({ id: map.id, url });
+  }, []);
+
   const playMenuMapTrack = useCallback(async (map: Beatmap, generation: number, volume: number) => {
     try {
       const cached = storageManager.lruMediaCache.get(map.id);
@@ -390,12 +426,13 @@ export default function App() {
       } else {
         menuMusic.play(MENU_FALLBACK_TRACK, volume);
       }
+      void ensureMenuTrackArt(map);
     } catch (err) {
       console.warn('Menu music track unpack failed, falling back:', err instanceof Error ? err.message : String(err));
       if (menuMusicGenRef.current !== generation) return;
       menuMusic.play(MENU_FALLBACK_TRACK, volume);
     }
-  }, []);
+  }, [ensureMenuTrackArt]);
 
   useEffect(() => {
     if (!booted) {
@@ -424,6 +461,18 @@ export default function App() {
       const generation = ++menuMusicGenRef.current;
       void playMenuMapTrack(picked, generation, volume);
       return;
+    }
+
+    // Upgrade: the bundled fallback only plays because the launch set had
+    // not installed yet — switch to the downloaded beatmap once it arrives.
+    if (!menuChoiceRef.current.mapId) {
+      const arrived = findLaunchMenuTrackMap(customMaps);
+      if (arrived) {
+        menuChoiceRef.current.mapId = arrived.id;
+        const arrivalGeneration = ++menuMusicGenRef.current;
+        void playMenuMapTrack(arrived, arrivalGeneration, volume);
+        return;
+      }
     }
 
     if (menuMusic.isPlaying()) return;
@@ -474,6 +523,33 @@ export default function App() {
     if (nowPlayingHoverTimer.current !== null) {
       window.clearTimeout(nowPlayingHoverTimer.current);
     }
+    if (nowPlayingLoadingTimer.current !== null) {
+      window.clearTimeout(nowPlayingLoadingTimer.current);
+    }
+  }, []);
+
+  // "Loading song..." from a switch click until the new track is audible
+  // (10s backstop in case a track fails to start). Clears when the audible
+  // src differs from the one observed at click time.
+  const loadingFromRef = useRef<string | null>(null);
+  const markNowPlayingLoading = useCallback((fromSrc: string | null) => {
+    loadingFromRef.current = fromSrc;
+    setNowPlayingLoading(true);
+    if (nowPlayingLoadingTimer.current !== null) {
+      window.clearTimeout(nowPlayingLoadingTimer.current);
+    }
+    nowPlayingLoadingTimer.current = window.setTimeout(() => {
+      nowPlayingLoadingTimer.current = null;
+      setNowPlayingLoading(false);
+    }, 10000);
+  }, []);
+
+  const clearNowPlayingLoading = useCallback(() => {
+    if (nowPlayingLoadingTimer.current !== null) {
+      window.clearTimeout(nowPlayingLoadingTimer.current);
+      nowPlayingLoadingTimer.current = null;
+    }
+    setNowPlayingLoading(false);
   }, []);
 
   // Progress poll while the panel is open (matches the ~6 Hz mania HUD cadence).
@@ -522,7 +598,7 @@ export default function App() {
     setPreviewTrack(track);
   }, []);
 
-  const handleRegisterSongSelectStep = useCallback((step: (dir: 1 | -1, shuffle: boolean) => void) => {
+  const handleRegisterSongSelectStep = useCallback((step: (dir: 1 | -1, shuffle: boolean) => boolean) => {
     songSelectStepRef.current = step;
   }, []);
 
@@ -543,7 +619,15 @@ export default function App() {
   const nowPlayingTrack: NowPlayingTrack | null = resolveNowPlayingTrack({
     previewMap: currentScreen === 'select' ? previewTrack : null,
     menuMap: nowPlayingMenuMap
-      ? { title: nowPlayingMenuMap.title, artist: nowPlayingMenuMap.artist, bgUrl: nowPlayingMenuMap.bgUrl }
+      ? {
+          title: nowPlayingMenuMap.title,
+          artist: nowPlayingMenuMap.artist,
+          // Cache-resolved art wins (parsed maps only hold raw filenames
+          // until unpacked, which is why the menu background was missing).
+          bgUrl: menuTrackArt?.id === nowPlayingMenuMap.id && menuTrackArt.url
+            ? menuTrackArt.url
+            : usableArtUrl(nowPlayingMenuMap.bgUrl),
+        }
       : nowPlayingMenuSrc
         ? { title: 'triangles', artist: '', bgUrl: '' }
         : null,
@@ -565,15 +649,24 @@ export default function App() {
   const nowPlayingCanStartRandom = currentScreen === 'menu' || customMaps.length > 0;
   const nowPlayingControlsEnabled = nowPlayingScreenOk && (nowPlayingTrack !== null || nowPlayingCanStartRandom);
 
+  // Clear "Loading song..." once the new track is actually audible.
+  useEffect(() => {
+    if (!nowPlayingLoading) return;
+    if (nowPlayingIsPlaying && nowPlayingTrack && nowPlayingTrack.src !== loadingFromRef.current) {
+      clearNowPlayingLoading();
+    }
+  }, [nowPlayingLoading, nowPlayingIsPlaying, nowPlayingTrack, clearNowPlayingLoading]);
+
   // Idle transport (first load, nothing playing): pick and play a random
   // installed song — a shuffle step on Song Select (auto-plays the preview),
   // the menu player everywhere else.
   const startRandomNowPlayingTrack = useCallback(() => {
     if (currentScreen === 'select' && songSelectStepRef.current) {
-      songSelectStepRef.current(1, true);
+      if (songSelectStepRef.current(1, true)) markNowPlayingLoading(null);
       return;
     }
     if (currentScreen === 'play' || currentScreen === 'results') return;
+    markNowPlayingLoading(null);
     nowPlayingUserPausedRef.current = false;
     if (customMaps.length === 0) {
       menuChoiceRef.current = { rolled: true, mapId: null };
@@ -585,7 +678,30 @@ export default function App() {
     menuChoiceRef.current = { rolled: true, mapId: pick.id };
     const generation = ++menuMusicGenRef.current;
     void playMenuMapTrack(pick, generation, launchMusicLevel(settings));
-  }, [currentScreen, customMaps, settings, playMenuMapTrack]);
+  }, [currentScreen, customMaps, settings, playMenuMapTrack, markNowPlayingLoading]);
+
+  // Menu next/previous step across installed maps (sequential or shuffle);
+  // a single-map pool (or no maps) restarts the current track instead.
+  // Returns true when a new track is starting (panel shows "Loading song...").
+  const stepMenuTrack = useCallback((dir: 1 | -1): boolean => {
+    if (customMaps.length === 0) {
+      menuMusic.seekTo(0);
+      return false;
+    }
+    const currentId = menuChoiceRef.current.mapId;
+    const currentIdx = currentId ? customMaps.findIndex((m) => m.id === currentId) : -1;
+    const nextIdx = pickAdjacentIndex(customMaps.length, currentIdx, dir, nowPlayingShuffle);
+    const next = nextIdx >= 0 ? customMaps[nextIdx] : undefined;
+    if (!next || next.id === currentId) {
+      menuMusic.seekTo(0);
+      return false;
+    }
+    nowPlayingUserPausedRef.current = false;
+    menuChoiceRef.current = { rolled: true, mapId: next.id };
+    const generation = ++menuMusicGenRef.current;
+    void playMenuMapTrack(next, generation, launchMusicLevel(settings));
+    return true;
+  }, [customMaps, nowPlayingShuffle, settings, playMenuMapTrack]);
 
   const handleNowPlayingTogglePlay = useCallback(() => {
     if (!nowPlayingTrack) {
@@ -623,26 +739,26 @@ export default function App() {
       player.seekTo(0);
       return;
     }
+    const fromSrc = nowPlayingTrack.src;
     if (nowPlayingTrack.kind === 'preview') {
-      songSelectStepRef.current?.(-1, nowPlayingShuffle);
-    } else {
-      // No menu playlist yet: a single launch track restarts.
-      player.seekTo(0);
+      if (songSelectStepRef.current?.(-1, nowPlayingShuffle)) markNowPlayingLoading(fromSrc);
+    } else if (stepMenuTrack(-1)) {
+      markNowPlayingLoading(fromSrc);
     }
-  }, [nowPlayingTrack, nowPlayingShuffle, startRandomNowPlayingTrack]);
+  }, [nowPlayingTrack, nowPlayingShuffle, startRandomNowPlayingTrack, stepMenuTrack, markNowPlayingLoading]);
 
   const handleNowPlayingNext = useCallback(() => {
     if (!nowPlayingTrack) {
       startRandomNowPlayingTrack();
       return;
     }
+    const fromSrc = nowPlayingTrack.src;
     if (nowPlayingTrack.kind === 'preview') {
-      songSelectStepRef.current?.(1, nowPlayingShuffle);
-    } else {
-      // No menu playlist yet: a single launch track restarts.
-      menuMusic.seekTo(0);
+      if (songSelectStepRef.current?.(1, nowPlayingShuffle)) markNowPlayingLoading(fromSrc);
+    } else if (stepMenuTrack(1)) {
+      markNowPlayingLoading(fromSrc);
     }
-  }, [nowPlayingTrack, nowPlayingShuffle, startRandomNowPlayingTrack]);
+  }, [nowPlayingTrack, nowPlayingShuffle, startRandomNowPlayingTrack, stepMenuTrack, markNowPlayingLoading]);
 
   const handleNowPlayingSeek = useCallback((seconds: number) => {
     if (!nowPlayingTrack) return;
@@ -657,22 +773,6 @@ export default function App() {
     const src = nowPlayingTrack.kind === 'preview' ? nowPlayingPreviewSrc : lastMenuSrcRef.current;
     if (src) player.seekPaused(src, target);
   }, [nowPlayingTrack, nowPlayingPreviewSrc]);
-
-  // Centre the panel on the toolbar music button (not the right wall).
-  // Recomputed with the progress poll so clock-width drift can't offset it.
-  const nowPlayingPanelStyle = React.useMemo((): React.CSSProperties | undefined => {
-    if (!isNowPlayingPanelOpen || typeof window === 'undefined' || typeof document === 'undefined') {
-      return undefined;
-    }
-    const width = Math.min(400, window.innerWidth - 28);
-    const clampLeft = (center: number) =>
-      Math.max(14, Math.min(center - width / 2, window.innerWidth - width - 14));
-    const btn = document.getElementById('toolbar-btn-now-playing');
-    if (!btn) return { left: clampLeft(window.innerWidth - width / 2) };
-    const rect = btn.getBoundingClientRect();
-    return { left: Math.round(clampLeft(rect.left + rect.width / 2)) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNowPlayingPanelOpen, nowPlayingTick, currentScreen]);
 
   const activePlayBeatmap = React.useMemo(() => {
     if (!selectedBeatmap) return null;
@@ -1686,7 +1786,7 @@ export default function App() {
         localDisplayName={settings.localDisplayName}
       />
 
-      {/* Now Playing player bar (hover opens, click/F6 pins), centred on the toolbar button. */}
+      {/* Now Playing player bar (hover opens, click/F6 pins), docked top-right. */}
       <AnimatePresence>
         {isNowPlayingPanelOpen && showLazerToolbar && (
           <NowPlayingPanel
@@ -1696,13 +1796,13 @@ export default function App() {
             duration={nowPlayingDuration}
             shuffle={nowPlayingShuffle}
             controlsEnabled={nowPlayingControlsEnabled}
+            loading={nowPlayingLoading}
             onToggleShuffle={() => setNowPlayingShuffle((prev) => !prev)}
             onPrevious={handleNowPlayingPrevious}
             onTogglePlay={handleNowPlayingTogglePlay}
             onNext={handleNowPlayingNext}
             onSeek={handleNowPlayingSeek}
             onHoverChange={handleNowPlayingHoverChange}
-            style={nowPlayingPanelStyle}
           />
         )}
       </AnimatePresence>

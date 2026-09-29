@@ -72,6 +72,19 @@ None. No schema, sessions, or leaderboards. Scores/replays/profiles are local-on
 `vitest.config.ts`: Node, `tests/**/*.test.ts` (~47 files). Covers parser/limits, settings/history, score/judgement, holds, replays, scroll/visibility, mirror catalog, UI tokens/shells, flashlight radius, API handlers (health/config, CORS, catalog 404). No browser App/GameplayCanvas/renderer/AudioEngine/SW/PostgreSQL/real-download coverage. Changing timing: check `GameplayCanvas`, `holdTickRules`/`holdNote`/`judgementTiming`, replay sim/cursor, DT/HT + video sync, `replayVerification.ts`. Changing settings: follow the §4 checklist (types, defaults, sanitize, `safePayload`, registry/UI, persistence, consumers) — if a setting does not work/persist, check both allowlists first. Changing visuals: shared frame/math first, then the WebGL2 renderer (sole playfield renderer).
 
 ## 11. Tools and Thing I would want you to explicitly know. (Extra Importance)
+
+### Pre-modification Changes
+
+- When I ask you to do something or to implement somthing, first check if you
+fully understand where and what I am asking you to do. 
+
+- If you are slightly unclear or my wording was vague, please use more precise 
+wording and ask me even if it seems clear to you.
+
+- As a general rule of thumb, taller and higher is usually vertical, and
+wider and thicker is usually horizontal, unless I explicitly said vertical or
+horizontal.
+
 ### Fonts
 
 - All webfonts are self-hosted from `public/fonts` and must never come from a
@@ -88,7 +101,7 @@ its `@font-face` block and precache entry, and verify no
 `fonts.googleapis.com` / `fonts.gstatic.com` reference remains.
 
 
-### Audio: zero-startup-delay playback (Extra Importance)
+### Audio: zero-startup-delay playback
 
 - Never start UI/menu sounds with `new Audio(src).play()` inside the click
 handler. That pays fetch + demux + first-frame decode + `canplay` on the

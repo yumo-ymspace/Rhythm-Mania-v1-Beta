@@ -806,9 +806,29 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const ix = col.x + ARGON_COLUMN_GAP / 2;
         const iw = Math.max(1, col.width - ARGON_COLUMN_GAP);
         const pressed = col.pressed;
-        if (pressed) {
+        // Hit flash: every note / long-note-head hit lights the receptor and
+        // fades with the decaying lane glow, so a quick tap still flashes it.
+        const glow = col.glow;
+        const flash = glow > 1 ? 1 : glow < 0 ? 0 : glow;
+        const lit = pressed ? 1 : flash;
+        const base = laneBase[i];
+        const darkLane = laneDarkLane[i];
+        if (lit > 0) {
+          // Lane-tinted bloom around the receptor (layered soft falloff).
+          const halo = laneLightPulse[i] ?? base;
+          if (halo) {
+            const cx0 = col.x + col.width / 2;
+            const ha1 = 0.10 * lit * receptorOpacity;
+            const haloW1 = col.width + 26;
+            const haloH1 = 104;
+            this.pushQuadNumbers(cx0 - haloW1 / 2, receptorY - haloH1 / 2, haloW1, haloH1, halo[0], halo[1], halo[2], ha1, halo[0], halo[1], halo[2], 0, haloH1 / 2);
+            const ha2 = 0.16 * lit * receptorOpacity;
+            const haloW2 = col.width + 10;
+            const haloH2 = 64;
+            this.pushQuadNumbers(cx0 - haloW2 / 2, receptorY - haloH2 / 2, haloW2, haloH2, halo[0], halo[1], halo[2], ha2, halo[0], halo[1], halo[2], 0, haloH2 / 2);
+          }
           // White-hot core hugging the judgement line, fading into the lane.
-          const coreAlpha = 0.3 * receptorOpacity;
+          const coreAlpha = 0.35 * lit * receptorOpacity;
           if (upscroll) {
             this.pushQuadNumbers(ix, receptorY, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
           } else {
@@ -818,14 +838,18 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const targetY = upscroll ? receptorY : receptorY - hitTargetH;
         this.quadRgb(
           ix, targetY, iw, hitTargetH,
-          whiteRgb, (pressed ? 0.55 : 0.3) * receptorOpacity, ARGON_CORNER_RADIUS,
+          whiteRgb, (0.3 + 0.35 * lit) * receptorOpacity, ARGON_CORNER_RADIUS,
         );
-        this.quadRgb(
+        // Lip ramps gray -> white with the hit flash.
+        const lipR = grayRgb[0] + (1 - grayRgb[0]) * lit;
+        const lipG = grayRgb[1] + (1 - grayRgb[1]) * lit;
+        const lipB = grayRgb[2] + (1 - grayRgb[2]) * lit;
+        this.pushQuadNumbers(
           ix, receptorY - lipH / 2, iw, lipH,
-          pressed ? whiteRgb : grayRgb, receptorOpacity, lipH / 2,
+          lipR, lipG, lipB, receptorOpacity,
+          lipR, lipG, lipB, receptorOpacity,
+          lipH / 2,
         );
-        const base = laneBase[i];
-        const darkLane = laneDarkLane[i];
         if (base && darkLane) {
           const ovalW = Math.min(22, iw * 0.42);
           const ovalH = 14;
