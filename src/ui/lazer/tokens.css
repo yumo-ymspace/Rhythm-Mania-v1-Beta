@@ -2579,7 +2579,7 @@ html[data-ui="lazer"] {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   font-size: 15px;
-  font-style: italic;
+  font-style: normal;
   color: #fff;
   outline: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
@@ -2587,7 +2587,7 @@ html[data-ui="lazer"] {
 
 .lazer-song-search-input::placeholder {
   color: rgba(255, 255, 255, 0.45);
-  font-style: italic;
+  font-style: normal;
 }
 
 .lazer-song-search-input:focus {
@@ -2750,14 +2750,18 @@ html[data-ui="lazer"] {
   background: transparent;
 }
 
-/* Song banners, status tags, diff rows, and top-left song info box all use Nunito. */
+/* Song banners, status tags, diff rows, top-left song info box, and the
+   top-right filter wedge (search, star, sort pills, dropdowns, menus)
+   all use Nunito. */
 .lazer-carousel-card,
 .lazer-carousel-card *,
 .lazer-carousel-diff-row,
 .lazer-carousel-diff-row *,
 .lazer-status-pill,
 .lazer-song-wedge,
-.lazer-song-wedge * {
+.lazer-song-wedge *,
+.lazer-song-filter-stack,
+.lazer-song-filter-stack * {
   font-family: "Nunito", Inter, sans-serif;
 }
 
@@ -2864,8 +2868,8 @@ html[data-ui="lazer"] {
    slant (match degrees, not widths): the shell's straight run is 26px
    over 146.5px, θ = atan(26/146.5) ≈ 10.1°, so each element shifts
    S = H x tan10.1°. The tall search field leans exactly like the short
-   pills and bar. Search H = 45px (8 + 15 padding + ~20px 16px-italic
-   line + 2px border): S = 8.0px. All four joints are R6 circular
+   pills and bar. Search H = 45px (8 + 15 padding + ~20px 16px
+   upright line + 2px border): S = 8.0px. All four joints are R6 circular
    fillets (R/H = 6/45 = 0.133, matching the pills' 4/28-30 ratio so the
    roundness reads the same): obtuse joints (TL/BR, φ=100.1°)
    T = 5.03px, acute joints (TR/BL, φ=79.9°) T = 7.16px, arcs sampled
@@ -3089,6 +3093,36 @@ html[data-ui="lazer"] {
 .lazer-song-filter-row .lazer-filter-select:hover {
   border-color: transparent;
   background: rgba(18, 20, 28, 0.75);
+}
+
+/* Sort/group/collection dropdown POPUPS: "/" parallelograms at 10.1°
+   (same lean as the row pills), with Slant Fillet R8 corners baked into
+   the clip-path on ALL FOUR joints. TL/BR are the obtuse joints
+   (φ=100.1°): T = 8/tan(50.05°) = 6.7px. TR/BL are the acute joints
+   (φ=79.9°): T = 8/tan(39.95°) = 9.6px. All arcs sampled every ~20°
+   (travel flows monotonically, no flat/kink/reversal). The slant offset
+   is per-menu via --dd-slant (S = menu H x tan10.1°, set inline from
+   the option count). Rows are inset by 12px + S on the left so the 12px
+   text column stands vertical and clear of the diagonal cut (deepest at
+   the top for this lean), while the highlight bars stay full-bleed (the
+   panel clip cuts them, like the reference). border-radius is 0: the
+   clip alone defines the corners (a radius would round the painted
+   background inside the clip and fight the baked arcs). (box-shadow
+   utilities are inert here: clip-path clips shadows away.) The popup
+   is left-0 right-0 (full pair width) PLUS a slant-compensation
+   overhang: the "/" clip insets the painted top by S+6.7 left / 9.6
+   right, while the pair's painted bottom is only inset ~4px per side,
+   so without compensation the menu reads narrower. margin-left pulls it
+   left by S+3 and margin-right pushes it 6px right (width auto-absorbs
+   both since left+right are set), aligning the painted spans. */
+.lazer-song-filter-row .lazer-filter-menu {
+  margin-left: calc(0px - var(--dd-slant, 20px) - 3px);
+  margin-right: -6px;
+  border-radius: 0;
+  clip-path: polygon(1.7px calc(100% - 9.4px), calc(var(--dd-slant, 20px) - 1.2px) 6.6px, calc(var(--dd-slant, 20px) - 0.2px) 4.0px, calc(var(--dd-slant, 20px) + 1.6px) 1.9px, calc(var(--dd-slant, 20px) + 4.0px) 0.5px, calc(var(--dd-slant, 20px) + 6.7px) 0px, calc(100% - 9.6px) 0px, calc(100% - 7.3px) 0.3px, calc(100% - 5.2px) 1.3px, calc(100% - 3.4px) 2.9px, calc(100% - 2.2px) 4.8px, calc(100% - 1.6px) 7.1px, calc(100% - 1.7px) 9.4px, calc(100% - var(--dd-slant, 20px) + 1.2px) calc(100% - 6.6px), calc(100% - var(--dd-slant, 20px) + 0.2px) calc(100% - 4.0px), calc(100% - var(--dd-slant, 20px) - 1.6px) calc(100% - 1.9px), calc(100% - var(--dd-slant, 20px) - 4.0px) calc(100% - 0.5px), calc(100% - var(--dd-slant, 20px) - 6.7px) 100%, 9.6px 100%, 7.3px calc(100% - 0.3px), 5.2px calc(100% - 1.3px), 3.4px calc(100% - 2.9px), 2.2px calc(100% - 4.8px), 1.6px calc(100% - 7.1px));
+}
+.lazer-song-filter-row .lazer-filter-menu > button {
+  padding-left: calc(12px + var(--dd-slant, 20px));
 }
 
 @media (max-width: 768px) {

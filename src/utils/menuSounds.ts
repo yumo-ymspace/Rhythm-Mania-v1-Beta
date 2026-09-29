@@ -4,6 +4,7 @@
  * - idle cookie press -> d1.mp3
  * - top-level play button / cookie press -> d2.mp3
  * - play solo button / cookie press -> d3.mp3
+ * - every interactive UI click -> click.mp3 (global click listener in App.tsx)
  *
  * Low-latency path: each file is fetched + decoded to an AudioBuffer once at
  * boot (see `preloadMenuSounds`, called from `main.tsx`). Every press then
@@ -18,15 +19,16 @@
  * fetch.
  */
 
-export type MenuSoundId = 'd1' | 'd2' | 'd3';
+export type MenuSoundId = 'd1' | 'd2' | 'd3' | 'click';
 
 const MENU_SOUND_SRC: Record<MenuSoundId, string> = {
   d1: '/sounds/d1.mp3',
   d2: '/sounds/d2.mp3',
   d3: '/sounds/d3.mp3',
+  click: '/sounds/click.mp3',
 };
 
-const MENU_SOUND_IDS: readonly MenuSoundId[] = ['d1', 'd2', 'd3'];
+const MENU_SOUND_IDS: readonly MenuSoundId[] = ['d1', 'd2', 'd3', 'click'];
 
 /** Dedicated low-latency context for menu clicks (never the gameplay clock). */
 let ctx: AudioContext | null = null;
@@ -169,4 +171,9 @@ export function playMenuSound(id: MenuSoundId): void {
   } catch {
     /* never break menu navigation because of a sound */
   }
+}
+
+/** Global UI click: plays click.mp3 instantly. Never throws. */
+export function playClickSound(): void {
+  playMenuSound('click');
 }

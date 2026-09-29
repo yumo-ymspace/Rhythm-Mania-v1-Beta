@@ -613,6 +613,70 @@ describe('Hidden, Fade In, and Cover modifiers', () => {
       expect(isHoldBodyAnchored(note)).toBe(true);
     });
 
+    it('keeps a held long note grounded after its tail time has passed', () => {
+      // The player is still holding when the tail passes the receptor: the
+      // body must stay anchored so it is eaten (the renderer clips it) rather
+      // than dropping below the judgement line.
+      const v3Hold = hold({
+        holdRulesVersion: 3,
+        isHit: true,
+        holdState: {
+          startTime: 1000,
+          endTime: 3000,
+          column: 0,
+          isHeadJudged: true,
+          headJudgement: 'marvelous',
+          headMissed: false,
+          isHolding: true,
+          hasHoldBreak: false,
+          bodyJudged: false,
+          isTailJudged: false,
+          tailJudgement: null,
+          tailMissed: false,
+          isTailCapped: false,
+          isComplete: false,
+        },
+      });
+
+      const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 3200, 0.2);
+      expect(note.isEndPassed).toBe(true);
+      expect(note.bodyStartY).toBe(600); // still grounded to receptorY
+      expect(isHoldBodyAnchored(note)).toBe(true);
+    });
+
+    it('collapses the body of a held-through long note whose release was missed', () => {
+      // Player held the whole note but released outside the window: the whole
+      // body was consumed, so it must not trail below the receptor.
+      const v3Hold = hold({
+        holdRulesVersion: 3,
+        isHit: true,
+        isReleased: true,
+        isReleaseMissed: true,
+        isHoldFailed: true,
+        releaseTime: 3200,
+        holdState: {
+          startTime: 1000,
+          endTime: 3000,
+          column: 0,
+          isHeadJudged: true,
+          headJudgement: 'marvelous',
+          headMissed: false,
+          isHolding: false,
+          hasHoldBreak: false,
+          bodyJudged: false,
+          isTailJudged: true,
+          tailJudgement: 'miss',
+          tailMissed: true,
+          isTailCapped: false,
+          isComplete: true,
+        },
+      });
+
+      const [note] = getVisibleNotes([v3Hold], settings, 800, 600, 3200, 0.2);
+      expect(note.bodyStartY).toBe(note.endY); // fully consumed -> zero-length body
+      expect(isHoldBodyAnchored(note)).toBe(false);
+    });
+
     it('starts unconsumed body at earlyReleaseTime after an early release break', () => {
       const v3Hold = hold({
         holdRulesVersion: 3,

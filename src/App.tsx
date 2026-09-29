@@ -40,6 +40,7 @@ import {
 } from './utils/mirrorStarRatings';
 import { FullscreenManager } from './utils/fullscreenManager';
 import { previewPlayer } from './utils/previewPlayer';
+import { playClickSound } from './utils/menuSounds';
 import { MENU_FALLBACK_TRACK, menuMusic } from './utils/menuMusic';
 import type { PreparedLaunchTrack } from './utils/launchMenuTrack';
 import { findLaunchMenuTrackMap } from './utils/launchMenuTrack';
@@ -197,6 +198,28 @@ export default function App() {
     };
     document.addEventListener('click', handleAnchorClick);
     return () => document.removeEventListener('click', handleAnchorClick);
+  }, []);
+
+  // Global UI click sound: every click that actually lands on an interactive
+  // element plays the pre-decoded click.mp3 with a synchronous start(0).
+  // Capture phase so overlay stopPropagation() calls never swallow it.
+  // Non-interactive background clicks stay silent.
+  useEffect(() => {
+    const handleClickSound = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || typeof target.closest !== 'function') return;
+      const interactive = target.closest(
+        'button, a, input, select, textarea, summary, ' +
+        '[role="button"], [role="link"], [role="tab"], [role="option"], ' +
+        '[role="menuitem"], [role="switch"], [role="checkbox"], [role="radio"]',
+      );
+      if (!interactive) return;
+      if ((interactive as HTMLButtonElement).disabled) return;
+      if (interactive.getAttribute('aria-disabled') === 'true') return;
+      playClickSound();
+    };
+    document.addEventListener('click', handleClickSound, true);
+    return () => document.removeEventListener('click', handleClickSound, true);
   }, []);
   const [scoreState, setScoreState] = useState<ScoreState | null>(null);
   const [lastHitErrors, setLastHitErrors] = useState<number[] | null>(null);

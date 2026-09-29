@@ -507,6 +507,12 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       let visualStartY = getNoteVisualY(n.bodyStartY ?? n.y, col.width, settingsSlice);
       if (anchored) visualStartY = receptorY;
       const visualEndY = getNoteVisualY(n.endY, col.width, settingsSlice);
+      // A held long note is eaten by the receptor: once the held tail reaches
+      // or passes the judgement line the whole body is consumed and must not
+      // trail below it.
+      if (anchored && (upscroll ? visualEndY <= receptorY : visualEndY >= receptorY)) {
+        continue;
+      }
       const bodySegments = n.tailSegments !== undefined
         ? n.tailSegments
         : [{ startY: visualStartY, endY: visualEndY }];
@@ -708,7 +714,11 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
           const releaseDone = n.holdRulesVersion !== 2
             ? (n.isReleased && !n.isReleaseMissed)
             : n.isReleaseHit;
-          if (releaseDone) continue;
+          // Head hit, never early-released, tail already at/past the receptor:
+          // the held tail was consumed, so the cap must not trail below.
+          const tailConsumed = n.holdRulesVersion === 3 && n.isHit && !n.isMissed &&
+            n.earlyReleaseTime === undefined && !!n.isEndPassed;
+          if (releaseDone || tailConsumed) continue;
           const centerY = getNoteVisualY(n.endY, colW, settingsSlice);
           let o = n.endOpacity ?? n.opacity;
           if (n.isHoldFailed) o *= 0.35;
@@ -740,7 +750,11 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const releaseDone = n.holdRulesVersion !== 2
           ? (n.isReleased && !n.isReleaseMissed)
           : n.isReleaseHit;
-        if (releaseDone) continue;
+        // Head hit, never early-released, tail already at/past the receptor:
+        // the held tail was consumed, so the cap must not trail below.
+        const tailConsumed = n.holdRulesVersion === 3 && n.isHit && !n.isMissed &&
+          n.earlyReleaseTime === undefined && !!n.isEndPassed;
+        if (releaseDone || tailConsumed) continue;
         const centerY = getNoteVisualY(n.endY, col.width, settingsSlice);
         const tailOpacity = n.endOpacity ?? n.opacity;
         const tailFailed = !!n.isHoldFailed;

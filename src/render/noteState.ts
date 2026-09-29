@@ -13,12 +13,20 @@
 import type { VisibleNote } from './types';
 
 export function isHoldBodyAnchored(note: Pick<VisibleNote, 'type' | 'isHit' | 'isMissed' | 'isReleased' | 'isHoldFailed' | 'isEndPassed' | 'earlyReleaseTime' | 'tailResumedTime' | 'isHolding' | 'holdRulesVersion'>): boolean {
-  if (note.type !== 'hold' || !note.isHit || note.isMissed || note.isReleased || note.isHoldFailed || note.isEndPassed) {
+  if (note.type !== 'hold' || !note.isHit || note.isMissed || note.isReleased || note.isHoldFailed) {
     return false;
   }
-  if (note.isHolding !== undefined) {
-    return note.isHolding;
+  // Live holds (v3) report `isHolding` from hold state. The body stays
+  // anchored to the receptor for as long as the key is held, even after the
+  // tail time has passed, so a held long note is eaten by the receptor
+  // instead of dropping below it. The renderer clips the anchored body at
+  // the judgement line.
+  if (note.holdRulesVersion === 3) {
+    return note.isHolding === true;
   }
+  // Tick holds (v1/v2) keep the legacy behavior: a tail that has passed the
+  // receptor no longer anchors.
+  if (note.isEndPassed) return false;
   return (note.earlyReleaseTime === undefined || note.tailResumedTime !== undefined);
 }
 

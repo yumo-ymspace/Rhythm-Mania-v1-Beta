@@ -88,6 +88,29 @@ its `@font-face` block and precache entry, and verify no
 `fonts.googleapis.com` / `fonts.gstatic.com` reference remains.
 
 
+### Audio: zero-startup-delay playback (Extra Importance)
+
+- Never start UI/menu sounds with `new Audio(src).play()` inside the click
+handler. That pays fetch + demux + first-frame decode + `canplay` on the
+gesture (very audible on the 3 MB `triangles.mp3` vs the ~50 KB d1/d2/d3).
+Canonical paths: one-shots in `src/utils/menuSounds.ts`, menu loops in
+`src/utils/menuMusic.ts` — both fetch + `decodeAudioData` to an
+`AudioBuffer` ahead of time, then fire synchronously with
+`source.start(0)`.
+- New audible UI sound = same recipe: dedicated `AudioContext` with
+`{ latencyHint: 'interactive' }`, `GainNode` for volume (never element
+volume), fresh `BufferSource` per play, `armUnlock()` resume on
+`pointerdown/keydown/touchstart`, `preload*()` from `src/main.tsx`, and
+`warm*()` the exact src before its button becomes visible (see
+`LoadingScreen.tsx` awaiting `warmMenuMusic()` before the start button).
+Keep the HTMLAudio fallback only for undecoded/unsupported cases, and warm
+in the background so the next play is instant.
+- Keep bytes cache-warm too: list the file in
+`src/utils/assetPreloader.ts` `BOOT_SOUNDS` and `public/sw.js`
+`STATIC_ASSETS`. If the `.mp3` itself starts with silence, trim the file —
+playback cannot remove baked-in leading silence (MP3 padding excepted via
+`start(0, offset)`).
+
 ### Playwright MCP
 
 - If I asked you to do any UI/frontend changes, and I did not tell you whether

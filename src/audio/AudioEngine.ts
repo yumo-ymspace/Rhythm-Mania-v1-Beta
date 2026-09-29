@@ -29,6 +29,26 @@ export type AudioTransportState =
   | 'paused-lead-in'
   | 'paused-playback';
 
+/**
+ * Gameplay one-shot SFX served from `public/sounds/`.
+ *
+ * - Default hitsound (no custom map hitsound): `soft-hitwhistle.mp3`.
+ * - Map fail: `fail.mp3` (played once per fail).
+ * - First miss of a miss chain: `miss-sound.mp3` (once until the next hit).
+ * - Restart from pause/fail menu: `restart.mp3`.
+ *
+ * Low-latency path (same approach as the menu clicks in `menuSounds.ts`):
+ * every file is fetched + decoded to an AudioBuffer ahead of time (boot via
+ * `preloadSfx()`, gameplay load via `init()`), then played with a
+ * synchronous BufferSource `start()` inside the event handler. When the
+ * buffer isn't decoded yet (or Web Audio is missing), playback falls back
+ * to a fresh HTMLAudio element hitting the HTTP cache warmed by boot.
+ */
+const DEFAULT_HITSOUND_SRC = '/sounds/soft-hitwhistle.mp3';
+const FAIL_SOUND_SRC = '/sounds/fail.mp3';
+const MISS_SOUND_SRC = '/sounds/miss-sound.mp3';
+const RESTART_SOUND_SRC = '/sounds/restart.mp3';
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private musicSource: AudioBufferSourceNode | null = null;
@@ -36,6 +56,12 @@ export class AudioEngine {
   private hitsoundBuffer: AudioBuffer | null = null;
   private hihatNoiseBuffer: AudioBuffer | null = null;
   private beatmapHitsoundBuffers = new Map<string, AudioBuffer>();
+  private failBuffer: AudioBuffer | null = null;
+  private missBuffer: AudioBuffer | null = null;
+  private restartBuffer: AudioBuffer | null = null;
+  private sfxWarmStarted = false;
+  private lastSfxVolume = 1;
+  private lastMasterVolume = 1;
   
   // Volume controls
   private masterGain: GainNode | null = null;
@@ -117,9 +143,143 @@ export class AudioEngine {
       this.sfxGain.connect(this.masterGain);
       
       this.refreshOutputLatencyCache();
-      this.createProceduralHitsound();
+      // Warm the file-backed SFX (soft-hitwhistle default hitsound +
+      // fail/miss/restart) so gameplay events play from decoded buffers.
+      // There is no synthetic fallback voice: until the fetch decodes,
+      // hits stay silent rather than playing a procedural stand-in.
+      void this.warmSfxBuffers();
     } catch (e) {
       console.error('Failed to initialize Web Audio Context:', e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /**
+   * Fetch + decode the gameplay one-shot SFX ahead of time so event
+   * handlers hit the instant buffered path. Safe to call multiple times
+   * and before any user gesture (the context stays suspended until the
+   * first gesture resumes it; decoding still completes). Never throws.
+   * Call this as early as possible (main.tsx) for zero-startup playback.
+   */
+  public preloadSfx(): void {
+    try {
+      this.init();
+      void this.warmSfxBuffers();
+    } catch {
+      /* never break startup because of a sound */
+    }
+  }
+
+  private async warmSfxBuffers(): Promise<void> {
+    if (this.sfxWarmStarted || !this.ctx) return;
+    this.sfxWarmStarted = true;
+    await Promise.all([
+      this.warmOneSfx(DEFAULT_HITSOUND_SRC, (buf) => { this.hitsoundBuffer = buf; }),
+      this.warmOneSfx(FAIL_SOUND_SRC, (buf) => { this.failBuffer = buf; }),
+      this.warmOneSfx(MISS_SOUND_SRC, (buf) => { this.missBuffer = buf; }),
+      this.warmOneSfx(RESTART_SOUND_SRC, (buf) => { this.restartBuffer = buf; }),
+    ]);
+  }
+
+  private async warmOneSfx(src: string, assign: (buf: AudioBuffer) => void): Promise<void> {
+    try {
+      if (!this.ctx) return;
+      const res = await fetch(src, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const bytes = await res.arrayBuffer();
+      const current = this.ctx;
+      if (!current) return;
+      const decoded = await current.decodeAudioData(bytes);
+      assign(decoded);
+    } catch {
+      /* decode/fetch failure: buffered play falls back to HTMLAudio */
+    }
+  }
+
+  /**
+   * Synchronous fire-and-forget playback of a pre-decoded SFX buffer
+   * through the SFX gain (respects hitsound/master volumes). Returns true
+   * when the buffered (instant) path played.
+   */
+  private playSfxBuffered(buffer: AudioBuffer | null): boolean {
+    try {
+      if (!this.ctx || !this.sfxGain || !buffer) return false;
+      this.init();
+      if (!this.ctx || !this.sfxGain) return false;
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.sfxGain);
+      try {
+        // Tiny schedule ahead reduces under-run clicks on some devices.
+        source.start(this.ctx.currentTime + 0.003);
+      } catch {
+        try { source.disconnect(); } catch { /* ignore */ }
+        return false;
+      }
+      source.onended = () => {
+        try { source.disconnect(); } catch { /* ignore */ }
+      };
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Fallback when Web Audio is missing or the buffer isn't decoded yet. */
+  private playSfxFallback(src: string): void {
+    try {
+      if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
+      // Fresh element per event: overlaps naturally and starts from the
+      // HTTP cache without a pause()+seek round-trip.
+      const audio = new Audio(src);
+      audio.preload = 'auto';
+      const volume = Math.max(0, Math.min(1, this.lastSfxVolume * this.lastMasterVolume));
+      try { audio.volume = volume; } catch { /* ignore */ }
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => { /* autoplay blocked - gameplay continues */ });
+      }
+    } catch {
+      /* never break gameplay because of a sound */
+    }
+  }
+
+  /** Map-failed sting. Plays once per fail (callers guard with a ref). */
+  public playFailSound(): void {
+    try {
+      if (typeof window === 'undefined') return;
+      if (this.playSfxBuffered(this.failBuffer)) return;
+      this.preloadSfx();
+      this.playSfxFallback(FAIL_SOUND_SRC);
+    } catch {
+      /* never break gameplay because of a sound */
+    }
+  }
+
+  /**
+   * First-miss-of-chain tick. Callers only invoke this for the first miss
+   * of any consecutive miss chain (a later hit re-arms it).
+   */
+  public playMissSound(): void {
+    try {
+      if (typeof window === 'undefined') return;
+      if (this.playSfxBuffered(this.missBuffer)) return;
+      this.preloadSfx();
+      this.playSfxFallback(MISS_SOUND_SRC);
+    } catch {
+      /* never break gameplay because of a sound */
+    }
+  }
+
+  /** Restart pressed in the pause/fail menu. */
+  public playRestartSound(): void {
+    try {
+      if (typeof window === 'undefined') return;
+      if (this.playSfxBuffered(this.restartBuffer)) return;
+      this.preloadSfx();
+      this.playSfxFallback(RESTART_SOUND_SRC);
+    } catch {
+      /* never break gameplay because of a sound */
     }
   }
 
@@ -157,6 +317,8 @@ export class AudioEngine {
 
   public setVolumes(musicVolume: number, sfxVolume: number, masterVolume = 1) {
     this.init();
+    if (Number.isFinite(sfxVolume)) this.lastSfxVolume = Math.max(0, Math.min(1, sfxVolume));
+    if (Number.isFinite(masterVolume)) this.lastMasterVolume = Math.max(0, Math.min(1, masterVolume));
     if (this.musicGain && this.sfxGain && this.masterGain) {
       this.masterGain.gain.setValueAtTime(masterVolume, this.ctx!.currentTime);
       this.musicGain.gain.setValueAtTime(musicVolume, this.ctx!.currentTime);
@@ -168,29 +330,8 @@ export class AudioEngine {
     this.audioOffsetMs = offsetMs;
   }
 
-  private createProceduralHitsound() {
-    if (!this.ctx) return;
-    // Generate a sharp, clean sound (synthesized drum rimshot/woodblock)
-    const sampleRate = this.ctx.sampleRate;
-    const duration = 0.08; // 80ms
-    const numSamples = sampleRate * duration;
-    const buffer = this.ctx.createBuffer(1, numSamples, sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < numSamples; i++) {
-      const t = i / sampleRate;
-      // Exponential decay pulse with frequency sweep
-      const freq = 1200 * Math.exp(-t * 40);
-      const val = Math.sin(2 * Math.PI * freq * t);
-      const envelope = Math.exp(-t * 28);
-      data[i] = val * envelope * 0.7;
-    }
-    this.hitsoundBuffer = buffer;
-    this.hihatNoiseBuffer = this.createHiHatNoiseBuffer();
-  }
-
   /**
-   * Pre-generated white-noise buffer for the fallback hi-hat voice.
+   * Pre-generated white-noise buffer for the backup synth hi-hat voice.
    * Reused across triggers so the sequencer only allocates the cheap
    * per-hit source/filter/gain nodes instead of a new AudioBuffer + fill
    * loop on every hit.
@@ -216,7 +357,12 @@ export class AudioEngine {
   }
 
   /**
-   * Play the low-latency hitsound immediately.
+   * Play the low-latency default hitsound immediately
+   * (`soft-hitwhistle.mp3`, pre-decoded at boot/gameplay load).
+   * This is the default voice when the map provides no custom hitsound —
+   * `playBeatmapHitsound` routes here when no custom buffer matches.
+   * No synthetic fallback: if the buffer isn't decoded yet, the hit stays
+   * silent.
    * Fire-and-forget: one-shot voices are NOT added to scheduledSources (that
    * Set + ended-listener per tap is GC churn in the input path). They decay
    * in <100ms, so reset() does not need to stop them; music/synth voices
@@ -224,49 +370,24 @@ export class AudioEngine {
    */
   public playHitsound() {
     this.init();
-    if (!this.ctx || !this.sfxGain) return;
+    if (!this.ctx || !this.sfxGain || !this.hitsoundBuffer) return;
 
     // Ensure context is running (user interactions unlock it)
     if (this.ctx.state === 'suspended') {
       void this.ctx.resume();
     }
 
-    if (this.hitsoundBuffer) {
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.hitsoundBuffer;
-      source.connect(this.sfxGain);
-      // Tiny schedule ahead reduces under-run clicks on some devices
-      const when = this.ctx.currentTime + 0.003;
-      try {
-        source.start(when);
-      } catch { /* context closed mid-hit */ }
-      source.onended = () => {
-        try { source.disconnect(); } catch { /* ignore */ }
-      };
-    } else {
-      // Fallback synthesizer hitsound if buffer failed to create
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      const t0 = this.ctx.currentTime + 0.003;
-      osc.frequency.setValueAtTime(800, t0);
-      osc.frequency.exponentialRampToValueAtTime(150, t0 + 0.05);
-
-      gain.gain.setValueAtTime(0.4, t0);
-      gain.gain.exponentialRampToValueAtTime(0.01, t0 + 0.06);
-
-      osc.connect(gain);
-      gain.connect(this.sfxGain);
-      try {
-        osc.start(t0);
-        osc.stop(t0 + 0.06);
-      } catch { /* ignore */ }
-      osc.onended = () => {
-        try { osc.disconnect(); } catch { /* ignore */ }
-        try { gain.disconnect(); } catch { /* ignore */ }
-      };
-    }
-
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.hitsoundBuffer;
+    source.connect(this.sfxGain);
+    // Tiny schedule ahead reduces under-run clicks on some devices
+    const when = this.ctx.currentTime + 0.003;
+    try {
+      source.start(when);
+    } catch { /* context closed mid-hit */ }
+    source.onended = () => {
+      try { source.disconnect(); } catch { /* ignore */ }
+    };
   }
 
   public async loadBeatmapHitsounds(urls: Record<string, string>, generation = this.loadGeneration): Promise<void> {

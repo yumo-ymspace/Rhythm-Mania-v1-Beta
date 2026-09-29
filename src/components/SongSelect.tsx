@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Upload, Sliders, Play, Compass, Info, Trash2,
   Music, ArrowLeft, ChevronRight,
-  ChevronDown, Star, Check, SlidersHorizontal, Shuffle,
+  ChevronDown, Star, SlidersHorizontal, Shuffle,
   Clock, Heart, Award, X, Infinity as InfinityIcon,
   SquareSlash, Eye, Layers, Flashlight, Rewind, FastForward, ArrowUpToLine, Keyboard, Sparkles,
   Skull, Zap, FlipHorizontal, Gauge, ArrowUpDown, Ban, MousePointerClick,
@@ -77,6 +77,17 @@ function getGradeBadgeClass(grade: string): string {
     default:
       return 'bg-slate-700/40 text-slate-300 border border-white/10';
   }
+}
+
+/* Sort/group/collection dropdown slant: S = menu H x tan10.1° (same
+   lean as the row pills; see tokens.css .lazer-filter-menu). A menu row
+   is 14px (12px text, leading-none + 2x1px padding), panel chrome ~10px
+   (py-1 + border). Computed per menu because the three menus list
+   different option counts (different heights => different S for the
+   same angle). */
+const DD_SLANT_TAN = Math.tan((10.1 * Math.PI) / 180);
+function menuSlantFor(optionCount: number): number {
+  return Math.round((optionCount * 14 + 10) * DD_SLANT_TAN);
 }
 
 interface SongSelectProps {
@@ -1355,7 +1366,7 @@ export default function SongSelect({
           {/* TOP-RIGHT FILTER BOX — floating overlay: the carousel runs
               full-height to the toolbar behind this shell. */}
           <div className="lazer-song-filter-stack" ref={filterStackRef}>
-          {/* SEARCH BOX — italic placeholder, yellow matches, magnifier */}
+          {/* SEARCH BOX — upright placeholder, yellow matches, magnifier */}
           <div className="relative flex-shrink-0 lazer-song-search">
             <input
               id="song-search-input"
@@ -1459,7 +1470,10 @@ export default function SongSelect({
                 {openFilterMenu === dd.key && (
                   <>
                     <div className="fixed inset-0 z-30 cursor-default" onClick={() => setOpenFilterMenu(null)} />
-                    <div className="absolute left-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 rounded-lg shadow-2xl py-1 min-w-[150px]">
+                    <div
+                      className="absolute left-0 right-0 top-full mt-1 z-40 bg-[#12121a] border border-white/10 py-1 min-w-[150px] lazer-filter-menu"
+                      style={{ '--dd-slant': `${menuSlantFor(dd.options.length)}px` } as React.CSSProperties}
+                    >
                       {dd.options.map((opt) => (
                         <button
                           key={opt}
@@ -1470,12 +1484,11 @@ export default function SongSelect({
                             else setCollectionFilter(opt);
                             setOpenFilterMenu(null);
                           }}
-                          className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-sans transition-colors cursor-pointer ${
-                            dd.value === opt ? 'text-white bg-white/10 font-bold' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          className={`w-full flex items-center justify-between px-3 py-[1px] text-left text-[12px] leading-none font-sans transition-colors cursor-pointer ${
+                            dd.value === opt ? 'text-white bg-[#2e7fc4]' : 'text-slate-200 hover:text-white hover:bg-[#2e7fc4]/30'
                           }`}
                         >
                           {opt}
-                          {dd.value === opt && <Check className="h-3 w-3" />}
                         </button>
                       ))}
                     </div>

@@ -246,11 +246,21 @@ export function getVisibleNotes(
 
     if (!isHoldBodyActive && !shouldDrawHead && !shouldDrawEnd) continue;
 
+    // Hold-body start. Live (non-tick) holds are consumed into the receptor:
+    // - actively held -> grounded at the receptor (the renderer clips it);
+    // - early release -> keep the un-pressed remainder from the release point;
+    // - head hit, never early-released (late/tail miss) -> the held tail was
+    //   fully consumed, so collapse the body onto the tail so nothing trails
+    //   below the receptor.
+    const bodyIsConsumed = n.holdRulesVersion === LAZER_HOLD_RULES_VERSION && n.isHit && !n.isMissed &&
+      n.earlyReleaseTime === undefined && endY !== undefined;
     const bodyStartY = isHoldBodyGrounded && !usesTailTicks
       ? receptorY
       : (n.isHit && n.earlyReleaseTime !== undefined && n.earlyReleaseTime > n.time && !usesTailTicks)
         ? getScrollYPosition(n.earlyReleaseTime, visualTime, receptorY, speedFactor, up, scrollModel)
-        : y;
+        : bodyIsConsumed
+          ? endY!
+          : y;
     const hitSegmentStartY = n.type === 'hold' && n.isHoldFailed && n.isReleased &&
       n.hitTime !== undefined && n.releaseTime !== undefined && n.releaseTime > n.hitTime
       ? getScrollYPosition(n.hitTime, visualTime, receptorY, speedFactor, up, scrollModel)

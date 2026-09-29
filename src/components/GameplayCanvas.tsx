@@ -724,6 +724,10 @@ export default function GameplayCanvas({
   const [unpauseCountdown, setUnpauseCountdown] = useState<number>(0);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [isFailed, setIsFailed] = useState<boolean>(false);
+  // One-shot SFX guards: fail plays once per run; miss plays only for the
+  // first miss of any consecutive miss chain (a later hit re-arms it).
+  const failSoundPlayedRef = useRef(false);
+  const missChainActiveRef = useRef(false);
 
   // Active inputs trace (boolean edge + refcount for multi-source keyboard/touch)
   const keysPressedRef = useRef<boolean[]>([]);
@@ -790,6 +794,31 @@ export default function GameplayCanvas({
   const isReplayMode = !!replayRecord;
   const isAutoplay = !isReplayMode && ((settings.selectedMods || []).includes('AT') || (settings.selectedMods || []).includes('CN'));
   const isCinema = !isReplayMode && (settings.selectedMods || []).includes('CN');
+
+  /** Map-failed sting, played once per run (never in replays/autoplay). */
+  const playFailSoundOnce = () => {
+    if (isReplayMode || isAutoplay) return;
+    if (failSoundPlayedRef.current) return;
+    failSoundPlayedRef.current = true;
+    mainAudio.playFailSound();
+  };
+
+  /**
+   * Miss-chain tick: plays miss-sound.mp3 only for the first miss of any
+   * consecutive miss chain. Any on-time hit re-arms it. Never in
+   * replays/autoplay (those misses aren't the player's).
+   */
+  const handleJudgementSfx = (judgType: string) => {
+    if (isReplayMode || isAutoplay) return;
+    if (judgType === 'miss') {
+      if (!missChainActiveRef.current) {
+        missChainActiveRef.current = true;
+        mainAudio.playMissSound();
+      }
+    } else {
+      missChainActiveRef.current = false;
+    }
+  };
   const isNoRelease = isNoReleaseMod(settings.selectedMods);
   const isConstantSpeed = isConstantSpeedMod(settings.selectedMods);
   const adaptiveSpeedAvgErrorRef = useRef<number>(0);
@@ -1124,6 +1153,8 @@ export default function GameplayCanvas({
     setComboBurst(null);
     setIsPaused(false);
     setIsFailed(false);
+    failSoundPlayedRef.current = false;
+    missChainActiveRef.current = false;
     isPlayingRef.current = false;
     hasSkippedIntroRef.current = false;
     skipVisibleRef.current = false;
@@ -1204,6 +1235,9 @@ export default function GameplayCanvas({
       mainAudio.setVolumes(settings.musicVolume, settings.hitsoundVolume, settings.masterVolume);
       mainAudio.setOffset(settings.audioOffset);
       mainAudio.compensateOutputLatency = settings.compensateOutputLatency === true;
+      // Warm the file-backed SFX (soft-hitwhistle default + fail/miss/
+      // restart) alongside the track so gameplay events play instantly.
+      mainAudio.preloadSfx();
 
       const activeRate = getSpeedMultiplier(settings.selectedMods);
       mainAudio.playbackRate = activeRate;
@@ -2048,7 +2082,9 @@ export default function GameplayCanvas({
           if (videoRef.current) {
             try { videoRef.current.pause(); } catch (e) {}
           }
+          playFailSoundOnce();
         }
+        handleJudgementSfx('miss');
         return;
       }
 
@@ -2232,6 +2268,10 @@ export default function GameplayCanvas({
         }
       }
     }
+
+    // Fail sting once per run; miss tick only for the first miss of a chain.
+    if (state.failed) playFailSoundOnce();
+    handleJudgementSfx(judg.type);
 
     if (holdRulesVersion === HOLD_TICK_RULES_VERSION) {
       maxComboPortionRef.current = extendMaxComboPortion(
@@ -3745,6 +3785,9 @@ export default function GameplayCanvas({
   };
 
   const restartMap = () => {
+    // Restart pressed in the pause/fail menu: fire the sting synchronously
+    // from the gesture so it plays instantly (pre-decoded buffer).
+    mainAudio.playRestartSound();
     setRetryCount(prev => prev + 1);
     if (finishTimeoutRef.current) {
       clearTimeout(finishTimeoutRef.current);

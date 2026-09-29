@@ -15,10 +15,24 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { preloadMenuSounds } from './utils/menuSounds';
+import { preloadMenuMusic } from './utils/menuMusic';
+import { mainAudio } from './audio/AudioEngine';
 
-// Fetch + decode the first-menu cookie sounds immediately so the first
-// cookie press plays instantly instead of waiting on network.
+// Fetch + decode the first-menu cookie sounds (plus the global UI click)
+// immediately so the first cookie press plays instantly instead of waiting
+// on network.
 preloadMenuSounds();
+
+// Fetch + decode the launch menu song (triangles.mp3 fallback) immediately so
+// the boot start button starts it with a synchronous start(0) — the same
+// no-startup-delay path as the d1/d2/d3 clicks — instead of paying the
+// HTMLAudio load pipeline on the click gesture.
+preloadMenuMusic();
+
+// Fetch + decode the gameplay one-shots (soft-hitwhistle default hitsound,
+// fail, miss, restart) immediately so the first gameplay event plays with a
+// synchronous start() instead of paying fetch + decode on the event.
+mainAudio.preloadSfx();
 
 // Register Service Worker for robust offline caching
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

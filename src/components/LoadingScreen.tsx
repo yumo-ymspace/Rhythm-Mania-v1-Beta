@@ -21,6 +21,7 @@ import {
   prepareLaunchMenuTrack,
   type PreparedLaunchTrack,
 } from '../utils/launchMenuTrack';
+import { MENU_FALLBACK_TRACK, warmMenuMusic } from '../utils/menuMusic';
 
 export type { PreparedLaunchTrack };
 
@@ -84,6 +85,15 @@ export default function LoadingScreen({ customMaps, mapsReady, onStartPressed, o
     setDoneUnits(BOOT_STATIC_ASSETS.length + 2);
     void (async () => {
       const prepared = await prepareLaunchMenuTrack(customMaps);
+      if (cancelled) return;
+      // Decode the launch song to an AudioBuffer BEFORE showing the start
+      // button, so the press fires a synchronous start(0) with no HTMLAudio
+      // startup delay — the same instant path as the d1/d2/d3 menu clicks.
+      try {
+        await warmMenuMusic(prepared.src ?? MENU_FALLBACK_TRACK);
+      } catch {
+        /* play() still falls back to HTMLAudio if warming failed */
+      }
       if (!cancelled) {
         setTrack(prepared);
         setDoneUnits(totalUnits);
