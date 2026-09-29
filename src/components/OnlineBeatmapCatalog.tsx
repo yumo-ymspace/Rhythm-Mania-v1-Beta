@@ -466,8 +466,8 @@ export default function OnlineBeatmapCatalog({
   }, [downloadQueue, downloadingMapId]);
 
   const filteredManifest = mirrorManifest.filter((s) => {
-    if (!filterSearchTerm) return true;
-    const q = filterSearchTerm.toLowerCase();
+    const q = filterSearchTerm.trim().toLowerCase();
+    if (!q) return true;
     return (
       (s.title || '').toLowerCase().includes(q) ||
       (s.artist || '').toLowerCase().includes(q) ||

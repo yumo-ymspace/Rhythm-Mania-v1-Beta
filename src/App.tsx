@@ -1460,6 +1460,7 @@ export default function App() {
         bindPause: updated.bindPause !== undefined ? String(updated.bindPause) : 'escape',
         bindRetry: updated.bindRetry !== undefined ? String(updated.bindRetry) : 'r',
         bindSkipIntro: updated.bindSkipIntro !== undefined ? String(updated.bindSkipIntro) : 'enter',
+        compensateOutputLatency: Boolean(updated.compensateOutputLatency),
         enableMapSV: updated.enableMapSV !== false,
         enableSongPreview: updated.enableSongPreview !== false,
         showFpsCounter: Boolean(updated.showFpsCounter),
