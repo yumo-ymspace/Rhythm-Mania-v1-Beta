@@ -37,7 +37,6 @@ describe('TASK-V-012: lazer toolbar + hover tooltips', () => {
     expect(html).toContain('href="https://wiki.rhythm-mania.com"');
     expect(html).toContain('id="toolbar-btn-listing"');
     expect(html).toContain('id="toolbar-btn-now-playing"');
-    expect(html).toContain('is-disabled-now-playing');
     expect(html).toContain('id="toolbar-profile"');
     expect(html).toContain('TestPlayer');
     expect(html).toContain('id="toolbar-clock"');
@@ -53,6 +52,18 @@ describe('TASK-V-012: lazer toolbar + hover tooltips', () => {
     );
 
     expect(html).toContain('id="toolbar-btn-listing" class="lazer-toolbar-btn is-active-pink"');
+  });
+
+  it('renders active pink state on now-playing button when now playing is open', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(LazerToolbar, {
+        visible: true,
+        isNowPlayingOpen: true,
+      })
+    );
+
+    expect(html).toContain('id="toolbar-btn-now-playing" class="lazer-toolbar-btn is-active-pink"');
+    expect(html).toContain('aria-pressed="true"');
   });
 
   it('renders hidden state when visible=false', () => {

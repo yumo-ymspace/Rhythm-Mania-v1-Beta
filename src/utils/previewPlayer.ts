@@ -59,6 +59,10 @@ class PreviewPlayer {
   private pending = new Map<string, Promise<AudioBuffer | null>>();
   private bufferedSource: AudioBufferSourceNode | null = null;
   private bufferedSrc: string | null = null;
+  /** ctx.currentTime when the current buffered loop started (for position reads). */
+  private loopStartCtxTime = 0;
+  /** Buffer offset (seconds) the current buffered loop started at. */
+  private loopStartOffsetSec = 0;
   private unlockArmed = false;
 
   private audio: HTMLAudioElement | null = null;
@@ -66,6 +70,12 @@ class PreviewPlayer {
   private previewStartSec = 0;
   private targetVolume = 0;
   private fadeTimer: number | null = null;
+  /** Frozen readout captured on stop() so the panel keeps showing the
+      pause position instead of snapping back to zero. */
+  private frozenTime: number | null = null;
+  private frozenDuration: number | null = null;
+  /** Seek targets set while paused, consumed by the next play() of that src. */
+  private pendingOffsets = new Map<string, number>();
 
   private clearFade(): void {
     if (this.fadeTimer !== null) {
@@ -255,6 +265,8 @@ class PreviewPlayer {
       }
       this.bufferedSource = source;
       this.bufferedSrc = src;
+      this.loopStartCtxTime = this.ctx.currentTime;
+      this.loopStartOffsetSec = offset;
       source.onended = () => {
         if (this.bufferedSource === source) {
           this.bufferedSource = null;
@@ -351,6 +363,15 @@ class PreviewPlayer {
     if (!src || typeof window === 'undefined') return;
     const target = clampPreviewVolume(volume);
     this.targetVolume = target;
+    this.frozenTime = null;
+    this.frozenDuration = null;
+
+    // A paused seek for this src wins over the default preview point.
+    const pending = this.pendingOffsets.get(src);
+    if (pending !== undefined) {
+      this.pendingOffsets.delete(src);
+      previewTimeMs = pending * 1000;
+    }
 
     if (this.playBuffered(src, previewTimeMs, target)) return;
     // Warm the buffer in the background so the *next* play() is instant,
@@ -377,8 +398,164 @@ class PreviewPlayer {
     if (this.audio && !this.audio.paused) this.fadeTo(target, 150);
   }
 
-  /** Fade out and release the current preview. */
+  /** Whether a preview track is currently audible (buffered or fallback). */
+  public isPlaying(): boolean {
+    if (this.bufferedSource && this.bufferedSrc) return true;
+    return !!this.audio && !this.audio.paused;
+  }
+
+  private readLiveTime(): number | null {
+    try {
+      if (this.bufferedSource && this.bufferedSrc && this.ctx) {
+        const buffer = this.buffers.get(this.bufferedSrc);
+        const duration = buffer?.duration;
+        if (!duration || !Number.isFinite(duration) || duration <= 0) return null;
+        const elapsed = Math.max(0, this.ctx.currentTime - this.loopStartCtxTime);
+        return (this.loopStartOffsetSec + elapsed) % duration;
+      }
+    } catch {
+      /* fall through to the fallback element */
+    }
+    try {
+      if (this.audio) {
+        const t = this.audio.currentTime;
+        if (typeof t === 'number' && Number.isFinite(t) && t >= 0) return t;
+      }
+    } catch {
+      /* unknown position */
+    }
+    return null;
+  }
+
+  private readLiveDuration(): number | null {
+    try {
+      if (this.bufferedSrc) {
+        const buffer = this.buffers.get(this.bufferedSrc);
+        if (buffer && Number.isFinite(buffer.duration)) return buffer.duration;
+      }
+    } catch {
+      /* fall through to the fallback element */
+    }
+    try {
+      if (this.audio) {
+        const dur = this.audio.duration;
+        if (typeof dur === 'number' && Number.isFinite(dur) && dur > 0) return dur;
+      }
+    } catch {
+      /* unknown duration */
+    }
+    return null;
+  }
+
+  /** Length of the current preview track in seconds (frozen pause value when idle). */
+  public getDuration(): number {
+    return this.readLiveDuration() ?? this.frozenDuration ?? 0;
+  }
+
+  /** Playback position in seconds (frozen pause value when idle). */
+  public getCurrentTime(): number {
+    return this.readLiveTime() ?? this.frozenTime ?? 0;
+  }
+
+  private freezePosition(): void {
+    try {
+      const liveTime = this.readLiveTime();
+      if (liveTime !== null) this.frozenTime = liveTime;
+      const liveDuration = this.readLiveDuration();
+      if (liveDuration !== null) this.frozenDuration = liveDuration;
+    } catch {
+      /* freezing must never break stop() */
+    }
+  }
+
+  /**
+   * Set the resume position for `src` while paused (no audible playback).
+   * The next play() of that src starts from `seconds`; the frozen readout
+   * updates at once so the progress bar follows while paused.
+   */
+  public seekPaused(src: string, seconds: number): void {
+    if (!src || !Number.isFinite(seconds)) return;
+    try {
+      const buffer = this.buffers.get(src);
+      const duration = buffer && Number.isFinite(buffer.duration) ? buffer.duration : NaN;
+      const target = Number.isFinite(duration) && duration > 0
+        ? Math.max(0, Math.min(seconds, Math.max(0, duration - 0.05)))
+        : Math.max(0, seconds);
+      this.pendingOffsets.set(src, target);
+      this.frozenTime = target;
+      if (Number.isFinite(duration) && duration > 0) this.frozenDuration = duration;
+    } catch {
+      /* seek must never throw out of the now-playing handoff */
+    }
+    void this.warm(src);
+  }
+
+  /**
+   * Seek the current preview track to `seconds` (clamped into the track).
+   * Buffered loops restart at the offset; the fallback element seeks directly.
+   * No-op when nothing is playing.
+   */
+  public seekTo(seconds: number): void {
+    if (!Number.isFinite(seconds)) return;
+    try {
+      if (this.bufferedSource && this.bufferedSrc && this.ctx && this.master) {
+        const buffer = this.buffers.get(this.bufferedSrc);
+        if (!buffer || !Number.isFinite(buffer.duration) || buffer.duration <= 0) return;
+        const offset = Math.max(0, Math.min(seconds, Math.max(0, buffer.duration - 0.05)));
+        const src = this.bufferedSrc;
+        const volume = this.master.gain.value;
+        this.stopBuffered(false);
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        try {
+          source.loopStart = offset;
+        } catch {
+          /* some browsers ignore loopStart - playback still starts at offset */
+        }
+        source.connect(this.master);
+        try {
+          source.start(0, offset);
+        } catch {
+          try { source.disconnect(); } catch { /* noop */ }
+          return;
+        }
+        this.bufferedSource = source;
+        this.bufferedSrc = src;
+        this.loopStartCtxTime = this.ctx.currentTime;
+        this.loopStartOffsetSec = offset;
+        try {
+          this.master.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.02);
+        } catch {
+          this.master.gain.value = volume;
+        }
+        const active = source;
+        source.onended = () => {
+          if (this.bufferedSource === active) {
+            this.bufferedSource = null;
+            this.bufferedSrc = null;
+          }
+          try { active.disconnect(); } catch { /* ignore */ }
+        };
+        return;
+      }
+    } catch {
+      /* fall through to the fallback element */
+    }
+    try {
+      const a = this.audio;
+      if (!a) return;
+      const dur = a.duration;
+      const max = Number.isFinite(dur) && dur > 0 ? dur : seconds;
+      a.currentTime = Math.max(0, Math.min(seconds, Math.max(0, max - 0.05)));
+    } catch {
+      /* seek must never throw out of the now-playing handoff */
+    }
+  }
+
+  /** Fade out and release the current preview (freezes the readout for pause display). */
   public stop(): void {
+    this.freezePosition();
     const a = this.audio;
     if (this.bufferedSource) {
       this.stopBuffered(true);
@@ -393,8 +570,9 @@ class PreviewPlayer {
     });
   }
 
-  /** Stop synchronously before handing audio focus to gameplay. */
+  /** Stop synchronously before handing audio focus to gameplay (freezes the readout). */
   public stopImmediately(): void {
+    this.freezePosition();
     const a = this.audio;
     this.clearFade();
     this.stopBuffered(false);

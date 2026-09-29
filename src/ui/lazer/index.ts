@@ -87,3 +87,5 @@ export { SongSelectCarousel } from './SongSelectCarousel';
 export type { SongSelectCarouselProps, CarouselSongGroup } from './SongSelectCarousel';
 export { SongSelectLeftPanel, computeBpmSummary } from './SongSelectLeftPanel';
 export type { SongSelectLeftPanelProps } from './SongSelectLeftPanel';
+export { NowPlayingPanel } from './NowPlayingPanel';
+export type { NowPlayingPanelProps } from './NowPlayingPanel';

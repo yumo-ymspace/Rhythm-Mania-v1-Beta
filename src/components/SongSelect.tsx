@@ -31,6 +31,7 @@ import { preloadBeatmapBackgrounds, shouldUnpackVideo, unpackBeatmap } from '../
 import { computeBeatmapHash } from '../utils/replayManager';
 import { extractZipEntry } from '../utils/zipResolver';
 import { previewPlayer } from '../utils/previewPlayer';
+import { pickAdjacentIndex } from '../utils/nowPlaying';
 import { getCachedStarRating, getCachedNoteCounts, buildSongMapsIndex } from '../utils/songSelectCache';
 import { calculateManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
 import { contrastTextOn, hexWithAlpha, sampleStarDifficultyColor, STRAIN_STAR_RATING_VERSION } from '../utils/starRating';
@@ -109,6 +110,12 @@ interface SongSelectProps {
   // True while beatmaps are still loading (IndexedDB/migration). Shows a
   // bare spinner in the carousel until song banners are ready.
   isLoading?: boolean;
+  /** Reports the currently selected map (slim metadata) for the Now Playing bar. */
+  onPreviewTrackChange?: (track: { id: string; title: string; artist: string; bgUrl?: string; audioUrl?: string } | null) => void;
+  /** Receives the Next/Previous stepper for the Now Playing bar (dir + shuffle). */
+  onRegisterStep?: (step: (dir: 1 | -1, shuffle: boolean) => void) => void;
+  /** Explicit pause from the Now Playing bar: suppresses preview autoplay. */
+  previewPaused?: boolean;
 }
 
 export default function SongSelect({
@@ -126,6 +133,9 @@ export default function SongSelect({
   playHistory = [],
   shouldAutoSelectOnMount = false,
   isLoading = false,
+  onPreviewTrackChange,
+  onRegisterStep,
+  previewPaused = false,
 }: SongSelectProps) {
   // Search & Basic UI State
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -979,6 +989,12 @@ export default function SongSelect({
 
   useEffect(() => {
     if (isStartingPlayRef.current) return;
+    // Explicit pause from the Now Playing bar suppresses autoplay (resume
+    // clears the flag, which re-runs this effect and restarts the track).
+    if (previewPaused) {
+      previewPlayer.stop();
+      return;
+    }
     if (!settings.enableSongPreview || !selectedCustomMapId) {
       previewPlayer.stop();
       return;
@@ -993,7 +1009,7 @@ export default function SongSelect({
       : (map.duration || 180) * 1000 * 0.4;
     previewPlayer.play(map.audioUrl, previewMs, settings.musicVolume * settings.previewVolume * settings.masterVolume);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCustomMapId, unpackTrigger, mapById, settings.enableSongPreview, settings.previewVolume, settings.masterVolume]);
+  }, [selectedCustomMapId, unpackTrigger, mapById, settings.enableSongPreview, settings.previewVolume, settings.masterVolume, previewPaused]);
 
   // Keep preview volume in sync with the music volume setting
   useEffect(() => {
@@ -1002,6 +1018,44 @@ export default function SongSelect({
 
   // Stop preview when leaving Song Select
   useEffect(() => () => previewPlayer.stop(), []);
+
+  // Now Playing: report the selected map's slim metadata upstream so the
+  // top-bar player can show title/artist/art while the preview plays.
+  useEffect(() => {
+    if (!onPreviewTrackChange) return;
+    if (!selectedCustomMap) {
+      onPreviewTrackChange(null);
+      return;
+    }
+    onPreviewTrackChange({
+      id: selectedCustomMap.id,
+      title: selectedCustomMap.title,
+      artist: selectedCustomMap.artist,
+      bgUrl: selectedCustomMap.bgUrl,
+      audioUrl: selectedCustomMap.audioUrl,
+    });
+  }, [selectedCustomMap, onPreviewTrackChange]);
+
+  // Now Playing: Next/Previous stepper over the filtered list. Sequential
+  // steps move to the adjacent entry (wrapping); shuffle draws a random
+  // entry that differs from the current one (see utils/nowPlaying, lazer
+  // MusicController parity). Selection recentres + expands like manual picks.
+  const stepSelection = useCallback((dir: 1 | -1, shuffle: boolean) => {
+    if (filteredCustomMaps.length === 0) return;
+    const currentIdx = filteredCustomMaps.findIndex((m) => m.id === selectedCustomMapIdRef.current);
+    const nextIdx = pickAdjacentIndex(filteredCustomMaps.length, currentIdx, dir, shuffle);
+    if (nextIdx < 0) return;
+    const next = filteredCustomMaps[nextIdx];
+    if (!next) return;
+    const nextKey = getMapSongKey(next);
+    if (nextKey !== expandedSongKey) setManualExpandedSongKey(nextKey);
+    void handleSelectCustomMap(next);
+    requestCarouselCenter(nextKey);
+  }, [filteredCustomMaps, expandedSongKey, getMapSongKey, handleSelectCustomMap, requestCarouselCenter]);
+
+  useEffect(() => {
+    onRegisterStep?.(stepSelection);
+  }, [onRegisterStep, stepSelection]);
 
   const handleStartPlay = useCallback(async (mapOverride?: Beatmap) => {
     const activeMap = mapOverride || selectedCustomMapRef.current;

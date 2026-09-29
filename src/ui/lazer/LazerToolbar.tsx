@@ -27,13 +27,6 @@ import {
   LAZER_DURATION,
   LAZER_EASE_OUT_QUINT,
 } from './motion';
-import {
-  ComingSoonNotificationStack,
-  useComingSoonToasts,
-  type LazerToastNotice,
-} from './ComingSoonNotifications';
-
-export type { LazerToastNotice };
 
 const DiscordIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
   <svg
@@ -106,6 +99,7 @@ export interface LazerToolbarProps {
   onGoHome?: () => void;
   onOpenListing?: () => void;
   onToggleNowPlaying?: () => void;
+  onNowPlayingHoverChange?: (hovering: boolean) => void;
   isListingOpen?: boolean;
   isNowPlayingOpen?: boolean;
   localDisplayName?: string;
@@ -121,6 +115,7 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
   onGoHome,
   onOpenListing,
   onToggleNowPlaying,
+  onNowPlayingHoverChange,
   isListingOpen = false,
   isNowPlayingOpen = false,
   localDisplayName,
@@ -163,13 +158,6 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
       }
     };
   }, [isListingOpen]);
-
-  // Coming-soon toasts share the same system as the middle horizontal bar buttons.
-  const {
-    toasts: comingSoonToasts,
-    showComingSoon: showComingSoonToast,
-    handleClickDismiss: handleToastClickDismiss,
-  } = useComingSoonToasts();
 
   // Live clock updating each second
   useEffect(() => {
@@ -451,22 +439,17 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
           <ListingIcon className="lazer-toolbar-icon" />
         </button>
 
-        {/* Now Playing (Disabled - triggers Coming Soon notification via the shared ButtonSystem system) */}
+        {/* Now Playing (F6): hover opens the player bar, click pins it.
+            No tooltip here — hovering shows the menu itself instead. */}
         <button
           type="button"
           id="toolbar-btn-now-playing"
-          className="lazer-toolbar-btn is-disabled-now-playing"
+          className={`lazer-toolbar-btn ${isNowPlayingOpen ? 'is-active-pink' : ''}`}
           aria-label="Now playing"
-          aria-disabled="true"
-          onClick={() => showComingSoonToast('Now Playing')}
-          onMouseEnter={(e) =>
-            handleMouseEnter(e, {
-              title: 'now playing',
-              subtitle: 'currently playing track (coming soon)',
-              align: 'right',
-            })
-          }
-          onMouseLeave={handleMouseLeave}
+          aria-pressed={isNowPlayingOpen}
+          onClick={onToggleNowPlaying}
+          onMouseEnter={() => onNowPlayingHoverChange?.(true)}
+          onMouseLeave={() => onNowPlayingHoverChange?.(false)}
         >
           <MusicIcon className="lazer-toolbar-icon" />
         </button>
@@ -612,9 +595,6 @@ export const LazerToolbar: React.FC<LazerToolbarProps> = ({
           <ToolbarTooltip data={tooltip.data} anchorRect={tooltip.rect} />
         )}
       </AnimatePresence>
-
-      {/* Stacking Coming Soon notifications — same system as the middle bar buttons */}
-      <ComingSoonNotificationStack toasts={comingSoonToasts} onDismiss={handleToastClickDismiss} />
     </div>
   );
 };

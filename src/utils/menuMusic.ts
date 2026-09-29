@@ -201,6 +201,10 @@ class MenuMusicPlayer {
   private loopStartCtxTime = 0;
   /** Buffer offset (seconds) the current loop started at. */
   private loopStartOffsetSec = 0;
+  /** Frozen readout captured on stop() so the panel keeps showing the
+      pause position instead of snapping back to zero. */
+  private frozenTime: number | null = null;
+  private frozenDuration: number | null = null;
   private unlockArmed = false;
 
   public getCurrentSrc(): string | null {
@@ -210,6 +214,165 @@ class MenuMusicPlayer {
   public isPlaying(): boolean {
     if (this.bufferedSource && this.bufferedSrc) return true;
     return !!this.audio && !this.audio.paused;
+  }
+
+  /** Length of the current menu track in seconds (frozen pause value when idle). */
+  public getDuration(): number {
+    return this.readLiveDuration() ?? this.frozenDuration ?? 0;
+  }
+
+  /** Playback position in seconds (frozen pause value when idle). */
+  public getCurrentTime(): number {
+    return this.readLiveTime() ?? this.frozenTime ?? 0;
+  }
+
+  private readLiveTime(): number | null {
+    try {
+      if (this.bufferedSource && this.bufferedSrc && ctx) {
+        const buffer = buffers.get(this.bufferedSrc);
+        const duration = buffer?.duration;
+        if (!duration || !Number.isFinite(duration) || duration <= 0) return null;
+        const elapsed = Math.max(0, ctx.currentTime - this.loopStartCtxTime);
+        return (this.loopStartOffsetSec + elapsed) % duration;
+      }
+    } catch {
+      /* fall through to the fallback element */
+    }
+    try {
+      if (this.audio) {
+        const t = this.audio.currentTime;
+        if (typeof t === 'number' && Number.isFinite(t) && t >= 0) return t;
+      }
+    } catch {
+      /* unknown position */
+    }
+    return null;
+  }
+
+  private readLiveDuration(): number | null {
+    try {
+      if (this.bufferedSrc) {
+        const buffer = buffers.get(this.bufferedSrc);
+        if (buffer && Number.isFinite(buffer.duration)) return buffer.duration;
+      }
+    } catch {
+      /* fall through to the fallback element */
+    }
+    try {
+      if (this.audio) {
+        const dur = this.audio.duration;
+        if (typeof dur === 'number' && Number.isFinite(dur) && dur > 0) return dur;
+      }
+    } catch {
+      /* unknown duration */
+    }
+    return null;
+  }
+
+  private freezePosition(): void {
+    try {
+      const liveTime = this.readLiveTime();
+      if (liveTime !== null) this.frozenTime = liveTime;
+      const liveDuration = this.readLiveDuration();
+      if (liveDuration !== null) this.frozenDuration = liveDuration;
+    } catch {
+      /* freezing must never break stop() */
+    }
+  }
+
+  /**
+   * Set the resume position for `src` while paused (no audible playback).
+   * Stored in the existing resume-offset bookkeeping, so the next play()
+   * of that src starts from `seconds`; the frozen readout updates at once
+   * so the progress bar follows while paused.
+   */
+  public seekPaused(src: string, seconds: number): void {
+    if (!src || !Number.isFinite(seconds)) return;
+    try {
+      const buffer = buffers.get(src);
+      const duration = buffer && Number.isFinite(buffer.duration) ? buffer.duration : NaN;
+      const target = Number.isFinite(duration) && duration > 0
+        ? Math.max(0, Math.min(seconds, Math.max(0, duration - 0.05)))
+        : Math.max(0, seconds);
+      resumeOffsets.set(src, target);
+      this.frozenTime = target;
+      if (Number.isFinite(duration) && duration > 0) this.frozenDuration = duration;
+    } catch {
+      /* seek must never throw out of the now-playing handoff */
+    }
+    void warmMenuMusic(src);
+  }
+
+  /**
+   * Seek the current menu track to `seconds` (clamped into the track).
+   * Buffered loops restart at the offset and keep looping; the fallback
+   * element seeks directly. No-op when nothing is playing.
+   */
+  public seekTo(seconds: number): void {
+    if (!Number.isFinite(seconds)) return;
+    try {
+      if (this.bufferedSource && this.bufferedSrc && ctx && master) {
+        const buffer = buffers.get(this.bufferedSrc);
+        if (!buffer || !Number.isFinite(buffer.duration) || buffer.duration <= 0) return;
+        const offset = Math.max(0, Math.min(seconds, Math.max(0, buffer.duration - 0.05)));
+        const src = this.bufferedSrc;
+        const volume = master.gain.value;
+        this.stopBuffered();
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        source.loopStart = 0;
+        try {
+          source.loopEnd = buffer.duration;
+        } catch {
+          /* some browsers ignore loopEnd - default full-buffer loop applies */
+        }
+        source.connect(master);
+        try {
+          if (offset > 0) source.start(0, offset);
+          else source.start(0);
+        } catch {
+          try { source.disconnect(); } catch { /* noop */ }
+          return;
+        }
+        this.bufferedSource = source;
+        this.bufferedSrc = src;
+        this.loopStartCtxTime = ctx.currentTime;
+        this.loopStartOffsetSec = offset;
+        try {
+          master.gain.setTargetAtTime(volume, ctx.currentTime, 0.02);
+        } catch {
+          master.gain.value = volume;
+        }
+        const active = source;
+        source.onended = () => {
+          if (this.bufferedSource === active) {
+            this.bufferedSource = null;
+            this.bufferedSrc = null;
+          }
+          try { active.disconnect(); } catch { /* ignore */ }
+        };
+        // Keep the resume-offset bookkeeping in sync so a later
+        // stop()/play() cycle resumes from the seek target.
+        try {
+          resumeOffsets.set(src, offset);
+        } catch {
+          /* offset bookkeeping must never break seek() */
+        }
+        return;
+      }
+    } catch {
+      /* fall through to the fallback element */
+    }
+    try {
+      const a = this.audio;
+      if (!a) return;
+      const dur = a.duration;
+      const max = Number.isFinite(dur) && dur > 0 ? dur : seconds;
+      a.currentTime = Math.max(0, Math.min(seconds, Math.max(0, max - 0.05)));
+    } catch {
+      /* seek must never throw out of the now-playing handoff */
+    }
   }
 
   private armAutoplayUnlock(): void {
@@ -371,6 +534,8 @@ class MenuMusicPlayer {
   public play(src: string, volume: number): void {
     if (!src || typeof window === 'undefined' || typeof Audio === 'undefined') return;
     const target = clampVolume(volume);
+    this.frozenTime = null;
+    this.frozenDuration = null;
 
     if (this.playBuffered(src, target)) return;
     // Warm the buffer in the background so the *next* play() is instant,
@@ -400,6 +565,7 @@ class MenuMusicPlayer {
 
   /** Pause menu music (keeps the track so returning to the menu resumes). */
   public stop(): void {
+    this.freezePosition();
     this.stopBuffered();
     this.stopFallback();
   }
@@ -408,6 +574,8 @@ class MenuMusicPlayer {
   public release(): void {
     this.stopBuffered();
     resumeOffsets.clear();
+    this.frozenTime = null;
+    this.frozenDuration = null;
     const a = this.audio;
     this.audio = null;
     this.src = null;

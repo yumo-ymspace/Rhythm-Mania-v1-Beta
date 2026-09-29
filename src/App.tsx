@@ -48,7 +48,8 @@ import LoadingScreen from './components/LoadingScreen';
 import { downloadBeatmapsetArchive, searchOsuBeatmapSetId } from './utils/osuTokenManager';
 import { resolveSkinTheme } from './render/skinTheme';
 import { cssColorToHex, parseCssColor } from './render/color';
-import { applyLazerChrome, LazerDebugSmoke, LazerToolbar } from './ui/lazer';
+import { applyLazerChrome, LazerDebugSmoke, LazerToolbar, NowPlayingPanel } from './ui/lazer';
+import { clampSeekTarget, resolveNowPlayingTrack, shouldRestartTrack, type NowPlayingTrack } from './utils/nowPlaying';
 import type { LazerMenuPhase } from './components/MainMenu';
 import LazerCursor from './components/LazerCursor';
 import GlobalFpsOverlay from './components/GlobalFpsOverlay';
@@ -262,6 +263,29 @@ export default function App() {
   const [showFindBeatmapOverlay, setShowFindBeatmapOverlay] = useState<boolean>(false);
   const [menuPhase, setMenuPhase] = useState<LazerMenuPhase>('idle');
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState<boolean>(false);
+  // Hover-to-open: hovering the toolbar music button (or the panel itself)
+  // opens the bar; leaving both closes it after a short delay unless pinned.
+  const [isNowPlayingHoverOpen, setIsNowPlayingHoverOpen] = useState<boolean>(false);
+  const nowPlayingHoverTimer = useRef<number | null>(null);
+  // Last audible track: the panel keeps showing it frozen instead of ever
+  // flashing an empty state while switching songs or when paused.
+  const lastNowPlayingTrackRef = useRef<NowPlayingTrack | null>(null);
+  // Now Playing bar state: shuffle mode (lazer default on), explicit preview
+  // pause (suppresses Song Select autoplay until the next track change), and
+  // a poll tick that refreshes progress while the panel is open.
+  const [nowPlayingShuffle, setNowPlayingShuffle] = useState<boolean>(true);
+  const [nowPlayingPreviewPaused, setNowPlayingPreviewPaused] = useState<boolean>(false);
+  const [nowPlayingTick, setNowPlayingTick] = useState<number>(0);
+  const [previewTrack, setPreviewTrack] = useState<{
+    id: string; title: string; artist: string; bgUrl?: string; audioUrl?: string;
+  } | null>(null);
+  const songSelectStepRef = useRef<((dir: 1 | -1, shuffle: boolean) => void) | null>(null);
+  // Explicit menu-music pause from the Now Playing bar (mirrors lazer
+  // MusicController.UserPauseRequested): the menu effect must not auto-resume
+  // until the user presses play again.
+  const nowPlayingUserPausedRef = useRef(false);
+  const lastMenuSrcRef = useRef<string | null>(null);
+  const previewTrackIdRef = useRef<string | null>(null);
 
   // Performance history states
   const [playHistory, setPlayHistory] = useState<PlayHistoryRecord[]>([]);
@@ -344,6 +368,35 @@ export default function App() {
     menuMusic.setVolume(launchMusicLevel(settings));
   }, [settings]);
 
+  // Resolve a menu-track map's audio (cached blob, parsed URL, or unpack)
+  // and start it on the menu player. Shared by the menu effect and the Now
+  // Playing random-start.
+  const playMenuMapTrack = useCallback(async (map: Beatmap, generation: number, volume: number) => {
+    try {
+      const cached = storageManager.lruMediaCache.get(map.id);
+      let src = cached?.audioUrl || map.audioUrl;
+      if (!src) {
+        const clone: Beatmap = {
+          ...map,
+          notes: map.notes ? map.notes.map(n => ({ ...n })) : [],
+        };
+        await unpackBeatmap(clone);
+        const fresh = storageManager.lruMediaCache.get(map.id);
+        src = fresh?.audioUrl || clone.audioUrl;
+      }
+      if (menuMusicGenRef.current !== generation) return;
+      if (src) {
+        menuMusic.play(src, volume);
+      } else {
+        menuMusic.play(MENU_FALLBACK_TRACK, volume);
+      }
+    } catch (err) {
+      console.warn('Menu music track unpack failed, falling back:', err instanceof Error ? err.message : String(err));
+      if (menuMusicGenRef.current !== generation) return;
+      menuMusic.play(MENU_FALLBACK_TRACK, volume);
+    }
+  }, []);
+
   useEffect(() => {
     if (!booted) {
       menuMusic.stop();
@@ -355,33 +408,9 @@ export default function App() {
       return;
     }
     if (!mapsReady) return;
+    // Explicit pause from the Now Playing bar wins over auto-resume.
+    if (nowPlayingUserPausedRef.current) return;
     const volume = launchMusicLevel(settings);
-
-    const playMapTrack = async (map: Beatmap, generation: number) => {
-      try {
-        const cached = storageManager.lruMediaCache.get(map.id);
-        let src = cached?.audioUrl || map.audioUrl;
-        if (!src) {
-          const clone: Beatmap = {
-            ...map,
-            notes: map.notes ? map.notes.map(n => ({ ...n })) : [],
-          };
-          await unpackBeatmap(clone);
-          const fresh = storageManager.lruMediaCache.get(map.id);
-          src = fresh?.audioUrl || clone.audioUrl;
-        }
-        if (menuMusicGenRef.current !== generation) return;
-        if (src) {
-          menuMusic.play(src, launchMusicLevel(settings));
-        } else {
-          menuMusic.play(MENU_FALLBACK_TRACK, launchMusicLevel(settings));
-        }
-      } catch (err) {
-        console.warn('Menu music track unpack failed, falling back:', err instanceof Error ? err.message : String(err));
-        if (menuMusicGenRef.current !== generation) return;
-        menuMusic.play(MENU_FALLBACK_TRACK, launchMusicLevel(settings));
-      }
-    };
 
     if (!menuChoiceRef.current.rolled) {
       menuChoiceRef.current.rolled = true;
@@ -393,7 +422,7 @@ export default function App() {
       }
       menuChoiceRef.current.mapId = picked.id;
       const generation = ++menuMusicGenRef.current;
-      void playMapTrack(picked, generation);
+      void playMenuMapTrack(picked, generation, volume);
       return;
     }
 
@@ -409,8 +438,241 @@ export default function App() {
       return;
     }
     const generation = ++menuMusicGenRef.current;
-    void playMapTrack(chosen, generation);
-  }, [booted, currentScreen, mapsReady, customMaps, settings]);
+    void playMenuMapTrack(chosen, generation, volume);
+  }, [booted, currentScreen, mapsReady, customMaps, settings, playMenuMapTrack]);
+
+  // --- Now Playing bar ------------------------------------------------
+  // Leaving Song Select clears an explicit preview pause; gameplay and
+  // results force the panel closed (mirrors lazer AllowTrackControl=false).
+  useEffect(() => {
+    if (currentScreen !== 'select') setNowPlayingPreviewPaused(false);
+    if (currentScreen === 'play' || currentScreen === 'results') {
+      setIsNowPlayingOpen(false);
+      setIsNowPlayingHoverOpen(false);
+    }
+  }, [currentScreen]);
+
+  const isNowPlayingPanelOpen = isNowPlayingOpen || isNowPlayingHoverOpen;
+
+  const handleNowPlayingHoverChange = useCallback((hovering: boolean) => {
+    if (nowPlayingHoverTimer.current !== null) {
+      window.clearTimeout(nowPlayingHoverTimer.current);
+      nowPlayingHoverTimer.current = null;
+    }
+    if (hovering) {
+      setIsNowPlayingHoverOpen(true);
+      return;
+    }
+    // Leaving button/panel: linger briefly so the cursor can travel between them.
+    nowPlayingHoverTimer.current = window.setTimeout(() => {
+      nowPlayingHoverTimer.current = null;
+      setIsNowPlayingHoverOpen(false);
+    }, 250);
+  }, []);
+
+  useEffect(() => () => {
+    if (nowPlayingHoverTimer.current !== null) {
+      window.clearTimeout(nowPlayingHoverTimer.current);
+    }
+  }, []);
+
+  // Progress poll while the panel is open (matches the ~6 Hz mania HUD cadence).
+  useEffect(() => {
+    if (!isNowPlayingPanelOpen) return;
+    const timer = window.setInterval(() => setNowPlayingTick((t) => t + 1), 160);
+    return () => window.clearInterval(timer);
+  }, [isNowPlayingPanelOpen]);
+
+  // Close on outside pointer-down or Escape (toolbar button is exempt).
+  useEffect(() => {
+    if (!isNowPlayingPanelOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      const panel = document.getElementById('now-playing-panel');
+      const btn = document.getElementById('toolbar-btn-now-playing');
+      const target = e.target as Node | null;
+      if ((panel && target && panel.contains(target)) || (btn && target && btn.contains(target))) return;
+      setIsNowPlayingOpen(false);
+      setIsNowPlayingHoverOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      setIsNowPlayingOpen(false);
+      setIsNowPlayingHoverOpen(false);
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isNowPlayingPanelOpen]);
+
+  // Song Select reports its selection; a new track clears an explicit pause
+  // (lazer track-change restarts playback).
+  const handlePreviewTrackChange = useCallback((track: {
+    id: string; title: string; artist: string; bgUrl?: string; audioUrl?: string;
+  } | null) => {
+    const id = track?.id ?? null;
+    if (previewTrackIdRef.current !== id) {
+      previewTrackIdRef.current = id;
+      setNowPlayingPreviewPaused(false);
+    }
+    setPreviewTrack(track);
+  }, []);
+
+  const handleRegisterSongSelectStep = useCallback((step: (dir: 1 | -1, shuffle: boolean) => void) => {
+    songSelectStepRef.current = step;
+  }, []);
+
+  // Resolve the audible track: Song Select preview wins on /select, otherwise
+  // the menu launch track. Sources are gated on actual playback so the panel
+  // never advertises a silent track.
+  const nowPlayingMenuMap = React.useMemo(() => {
+    const id = menuChoiceRef.current.mapId;
+    if (!id) return null;
+    return customMaps.find((m) => m.id === id) ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customMaps, nowPlayingTick]);
+  const nowPlayingMenuSrc = menuMusic.isPlaying() ? menuMusic.getCurrentSrc() : null;
+  if (nowPlayingMenuSrc) lastMenuSrcRef.current = nowPlayingMenuSrc;
+  const nowPlayingPreviewSrc = currentScreen === 'select' && previewTrack?.audioUrl?.startsWith('blob:')
+    ? previewTrack.audioUrl
+    : null;
+  const nowPlayingTrack: NowPlayingTrack | null = resolveNowPlayingTrack({
+    previewMap: currentScreen === 'select' ? previewTrack : null,
+    menuMap: nowPlayingMenuMap
+      ? { title: nowPlayingMenuMap.title, artist: nowPlayingMenuMap.artist, bgUrl: nowPlayingMenuMap.bgUrl }
+      : nowPlayingMenuSrc
+        ? { title: 'triangles', artist: '', bgUrl: '' }
+        : null,
+    menuSrc: nowPlayingMenuSrc,
+    previewSrc: nowPlayingPreviewSrc,
+  });
+
+  const nowPlayingOwner = nowPlayingTrack?.kind ?? null;
+  const nowPlayingPlayer = nowPlayingOwner === 'preview' ? previewPlayer : menuMusic;
+  const nowPlayingIsPlaying = nowPlayingOwner ? nowPlayingPlayer.isPlaying() : false;
+  const nowPlayingDuration = nowPlayingOwner ? nowPlayingPlayer.getDuration() : 0;
+  const nowPlayingPosition = nowPlayingOwner ? nowPlayingPlayer.getCurrentTime() : 0;
+  // Song switches never flash an empty state: hold the last audible track.
+  if (nowPlayingTrack) lastNowPlayingTrackRef.current = nowPlayingTrack;
+  const nowPlayingDisplayTrack = nowPlayingTrack ?? lastNowPlayingTrackRef.current;
+  // Transport stays usable with nothing audible: play/next/prev pick and
+  // play a random song (menu fallback when no maps are installed).
+  const nowPlayingScreenOk = currentScreen !== 'play' && currentScreen !== 'results';
+  const nowPlayingCanStartRandom = currentScreen === 'menu' || customMaps.length > 0;
+  const nowPlayingControlsEnabled = nowPlayingScreenOk && (nowPlayingTrack !== null || nowPlayingCanStartRandom);
+
+  // Idle transport (first load, nothing playing): pick and play a random
+  // installed song — a shuffle step on Song Select (auto-plays the preview),
+  // the menu player everywhere else.
+  const startRandomNowPlayingTrack = useCallback(() => {
+    if (currentScreen === 'select' && songSelectStepRef.current) {
+      songSelectStepRef.current(1, true);
+      return;
+    }
+    if (currentScreen === 'play' || currentScreen === 'results') return;
+    nowPlayingUserPausedRef.current = false;
+    if (customMaps.length === 0) {
+      menuChoiceRef.current = { rolled: true, mapId: null };
+      menuMusic.play(MENU_FALLBACK_TRACK, launchMusicLevel(settings));
+      return;
+    }
+    const pick = customMaps[Math.floor(Math.random() * customMaps.length)];
+    if (!pick) return;
+    menuChoiceRef.current = { rolled: true, mapId: pick.id };
+    const generation = ++menuMusicGenRef.current;
+    void playMenuMapTrack(pick, generation, launchMusicLevel(settings));
+  }, [currentScreen, customMaps, settings, playMenuMapTrack]);
+
+  const handleNowPlayingTogglePlay = useCallback(() => {
+    if (!nowPlayingTrack) {
+      startRandomNowPlayingTrack();
+      return;
+    }
+    if (nowPlayingTrack.kind === 'preview') {
+      // Pause stops audibly at once; resume clears the suppression flag and
+      // lets the Song Select preview effect restart the track (single path).
+      if (previewPlayer.isPlaying()) {
+        previewPlayer.stop();
+        setNowPlayingPreviewPaused(true);
+      } else {
+        setNowPlayingPreviewPaused(false);
+      }
+      return;
+    }
+    if (menuMusic.isPlaying()) {
+      menuMusic.stop();
+      nowPlayingUserPausedRef.current = true;
+    } else {
+      nowPlayingUserPausedRef.current = false;
+      menuMusic.play(lastMenuSrcRef.current ?? MENU_FALLBACK_TRACK, launchMusicLevel(settings));
+    }
+  }, [nowPlayingTrack, settings, startRandomNowPlayingTrack]);
+
+  const handleNowPlayingPrevious = useCallback(() => {
+    if (!nowPlayingTrack) {
+      startRandomNowPlayingTrack();
+      return;
+    }
+    const player = nowPlayingTrack.kind === 'preview' ? previewPlayer : menuMusic;
+    // Lazer rule: restart past the 5s cutoff, step otherwise.
+    if (shouldRestartTrack(player.getCurrentTime())) {
+      player.seekTo(0);
+      return;
+    }
+    if (nowPlayingTrack.kind === 'preview') {
+      songSelectStepRef.current?.(-1, nowPlayingShuffle);
+    } else {
+      // No menu playlist yet: a single launch track restarts.
+      player.seekTo(0);
+    }
+  }, [nowPlayingTrack, nowPlayingShuffle, startRandomNowPlayingTrack]);
+
+  const handleNowPlayingNext = useCallback(() => {
+    if (!nowPlayingTrack) {
+      startRandomNowPlayingTrack();
+      return;
+    }
+    if (nowPlayingTrack.kind === 'preview') {
+      songSelectStepRef.current?.(1, nowPlayingShuffle);
+    } else {
+      // No menu playlist yet: a single launch track restarts.
+      menuMusic.seekTo(0);
+    }
+  }, [nowPlayingTrack, nowPlayingShuffle, startRandomNowPlayingTrack]);
+
+  const handleNowPlayingSeek = useCallback((seconds: number) => {
+    if (!nowPlayingTrack) return;
+    const player = nowPlayingTrack.kind === 'preview' ? previewPlayer : menuMusic;
+    const target = clampSeekTarget(seconds, player.getDuration());
+    if (player.isPlaying()) {
+      player.seekTo(target);
+      return;
+    }
+    // Paused seeks park the resume position (and frozen readout) so the bar
+    // follows now and playback continues from there on play.
+    const src = nowPlayingTrack.kind === 'preview' ? nowPlayingPreviewSrc : lastMenuSrcRef.current;
+    if (src) player.seekPaused(src, target);
+  }, [nowPlayingTrack, nowPlayingPreviewSrc]);
+
+  // Centre the panel on the toolbar music button (not the right wall).
+  // Recomputed with the progress poll so clock-width drift can't offset it.
+  const nowPlayingPanelStyle = React.useMemo((): React.CSSProperties | undefined => {
+    if (!isNowPlayingPanelOpen || typeof window === 'undefined' || typeof document === 'undefined') {
+      return undefined;
+    }
+    const width = Math.min(400, window.innerWidth - 28);
+    const clampLeft = (center: number) =>
+      Math.max(14, Math.min(center - width / 2, window.innerWidth - width - 14));
+    const btn = document.getElementById('toolbar-btn-now-playing');
+    if (!btn) return { left: clampLeft(window.innerWidth - width / 2) };
+    const rect = btn.getBoundingClientRect();
+    return { left: Math.round(clampLeft(rect.left + rect.width / 2)) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNowPlayingPanelOpen, nowPlayingTick, currentScreen]);
 
   const activePlayBeatmap = React.useMemo(() => {
     if (!selectedBeatmap) return null;
@@ -1417,10 +1679,32 @@ export default function App() {
         }}
         onOpenListing={() => setShowFindBeatmapOverlay((prev) => !prev)}
         onToggleNowPlaying={() => setIsNowPlayingOpen((prev) => !prev)}
+        onNowPlayingHoverChange={handleNowPlayingHoverChange}
         isListingOpen={showFindBeatmapOverlay}
-        isNowPlayingOpen={isNowPlayingOpen}
+        isNowPlayingOpen={isNowPlayingPanelOpen}
         localDisplayName={settings.localDisplayName}
       />
+
+      {/* Now Playing player bar (hover opens, click/F6 pins), centred on the toolbar button. */}
+      <AnimatePresence>
+        {isNowPlayingPanelOpen && showLazerToolbar && (
+          <NowPlayingPanel
+            track={nowPlayingDisplayTrack}
+            isPlaying={nowPlayingIsPlaying}
+            currentTime={nowPlayingPosition}
+            duration={nowPlayingDuration}
+            shuffle={nowPlayingShuffle}
+            controlsEnabled={nowPlayingControlsEnabled}
+            onToggleShuffle={() => setNowPlayingShuffle((prev) => !prev)}
+            onPrevious={handleNowPlayingPrevious}
+            onTogglePlay={handleNowPlayingTogglePlay}
+            onNext={handleNowPlayingNext}
+            onSeek={handleNowPlayingSeek}
+            onHoverChange={handleNowPlayingHoverChange}
+            style={nowPlayingPanelStyle}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 2. CORE VIEWPORTS */}
       <main
@@ -1489,6 +1773,9 @@ export default function App() {
                 customMaps={customMaps}
                 shouldAutoSelectOnMount={hasPlayedThisSession}
                 isLoading={!mapsReady}
+                previewPaused={nowPlayingPreviewPaused}
+                onPreviewTrackChange={handlePreviewTrackChange}
+                onRegisterStep={handleRegisterSongSelectStep}
                  onImportBeatmap={handleImportBeatmap}
                  onImportPackage={handleImportPackage}
                 onDeleteSongGroup={handleDeleteSongGroup}
