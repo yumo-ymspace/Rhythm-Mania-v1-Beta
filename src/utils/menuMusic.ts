@@ -295,6 +295,13 @@ class MenuMusicPlayer {
         ? Math.max(0, Math.min(seconds, Math.max(0, duration - 0.05)))
         : Math.max(0, seconds);
       resumeOffsets.set(src, target);
+      // LRU-cap: release() is the only place that clears, and it is never
+      // called from App, so bound growth here to avoid a slow session leak.
+      while (resumeOffsets.size > 20) {
+        const oldest = resumeOffsets.keys().next().value;
+        if (oldest === undefined) break;
+        resumeOffsets.delete(oldest);
+      }
       this.frozenTime = target;
       if (Number.isFinite(duration) && duration > 0) this.frozenDuration = duration;
     } catch {
@@ -356,6 +363,11 @@ class MenuMusicPlayer {
         // stop()/play() cycle resumes from the seek target.
         try {
           resumeOffsets.set(src, offset);
+          while (resumeOffsets.size > 20) {
+            const oldest = resumeOffsets.keys().next().value;
+            if (oldest === undefined) break;
+            resumeOffsets.delete(oldest);
+          }
         } catch {
           /* offset bookkeeping must never break seek() */
         }
@@ -407,6 +419,11 @@ class MenuMusicPlayer {
         if (buffer && buffer.duration > 0) {
           const elapsed = Math.max(0, ctx.currentTime - this.loopStartCtxTime);
           resumeOffsets.set(src, (this.loopStartOffsetSec + elapsed) % buffer.duration);
+          while (resumeOffsets.size > 20) {
+            const oldest = resumeOffsets.keys().next().value;
+            if (oldest === undefined) break;
+            resumeOffsets.delete(oldest);
+          }
         }
       }
     } catch {

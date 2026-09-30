@@ -402,6 +402,14 @@ export default function OnlineBeatmapCatalog({
         mapWithMeta.videoFilename = media.videoFilename;
         mapWithMeta.bgFilename = media.bgFilename;
         mapWithMeta.coverUrl = s.slimCoverUrl || s.coverUrl;
+        // Persist the mirror search result's rank status so song banners
+        // and the song info wedge show loved/graveyard correctly instead
+        // of defaulting every download to RANKED. sanitizeSavedBeatmap
+        // preserves this across IndexedDB round-trips.
+        const importedStatus = String(s.status || '').toLowerCase();
+        if (['ranked', 'approved', 'qualified', 'loved', 'graveyard', 'pending', 'wip'].includes(importedStatus)) {
+          mapWithMeta.rankStatus = importedStatus;
+        }
         mapWithMeta.originalContent = beatmapStr.content;
         mapWithMeta.isServerMap = false;
         mapWithMeta.beatmapHash = computeBeatmapHash(parsedMap);

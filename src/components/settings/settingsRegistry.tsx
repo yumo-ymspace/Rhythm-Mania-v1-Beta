@@ -30,6 +30,7 @@ import {
   SCROLL_SPEED_MIN,
 } from './defaultSettings';
 import { computeScrollTravelTimeMs } from '../../render/playfieldLayout';
+import { isArgonSkin } from '../../render/argonSkin';
 import BindingMatrix from './BindingMatrix';
 import LaneColorEditor from './LaneColorEditor';
 import SkinPicker from './SkinPicker';
@@ -131,9 +132,10 @@ export const ROWS: RowDef[] = [
   // ── VISUAL ────────────────────────────────────────────────────────────
   {
     id: 'playfieldWidthPercent', section: 'visual', label: 'Playfield width',
-    description: 'How wide the lanes are, as a percentage of the screen width.',
+    description: 'How wide the lanes are, as a percentage of the screen width. Hidden while the Argon skin is selected (Argon auto-sizes: 4K = 18%, one lane = 4.5%).',
     control: { kind: 'slider', min: PLAYFIELD_WIDTH_MIN, max: PLAYFIELD_WIDTH_MAX, step: 1, suffix: '%' },
     defaultValue: DEFAULT_SETTINGS.playfieldWidthPercent,
+    showWhen: (s) => !isArgonSkin(s),
   },
   {
     id: 'backgroundDim', section: 'visual', subgroup: 'Dim', label: 'Gameplay Background Dim',

@@ -277,7 +277,7 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
 
   return (
     <div
-      className={`pointer-events-none select-none ${className}`}
+      className={`relative pointer-events-none select-none ${className}`}
       style={{ width: 360, height: 56 }}
     >
       <div
@@ -289,10 +289,11 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
         aria-label="Health"
       >
         <svg
-          width={360}
-          height={56}
-          viewBox="0 0 360 56"
-          className="overflow-visible block"
+          width={400}
+          height={92}
+          viewBox="-20 -18 400 92"
+          className="overflow-visible absolute block"
+          style={{ left: -20, top: -18 }}
           aria-hidden="true"
         >
           <defs>
@@ -319,10 +320,31 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
               <stop offset="0%" stopColor="#7ed7fd" stopOpacity="0" />
               <stop offset="100%" stopColor="#9fd8f5" stopOpacity="0.65" />
             </linearGradient>
+            {/* Ring masks: white band minus a wider-than-tube black core, so
+                the outline floats with a transparent gap off the tube */}
+            <mask id="railOutlineMask" maskUnits="userSpaceOnUse" x="-20" y="-18" width="400" height="92">
+              <path d={railPath} fill="none" stroke="#ffffff" strokeWidth="22" strokeLinecap="round" strokeLinejoin="round" />
+              <path d={railPath} fill="none" stroke="#000000" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
+            </mask>
+            <mask id="railHaloMask" maskUnits="userSpaceOnUse" x="-20" y="-18" width="400" height="92">
+              <path d={railPath} fill="none" stroke="#ffffff" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" />
+              <path d={railPath} fill="none" stroke="#000000" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round" />
+            </mask>
           </defs>
 
           {/* Thin hairline extending left from the rail */}
           <rect x="2" y="8" width="52" height="2" rx="1" fill="url(#healthHairline)" />
+
+          {/* Rounded outline floating off the tube + faint outer glow */}
+          <g mask="url(#railHaloMask)">
+            <rect x="-20" y="-18" width="400" height="92" fill="rgba(226,236,245,0.20)" />
+          </g>
+          <g mask="url(#railOutlineMask)">
+            <rect x="-20" y="-18" width="400" height="92" fill="rgba(232,240,248,0.6)" />
+          </g>
+          <g mask="url(#railOutlineMask)">
+            <rect x="0" y="0" width="360" height="56" fill="rgba(232,240,248,0.6)" />
+          </g>
 
           {/* Dark empty track along the full rail */}
           <path
@@ -552,11 +574,9 @@ export const ArgonKeyCounter = React.memo(function ArgonKeyCounter({
 
 /**
  * ArgonDualHitErrorMeters component
- * Two vertical BarHitErrorMeters flanking the playfield stage.
- * Left meter is positioned at stage left edge; Right meter is mirrored on stage right edge.
+ * Two vertical BarHitErrorMeters docked to the screen left/right edges.
  */
 export const ArgonDualHitErrorMeters = React.memo(function ArgonDualHitErrorMeters({
-  playfieldWidthPercent = 40,
   leftCanvasRef,
   rightCanvasRef,
   className = '',
@@ -566,16 +586,14 @@ export const ArgonDualHitErrorMeters = React.memo(function ArgonDualHitErrorMete
   rightCanvasRef?: React.Ref<HTMLCanvasElement>;
   className?: string;
 }) {
-  const halfPercent = Math.max(10, Math.min(48, (playfieldWidthPercent || 40) / 2));
-
   return (
     <div className={`pointer-events-none select-none ${className}`}>
-      {/* Left Hit Error Meter */}
+      {/* Left Hit Error Meter (screen left edge) */}
       <div
         id="argon-hit-error-left"
         className="absolute top-1/2 -translate-y-1/2 z-25 flex flex-col items-center gap-1"
         style={{
-          right: `calc(50% + ${halfPercent}% + 12px)`,
+          left: '10px',
         }}
       >
         <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Early</span>
@@ -589,12 +607,12 @@ export const ArgonDualHitErrorMeters = React.memo(function ArgonDualHitErrorMete
         <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Late</span>
       </div>
 
-      {/* Right Hit Error Meter (X-Flipped canvas only; labels stay readable) */}
+      {/* Right Hit Error Meter (screen right edge; X-Flipped canvas only; labels stay readable) */}
       <div
         id="argon-hit-error-right"
         className="absolute top-1/2 -translate-y-1/2 z-25 flex flex-col items-center gap-1"
         style={{
-          left: `calc(50% + ${halfPercent}% + 12px)`,
+          right: '10px',
         }}
       >
         <span className="text-[8px] font-display font-black uppercase tracking-wider text-slate-400/80">Early</span>
@@ -737,7 +755,7 @@ export const ManiaHud = React.memo(function ManiaHud({
   showPenar = true,
   keyCount = 4,
   keyLabels = [],
-  playfieldWidthPercent = 40,
+  playfieldWidthPercent = 15,
   isReplayMode = false,
   isAutoplay = false,
   progressBarRef,

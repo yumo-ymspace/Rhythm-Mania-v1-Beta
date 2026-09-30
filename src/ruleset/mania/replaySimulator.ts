@@ -40,7 +40,7 @@ import {
   healthToDisplayPercent,
   type HealthJudgementContext,
 } from './healthProcessor';
-import { getHoldTailJudgement, resolveJudgementForError } from './judgementTiming';
+import { getLazerTailJudgementWindow, resolveLazerJudgementWindow } from './judgementTiming';
 import { normalizeReplayFrames, upperBoundReplayFrame } from '../../utils/replayCursor';
 import {
   advanceHoldTailTicks,
@@ -367,7 +367,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
         return;
       }
 
-      const resolvedJudgement = resolveJudgementForError(diff, judgementWindows);
+      const resolvedJudgement = resolveLazerJudgementWindow(diff, judgementWindows);
       if (resolvedJudgement.type !== 'miss') {
         note.isHit = true;
         note.hitTime = frameTime;
@@ -424,7 +424,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
     const diff = frameTime - note.time;
     if (diff < -maxWindow) return;
 
-    const resolvedJudgement = resolveJudgementForError(diff, judgementWindows);
+    const resolvedJudgement = resolveLazerJudgementWindow(diff, judgementWindows);
     if (resolvedJudgement.type !== 'miss') {
       note.isHit = true;
       note.hitTime = frameTime;
@@ -521,7 +521,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
       }
       holdNote.isReleased = true;
       holdNote.releaseTime = frameTime;
-      const releaseJudgement = getHoldTailJudgement(endDiff, judgementWindows);
+      const releaseJudgement = getLazerTailJudgementWindow(endDiff, judgementWindows);
       const releaseMissed = releaseJudgement.type === 'miss';
       holdNote.isReleaseMissed = releaseMissed;
       holdNote.isReleaseHit = !releaseMissed;
@@ -537,7 +537,7 @@ export function simulateManiaReplay(options: SimulateReplayOptions): SimulateRep
     // Version 1
     holdNote.isReleased = true;
     holdNote.releaseTime = frameTime;
-    const tailJudgement = getHoldTailJudgement(endDiff, judgementWindows);
+    const tailJudgement = getLazerTailJudgementWindow(endDiff, judgementWindows);
     applyJudgement(tailJudgement, colIndex, 'hold_tail');
     if (tailJudgement.type !== 'miss') {
       hitErrorSamples.push(endDiff);

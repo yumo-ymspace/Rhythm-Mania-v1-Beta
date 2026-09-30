@@ -7,7 +7,7 @@
       "destination": "/api/catalog-router?_route=:path*"
     },
     {
-      "source": "/((?!api/|sitemap\\.xml|robots\\.txt|manifest\\.webmanifest|sw\\.js|icons/|backgrounds/|avatars/|skin/).*)",
+      "source": "/((?!api/|sitemap\\.xml|robots\\.txt|manifest\\.webmanifest|sw\\.js|icons/|backgrounds/|avatars/|skin/|sounds/|fonts/|cursor/).*)",
       "destination": "/index.html"
     }
   ]

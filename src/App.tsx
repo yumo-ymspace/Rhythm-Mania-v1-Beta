@@ -88,8 +88,6 @@ const LOCAL_STORAGE_CUSTOM_MAPS_KEY = 'rhythm_mania_v1_custom_maps';
 
 import {
   DEFAULT_SETTINGS,
-  PLAYFIELD_WIDTH_MAX,
-  PLAYFIELD_WIDTH_MIN,
   HISTORY_LIMIT_UNLIMITED,
   SCROLL_SPEED_MAX,
   SCROLL_SPEED_MIN,
@@ -1504,80 +1502,7 @@ export default function App() {
   }, []);
 
   const updateSettings = useCallback((newSettings: Partial<GameSettings>) => {
-    setSettings(prev => {
-      const updated = { ...prev, ...newSettings };
-      const widthMin = PLAYFIELD_WIDTH_MIN;
-      const widthMax = PLAYFIELD_WIDTH_MAX;
-      const requestedWidth = Number(updated.playfieldWidthPercent !== undefined ? updated.playfieldWidthPercent : 40);
-       const playfieldWidthPercent = Number.isFinite(requestedWidth)
-        ? Math.max(widthMin, Math.min(widthMax, requestedWidth))
-         : Math.max(widthMin, Math.min(widthMax, 40));
-      const safePayload: GameSettings = {
-        scrollSpeed: Number(updated.scrollSpeed !== undefined ? updated.scrollSpeed : 21),
-        lockScrollSpeedDuringPlay: updated.lockScrollSpeedDuringPlay !== false,
-        audioOffset: Number(updated.audioOffset !== undefined ? updated.audioOffset : 0),
-        visualOffset: Number(updated.visualOffset !== undefined ? updated.visualOffset : 0),
-        hitsoundVolume: Number(updated.hitsoundVolume !== undefined ? updated.hitsoundVolume : 0.60),
-        musicVolume: Number(updated.musicVolume !== undefined ? updated.musicVolume : 0.75),
-        previewVolume: Number(updated.previewVolume !== undefined ? updated.previewVolume : 0.70),
-        launchMusicVolume: Number(updated.launchMusicVolume !== undefined ? updated.launchMusicVolume : 0.10),
-        masterVolume: Number(updated.masterVolume !== undefined ? updated.masterVolume : 1.0),
-        keyMode: Number(updated.keyMode !== undefined ? updated.keyMode : 4),
-        bindings: {},
-        upsurfaceNoteMode: (updated.upsurfaceNoteMode === true || String(updated.upsurfaceNoteMode) === 'true'),
-        videoOpacity: 1.0,
-        backgroundDim: Number(updated.backgroundDim !== undefined ? updated.backgroundDim : 0.60),
-        songSelectBackgroundDim: Number(updated.songSelectBackgroundDim !== undefined ? updated.songSelectBackgroundDim : 0),
-        disableVideo: Boolean(updated.disableVideo),
-        videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
-        renderDpr: (() => {
-          const num = Number(updated.renderDpr);
-          if (num === 1 || num === 1.5 || num === 2) return num;
-          return 1.5;
-        })(),
-        skinId: updated.skinId === 'rhythmmania-3d' ? 'argon' : (updated.skinId || 'argon'),
-        customSkinColors: updated.customSkinColors,
-        customSkinName: updated.customSkinName,
-        squareRenderStyle: updated.squareRenderStyle === 'rhythmplus-dynamic'
-          ? 'rhythmplus-dynamic'
-          : updated.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : undefined,
-         receptorColorsByKeyCount: updated.receptorColorsByKeyCount || {},
-        // Note/receptor size + opacity are permanently locked at 100% for all skins (non-adjustable).
-        noteOpacity: 1.0,
-        receptorOpacity: 1.0,
-        judgementOpacity: updated.judgementOpacity !== undefined ? Number(updated.judgementOpacity) : 1.0,
-         judgementSize: updated.judgementSize !== undefined ? Math.max(0.1, Math.min(1.0, Number(updated.judgementSize))) : 0.5,
-         judgementPositionY: updated.judgementPositionY !== undefined ? Math.max(20, Math.min(85, Number(updated.judgementPositionY))) : 50,
-        laneSeparatorOpacity: updated.laneSeparatorOpacity !== undefined ? Number(updated.laneSeparatorOpacity) : 0.30,
-        noteSizeMultiplier: 1.0,
-        receptorSizeMultiplier: 1.0,
-         playfieldWidthPercent,
-        selectedMods: updated.selectedMods || [],
-        bindPause: updated.bindPause !== undefined ? String(updated.bindPause) : 'escape',
-        bindRetry: updated.bindRetry !== undefined ? String(updated.bindRetry) : 'r',
-        bindSkipIntro: updated.bindSkipIntro !== undefined ? String(updated.bindSkipIntro) : 'enter',
-        compensateOutputLatency: Boolean(updated.compensateOutputLatency),
-        enableMapSV: updated.enableMapSV !== false,
-        enableSongPreview: updated.enableSongPreview !== false,
-        showFpsCounter: Boolean(updated.showFpsCounter),
-        uncappedMenuMotion: Boolean(updated.uncappedMenuMotion),
-        menuCursorEnabled: updated.menuCursorEnabled !== false,
-        showPenarDuringPlay: updated.showPenarDuringPlay !== undefined ? Boolean(updated.showPenarDuringPlay) : true,
-        localDisplayName: updated.localDisplayName !== undefined ? String(updated.localDisplayName).slice(0, 32) : '',
-        difficultyAdjust: updated.difficultyAdjust,
-      };
-
-      if (updated.bindings) {
-        for (const k of Object.keys(updated.bindings)) {
-          const numKey = Number(k);
-          if (!isNaN(numKey) && Array.isArray(updated.bindings[numKey])) {
-            safePayload.bindings[numKey] = updated.bindings[numKey].map(bind => String(bind));
-          }
-        }
-      }
-
-      return safePayload;
-    });
+    setSettings(prev => sanitizeSettings({ ...prev, ...newSettings }, DEFAULT_SETTINGS));
   }, []);
 
   const handleImportBeatmap = async (map: Beatmap) => {

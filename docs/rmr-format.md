@@ -268,7 +268,7 @@ Recording/exporting device info. String lengths are truncated as noted.
 | `timezone` | string (≤ 80) | IANA zone, e.g. `"Asia/Tokyo"`. `"UTC"` fallback. |
 | `timezoneOffset` | integer | `Date.getTimezoneOffset()` in minutes (e.g. `-540` = UTC+9). Sign is inverted vs UTC offset. |
 | `screenWidth` / `screenHeight` | integers (optional) | Screen size in px. Absent outside browsers. |
-| `appVersion` | string | App build. Record `clientInfo` reads the runtime version (fallback `"unknown"`); envelope `exporter` currently writes `"v0.9.4"`. |
+| `appVersion` | string | App build. Record `clientInfo` reads the runtime version (fallback `"unknown"`); envelope `exporter` currently writes `"v1"`. |
 
 ---
 

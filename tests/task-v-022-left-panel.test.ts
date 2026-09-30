@@ -47,6 +47,7 @@ describe('TASK-V-022 — Left title, stats, ranking', () => {
     baseBeatLength: 285.71,
     breaks: [],
     catalogSetId: '12345',
+    rankStatus: 'ranked',
   };
 
   describe('computeBpmSummary', () => {
@@ -116,8 +117,35 @@ describe('TASK-V-022 — Left title, stats, ranking', () => {
       expect(html).not.toContain('Please sign in');
     });
 
-    it('renders populated local score rows with rank, grade, score, and replay buttons', () => {
-      const mockRecord: PlayHistoryRecord = {
+    it('shows LOVED/GRAVEYARD pills for saved statuses and LOCAL for unknown ones', () => {
+      const renderPill = (map: Beatmap, groupMaps?: Beatmap[]) => renderToStaticMarkup(
+        React.createElement(SongSelectLeftPanel, {
+          selectedMap: map,
+          groupMaps,
+          currentStarRating: 2.32,
+          isFavorite: false,
+          onToggleFavorite: vi.fn(),
+          activeTab: 'ranking',
+          onChangeTab: vi.fn(),
+          localScores: [],
+          settings: mockSettings,
+          getDifficultyColor: () => ({}),
+          getGradeBadgeClass: () => 'bg-emerald-500',
+        })
+      );
+
+      expect(renderPill({ ...mockBeatmap, rankStatus: 'loved' })).toContain('LOVED');
+      expect(renderPill({ ...mockBeatmap, rankStatus: 'graveyard' })).toContain('GRAVEYARD');
+      // Legacy download with no saved status: LOCAL, never a default RANKED.
+      const { rankStatus: _dropped, ...legacyMap } = mockBeatmap;
+      void _dropped;
+      expect(renderPill({ ...legacyMap })).toContain('LOCAL');
+      expect(renderPill({ ...legacyMap })).not.toContain('RANKED');
+      // ...unless an already-downloaded sibling diff carries the set status.
+      expect(renderPill({ ...legacyMap }, [{ ...mockBeatmap, rankStatus: 'graveyard' }])).toContain('GRAVEYARD');
+    });
+
+    it('renders populated local score rows with rank, grade, score, and replay buttons', () => {      const mockRecord: PlayHistoryRecord = {
         id: 'rec-1',
         timestamp: Date.now(),
         beatmapId: 'astro-notes-adv',

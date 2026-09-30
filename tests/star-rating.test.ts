@@ -116,4 +116,12 @@ describe('saved beatmap star-rating sanitization', () => {
     expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]), starRating: 21 })).toBeNull();
     expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]), starRatingVersion: 1.5 })).toBeNull();
   });
+
+  it('preserves rank status written at download time, drops unknown values', () => {
+    expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]), rankStatus: 'Loved' })?.rankStatus).toBe('loved');
+    expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]), rankStatus: 'graveyard' })?.rankStatus).toBe('graveyard');
+    expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]), rankStatus: 'approved' })?.rankStatus).toBe('approved');
+    expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]), rankStatus: 'bogus' })?.rankStatus).toBeUndefined();
+    expect(sanitizeSavedBeatmap({ ...mapWithNotes([note(0, 0)]) })?.rankStatus).toBeUndefined();
+  });
 });

@@ -148,4 +148,45 @@ describe('TASK-V-021: Song Select Carousel', () => {
     expect(html).toContain('lazer-star-meter');
     expect(html).not.toContain('READY');
   });
+
+  it('shows saved loved/graveyard statuses and LOCAL for status-less downloads', () => {
+    const renderBadge = (maps: Beatmap[]) => renderToStaticMarkup(
+      React.createElement(SongSelectCarousel, {
+        songGroups: [{
+          songKey: 'k',
+          title: 'T',
+          artist: 'A',
+          maps,
+        }],
+        selectedGroupKey: 'k',
+        expandedSongKey: 'k',
+        selectedMapId: '',
+        favoriteSongs: [],
+        playHistory: [],
+        onSelectGroup: () => {},
+        onSelectDifficulty: () => {},
+        onStartPlay: () => {},
+        onToggleFavorite: () => {},
+        getStarRating: () => 1,
+        getGradeBadgeClass: () => '',
+      })
+    );
+
+    expect(renderBadge([{ ...dummyMapA, rankStatus: 'loved' }])).toContain('LOVED');
+    expect(renderBadge([{ ...dummyMapA, rankStatus: 'graveyard' }])).toContain('GRAVEYARD');
+    expect(renderBadge([{ ...dummyMapA, rankStatus: 'ranked' }])).toContain('RANKED');
+    // Legacy download (catalog ids, no saved status): LOCAL, not RANKED.
+    const legacyHtml = renderBadge([{
+      ...dummyMapA,
+      catalogSetId: 'pkg_1',
+      catalogMapId: 'rev-1',
+    }]);
+    expect(legacyHtml).toContain('LOCAL');
+    expect(legacyHtml).not.toContain('RANKED');
+    // Status-less first diff inherits from an already-downloaded sibling.
+    expect(renderBadge([
+      { ...dummyMapA, catalogSetId: 'pkg_1' },
+      { ...dummyMapB, rankStatus: 'loved' },
+    ])).toContain('LOVED');
+  });
 });

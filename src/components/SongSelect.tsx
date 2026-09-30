@@ -757,10 +757,11 @@ export default function SongSelect({
   }, [selectedGroupForBg]);
 
   // Displayed backdrop holds the last image until the next one is fully
-  // preloaded — it never unmounts or flashes mid-switch. Empty means no
-  // song is selected yet, in which case the idle triangle field shows
-  // (same custom background as the first/main menu) instead of a
-  // public/backgrounds picture.
+  // preloaded — it never unmounts or flashes mid-switch. Empty means the
+  // idle triangle field shows (same custom background as the first/main
+  // menu): on first entry with no selection yet, or when the selected
+  // song has no picture art in its .osz (after its background resolution
+  // has been attempted — never the previous song's art).
   const [displayedBgUrl, setDisplayedBgUrl] = useState('');
   const displayedBgUrlRef = useRef('');
   const pendingBgRef = useRef('');
@@ -792,11 +793,32 @@ export default function SongSelect({
         displayedBgUrlRef.current = '';
         setDisplayedBgUrl('');
       }
+    } else {
+      // A song is selected but the group has no usable local art. Fall
+      // back to the triangle field — never hold the previous song's art.
+      // Still wait until background resolution has actually been attempted
+      // for this selection (a memory-cache entry exists, even an empty
+      // one) so the old backdrop holds while the art unzip is in flight
+      // instead of flashing away mid-switch. Maps with no package at all
+      // (standalone imports, uncached server maps) can never resolve
+      // local art, so they fall back immediately.
+      const maps = selectedGroupForBg?.maps || [];
+      const canResolveLocalArt = maps.some(
+        (m) => (m as any).packageId || (m as any).parentPackageId,
+      );
+      const attempted = !!storageManager.lruMediaCache.get(selectedCustomMap.id);
+      if (!canResolveLocalArt || attempted) {
+        pendingBgRef.current = '';
+        if (displayedBgUrlRef.current !== '') {
+          displayedBgUrlRef.current = '';
+          setDisplayedBgUrl('');
+        }
+      }
     }
     // No clearing while a new group's art is still unpacking — the old
     // backdrop holds instead of flashing away.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBgUrl, selectedCustomMap]);
+  }, [groupBgUrl, selectedCustomMap, unpackTrigger]);
 
   // Neighbour prefetch: unzip + decode the song art for the groups around
   // the selection so carousel scrolling and backdrop swaps stay instant.
@@ -1370,7 +1392,8 @@ export default function SongSelect({
           App-level unified layer renders nothing for Song Select so the
           dim stays effective mid-switch): triangle field when no song is
           selected (first entry into Song Select, same as the first/main
-          menu), otherwise the selected song's cover artwork with dim
+          menu) or when the selected song has no picture art in its .osz,
+          otherwise the selected song's cover artwork with dim
           overlay. Group-stable + preloaded + cross-fading in place: no
           slide, no flash when changing difficulties or songs. */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden bg-[#0d1520]" style={{ zIndex: 0 }}>
@@ -1425,6 +1448,7 @@ export default function SongSelect({
         <div className="w-full lg:w-[596px] xl:w-[676px] flex-col h-full min-h-0 pl-0 pr-4 lg:pr-4 pt-0 pb-4 lg:pb-6 gap-4 overflow-hidden flex-shrink-0 flex">
           <SongSelectLeftPanel
             selectedMap={selectedCustomMap}
+            groupMaps={currentSongMaps}
             currentStarRating={currentStarRating}
             isFavorite={selectedCustomMap ? favoriteSongs.includes(getMapSongKey(selectedCustomMap)) : false}
             onToggleFavorite={() => {

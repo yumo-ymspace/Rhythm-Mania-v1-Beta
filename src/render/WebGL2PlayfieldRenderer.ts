@@ -815,31 +815,26 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         const base = laneBase[i];
         const darkLane = laneDarkLane[i];
         if (lit > 0) {
-          // Lane-tinted bloom around the receptor (layered soft falloff).
-          const halo = laneLightPulse[i] ?? base;
-          if (halo) {
-            const cx0 = col.x + col.width / 2;
-            const ha1 = 0.10 * lit * receptorOpacity;
-            const haloW1 = col.width + 26;
-            const haloH1 = 104;
-            this.pushQuadNumbers(cx0 - haloW1 / 2, receptorY - haloH1 / 2, haloW1, haloH1, halo[0], halo[1], halo[2], ha1, halo[0], halo[1], halo[2], 0, haloH1 / 2);
-            const ha2 = 0.16 * lit * receptorOpacity;
-            const haloW2 = col.width + 10;
-            const haloH2 = 64;
-            this.pushQuadNumbers(cx0 - haloW2 / 2, receptorY - haloH2 / 2, haloW2, haloH2, halo[0], halo[1], halo[2], ha2, halo[0], halo[1], halo[2], 0, haloH2 / 2);
-          }
           // White-hot core hugging the judgement line, fading into the lane.
-          const coreAlpha = 0.35 * lit * receptorOpacity;
+          const coreAlpha = 0.45 * lit * receptorOpacity;
           if (upscroll) {
             this.pushQuadNumbers(ix, receptorY, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, 0);
           } else {
             this.pushQuadNumbers(ix, receptorY - CORE_H, iw, CORE_H, whiteRgb[0], whiteRgb[1], whiteRgb[2], 0, whiteRgb[0], whiteRgb[1], whiteRgb[2], coreAlpha, 0);
           }
         }
+        // Idle: translucent white. Pressed: fills with the lane colour
+        // (near-opaque) while the white judgement lip stays on top.
         const targetY = upscroll ? receptorY : receptorY - hitTargetH;
-        this.quadRgb(
+        const tr = base ? whiteRgb[0] + (base[0] - whiteRgb[0]) * lit : whiteRgb[0];
+        const tg = base ? whiteRgb[1] + (base[1] - whiteRgb[1]) * lit : whiteRgb[1];
+        const tb = base ? whiteRgb[2] + (base[2] - whiteRgb[2]) * lit : whiteRgb[2];
+        const targetAlpha = (0.3 + 0.6 * lit) * receptorOpacity;
+        this.pushQuadNumbers(
           ix, targetY, iw, hitTargetH,
-          whiteRgb, (0.3 + 0.35 * lit) * receptorOpacity, ARGON_CORNER_RADIUS,
+          tr, tg, tb, targetAlpha,
+          tr, tg, tb, targetAlpha,
+          ARGON_CORNER_RADIUS,
         );
         // Lip ramps gray -> white with the hit flash.
         const lipR = grayRgb[0] + (1 - grayRgb[0]) * lit;
@@ -872,6 +867,33 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
             this.quadRgb(cx - ovalW / 2, ovalCY - ovalH / 2, ovalW, ovalH, darkLane, 0.8 * receptorOpacity, ovalH / 2);
           }
         }
+      }
+
+      // Argon lane-bottom dots: three decorative circles per lane (one top,
+      // two below). Purely cosmetic, no gameplay meaning; they brighten with
+      // the same press / hit flash as the receptor.
+      const dotMargin = 14;
+      for (let i = 0; i < keyCount; i++) {
+        const col = columns[i];
+        if (!col) continue;
+        const dotBase = laneBase[i];
+        if (!dotBase) continue;
+        const glow = col.glow;
+        const flash = glow > 1 ? 1 : glow < 0 ? 0 : glow;
+        const lit = col.pressed ? 1 : flash;
+        const dotR = Math.max(2, Math.min(3, col.width * 0.055)) * noteScale;
+        const cx = col.x + col.width / 2;
+        const bottomCY = height - dotMargin - dotR;
+        const topCY = bottomCY - dotR * 2.1;
+        const offX = dotR * 1.9;
+        const w = 0.45 * lit;
+        const dr = dotBase[0] + (1 - dotBase[0]) * w;
+        const dg = dotBase[1] + (1 - dotBase[1]) * w;
+        const db = dotBase[2] + (1 - dotBase[2]) * w;
+        const da = (0.55 + 0.45 * lit) * receptorOpacity;
+        this.pushQuadNumbers(cx - dotR, topCY - dotR, dotR * 2, dotR * 2, dr, dg, db, da, dr, dg, db, da, dotR);
+        this.pushQuadNumbers(cx - offX - dotR, bottomCY - dotR, dotR * 2, dotR * 2, dr, dg, db, da, dr, dg, db, da, dotR);
+        this.pushQuadNumbers(cx + offX - dotR, bottomCY - dotR, dotR * 2, dotR * 2, dr, dg, db, da, dr, dg, db, da, dotR);
       }
     }
 

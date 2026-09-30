@@ -117,9 +117,9 @@ export async function extractZipEntry(
   validateZipEntrySize(file, name);
   const internalStream = (file as ZipObjectWithStream).internalStream;
   if (!internalStream) {
-    const data = await file.async('arraybuffer');
-    addExtractedZipBytes(budget, data.byteLength, name);
-    return data;
+    // Fail closed: no streaming primitive means we cannot enforce the byte
+    // budget during decompression (file.async would allocate the full entry).
+    throw new Error(`Security Exception: Streaming extraction unavailable for "${name}".`);
   }
 
   return new Promise<ArrayBuffer>((resolve, reject) => {

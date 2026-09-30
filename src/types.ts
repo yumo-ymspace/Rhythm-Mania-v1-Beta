@@ -130,6 +130,10 @@ export interface BeatmapMetadata {
   starRating?: number;
   starRatingSource?: StarRatingSource;
   starRatingVersion?: number;
+  // Rank status persisted at catalog-download time (ranked/loved/graveyard
+  // + raw osu! states like approved/qualified/pending/wip). Display mapping
+  // lives in the rank-status resolver; missing means unknown (LOCAL pill).
+  rankStatus?: string;
 }
 
 export interface Beatmap extends BeatmapMetadata {
@@ -315,7 +319,7 @@ export interface GameSettings {
   judgementSize?: number; // 0.1 to 1.0 (font size scaling multiplier, default 0.5 = 50%)
   judgementPositionY?: number; // vertical screen position in percent
   laneSeparatorOpacity?: number; // 0.0 to 1.0 (opacity for lane divider lines)
-  playfieldWidthPercent?: number; // width of lanes as percent of screen width (33 to 50)
+  playfieldWidthPercent?: number; // width of lanes as percent of screen width (5 to 30, default 15)
   selectedMods?: string[]; // list of active gameplay modifiers (e.g., 'NF', 'HD', 'HR', 'DT')
   bindPause?: string; // gameplay pause/resume keybind
   bindRetry?: string; // gameplay quick retry keybind

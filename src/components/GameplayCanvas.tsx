@@ -24,8 +24,8 @@ import {
   autoReleaseHoldTail,
   createHoldNoteState,
   getDifficultyMultiplier,
-  getHoldTailJudgement,
   getJudgementWindows,
+  getLazerTailJudgementWindow,
   getSpeedMultiplier,
   HoldNoteState,
   isClassicMod,
@@ -38,7 +38,7 @@ import {
   onHoldKeyPress,
   onHoldKeyRelease,
   resolveHoldGrace,
-  resolveJudgementForError,
+  resolveLazerJudgementWindow,
   TAIL_RELEASE_WINDOW_LENIENCE,
 } from '../ruleset/mania';
 import {
@@ -97,7 +97,7 @@ import { getColumnStyles } from '../render/laneLayout';
 import { getVisibleNotes } from '../render/noteVisibility';
 import { getEffectiveDpr } from '../render/displayScale';
 import { createScrollModel, ScrollModel } from '../render/scrollVelocity';
-import { computeSongDensityBins } from '../render/argonSkin';
+import { computeSongDensityBins, getArgonPlayfieldWidthPercent, isArgonSkin } from '../render/argonSkin';
 import { parseBeatmap } from '../utils/beatmapParser';
 import {
   PLAYFIELD_WIDTH_MAX,
@@ -195,7 +195,7 @@ export function checkNotesAutonomousMisses(
         n.isReleaseMissed = true;
         onMiss(n, false);
       }
-      return;
+      continue;
     }
 
     // 1b. Head already missed, never engaged: tail times out separately
@@ -888,6 +888,10 @@ export default function GameplayCanvas({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (unpauseTimeoutRef.current) {
+        clearTimeout(unpauseTimeoutRef.current);
+        unpauseTimeoutRef.current = null;
+      }
       executeTeardown(mainAudio, animationFrameRef.current, null, null, null, {
         timers: [
           finishTimeoutRef.current,
@@ -1035,7 +1039,7 @@ export default function GameplayCanvas({
   const windowDifficultyMultiplier = getDifficultyMultiplier(settings.selectedMods);
   const windowSpeedMultiplier = getSpeedMultiplier(settings.selectedMods);
   const judgementWindows = getJudgementWindows(
-    beatmap.overallDifficulty,
+    Number.isFinite(beatmap.overallDifficulty) ? beatmap.overallDifficulty : 8,
     windowDifficultyMultiplier,
     windowSpeedMultiplier,
     isClassic,
@@ -1503,21 +1507,21 @@ export default function GameplayCanvas({
     if (unpauseCountdown > 0) {
       const timer = setTimeout(() => {
         unpauseTimeoutRef.current = null;
-        setUnpauseCountdown(prev => {
-          if (prev === 1) {
-            setIsPaused(false);
-            isPausedRef.current = false;
-            isPlayingRef.current = true;
-            void mainAudio.playAsync(beatmap.bpm, settings.audioOffset).then(() => {
-              const now = mainAudio.getCurrentTimeMs();
-              audioTimeRef.current = now;
-              lastSongTimeRef.current = now;
-              songTimeJumpRef.current = true;
-              snapVideoToAudio(now, true);
-            });
-          }
-          return prev - 1;
-        });
+        if (unpauseCountdown === 1) {
+          setUnpauseCountdown(0);
+          setIsPaused(false);
+          isPausedRef.current = false;
+          isPlayingRef.current = true;
+          void mainAudio.playAsync(beatmap.bpm, settings.audioOffset).then(() => {
+            const now = mainAudio.getCurrentTimeMs();
+            audioTimeRef.current = now;
+            lastSongTimeRef.current = now;
+            songTimeJumpRef.current = true;
+            snapVideoToAudio(now, true);
+          });
+        } else {
+          setUnpauseCountdown(unpauseCountdown - 1);
+        }
       }, 1000);
       unpauseTimeoutRef.current = timer;
       return () => clearTimeout(timer);
@@ -1999,7 +2003,7 @@ export default function GameplayCanvas({
         return;
       }
 
-      const resolvedJudgement = resolveJudgementForError(diff, judgementWindows);
+      const resolvedJudgement = resolveLazerJudgementWindow(diff, judgementWindows);
       if (resolvedJudgement.type !== 'miss') {
         note.isHit = true;
         note.hitTime = playTime;
@@ -2100,7 +2104,7 @@ export default function GameplayCanvas({
     }
 
     // Assign judgement
-    const resolvedJudgement = resolveJudgementForError(diff, judgementWindows);
+    const resolvedJudgement = resolveLazerJudgementWindow(diff, judgementWindows);
 
     if (resolvedJudgement.type !== 'miss') {
       // Registrations
@@ -2272,7 +2276,7 @@ export default function GameplayCanvas({
       }
       holdNote.isReleased = true;
       holdNote.releaseTime = playTime;
-      const releaseJudgement = getHoldTailJudgement(endDiff, judgementWindows);
+      const releaseJudgement = getLazerTailJudgementWindow(endDiff, judgementWindows);
       const releaseMissed = releaseJudgement.type === 'miss';
       holdNote.isReleaseMissed = releaseMissed;
       holdNote.isReleaseHit = !releaseMissed;
@@ -2296,7 +2300,7 @@ export default function GameplayCanvas({
     // Otherwise, they are releasing near the end (normal release window evaluation)
     holdNote.isReleased = true;
     holdNote.releaseTime = playTime;
-    const tailJudgement = getHoldTailJudgement(endDiff, judgementWindows);
+    const tailJudgement = getLazerTailJudgementWindow(endDiff, judgementWindows);
     applyJudgement(tailJudgement, colIndex, 'hold_tail');
     if (tailJudgement.type !== 'miss') {
       recordHitErrorSample(endDiff);
@@ -3314,7 +3318,7 @@ export default function GameplayCanvas({
 
       // Check if song completed naturally or run loops (audio truth, not the
       // slewed visual clock, so completion never lags a catch-up glide).
-      const songDurationMs = beatmap.duration * 1000;
+      const songDurationMs = Number.isFinite(beatmap.duration) && beatmap.duration > 0 ? beatmap.duration * 1000 : 10 * 1000;
       if (judgeTime >= songDurationMs && !scoreStateRef.current.completed && isPlayingRef.current) {
         scoreStateRef.current.completed = true;
         isPlayingRef.current = false;
@@ -3668,7 +3672,7 @@ export default function GameplayCanvas({
           return;
         }
 
-        const resolvedJudgement = resolveJudgementForError(diff, judgementWindows);
+        const resolvedJudgement = resolveLazerJudgementWindow(diff, judgementWindows);
         if (resolvedJudgement.type !== 'miss') {
           note.isHit = true;
           note.hitTime = frameTime;
@@ -3736,7 +3740,7 @@ export default function GameplayCanvas({
       if (diff < -maxWindow) {
         return; 
       }
-      const resolvedJudgement = resolveJudgementForError(diff, judgementWindows);
+      const resolvedJudgement = resolveLazerJudgementWindow(diff, judgementWindows);
       if (resolvedJudgement.type !== 'miss') {
         note.isHit = true;
         note.hitTime = frameTime;
@@ -3825,7 +3829,7 @@ export default function GameplayCanvas({
         }
         holdNote.isReleased = true;
         holdNote.releaseTime = frameTime;
-        const releaseJudgement = getHoldTailJudgement(endDiff, judgementWindows);
+        const releaseJudgement = getLazerTailJudgementWindow(endDiff, judgementWindows);
         const releaseMissed = releaseJudgement.type === 'miss';
         holdNote.isReleaseMissed = releaseMissed;
         holdNote.isReleaseHit = !releaseMissed;
@@ -3844,7 +3848,7 @@ export default function GameplayCanvas({
       }
       holdNote.isReleased = true;
       holdNote.releaseTime = frameTime;
-      const tailJudgement = getHoldTailJudgement(endDiff, judgementWindows);
+      const tailJudgement = getLazerTailJudgementWindow(endDiff, judgementWindows);
       simApplyJudgement(tailJudgement, colIndex, 'hold_tail');
       if (tailJudgement.type !== 'miss') {
         recordHitErrorSample(endDiff);
@@ -4452,13 +4456,13 @@ export default function GameplayCanvas({
                     />
                   </div>
 
-                  {/* Playfield Width */}
-                  {!isReplayMode && (
+                  {/* Playfield Width (manual sizing; hidden for argon, which auto-sizes per key count) */}
+                  {!isReplayMode && !isArgonSkin(settings) && (
                     <div className="space-y-1.5">
                       {(() => {
                         const widthMin = PLAYFIELD_WIDTH_MIN;
                         const widthMax = PLAYFIELD_WIDTH_MAX;
-                        const width = Math.max(widthMin, Math.min(widthMax, settings.playfieldWidthPercent ?? 40));
+                        const width = Math.max(widthMin, Math.min(widthMax, settings.playfieldWidthPercent ?? 15));
                         return (
                           <>
                       <div className="flex justify-between text-slate-400">
@@ -4651,7 +4655,7 @@ export default function GameplayCanvas({
             combo={uiCombo}
             keyCount={beatmap.keyCount}
             keyLabels={settings.bindings[beatmap.keyCount] || []}
-            playfieldWidthPercent={settings.playfieldWidthPercent ?? 40}
+            playfieldWidthPercent={isArgonSkin(settings) ? getArgonPlayfieldWidthPercent(beatmap.keyCount) : (settings.playfieldWidthPercent ?? 15)}
             isReplayMode={isReplayMode}
             isAutoplay={isAutoplay}
             progressBarRef={progressBarRef as React.Ref<HTMLDivElement>}
@@ -4917,9 +4921,9 @@ export default function GameplayCanvas({
           <div 
             ref={containerRef} 
             className={`h-full relative transition-all duration-205 z-20 playfield-chassis-container ${isCinema ? 'opacity-0 pointer-events-none' : ''}`} 
-            style={{ 
-              width: `${settings.playfieldWidthPercent ?? 40}%`, 
-              minWidth: '280px',
+            style={{
+              // Argon auto-sizes: 4K = 18% of screen width, one lane = 4.5%, linear per key count.
+              width: `${isArgonSkin(settings) ? getArgonPlayfieldWidthPercent(beatmap.keyCount) : (settings.playfieldWidthPercent ?? 15)}%`,
               maxWidth: '100%'
             }}
           >

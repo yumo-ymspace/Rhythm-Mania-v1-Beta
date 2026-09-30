@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Beatmap, GameSettings, PlayHistoryRecord } from '../../types';
 import { calculateDominantBpm } from '../../utils/beatmapParser';
+import { resolveMapsRankStatus } from './SongSelectCarousel';
 
 export type RankingSortKey = 'score' | 'accuracy' | 'combo' | 'recent';
 
@@ -73,6 +74,9 @@ export function sortRankingScores(
 
 export interface SongSelectLeftPanelProps {
   selectedMap: Beatmap | null;
+  /** All listed diffs of the selected song: the wedge inherits the set's
+      status from already-downloaded siblings before showing LOCAL. */
+  groupMaps?: Beatmap[];
   currentStarRating: number;
   isFavorite: boolean;
   onToggleFavorite: () => void;
@@ -130,6 +134,7 @@ function formatDuration(seconds: number): string {
 
 export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
   selectedMap,
+  groupMaps,
   currentStarRating,
   isFavorite,
   onToggleFavorite,
@@ -343,29 +348,31 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
         {/* 5. CONTENT BODY: BLANK DETAILS OR EMPTY RANKING — the only scroll region */}
         <div className="flex-1 min-h-0 overflow-y-auto lazer-left-content-scroll min-h-[220px] max-h-[360px]">
           {activeTab === 'details' ? (
-            <div className="space-y-3 text-xs font-mono pt-2">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Length</div>
-                  <div className="text-sm font-black text-white mt-1">-</div>
-                </div>
-                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">BPM</div>
-                  <div className="text-sm font-black text-white mt-1">-</div>
-                </div>
-                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Total Objects</div>
-                  <div className="text-sm font-black text-white mt-1">-</div>
-                </div>
-                <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
-                <div className="text-sm font-black mt-1" style={getDifficultyColor(0)}>★ -</div>
+            <div className="space-y-2.5 text-xs pt-2">
+              <div className="lazer-song-details-box">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Length</div>
+                    <div className="text-sm font-black text-white mt-0.5">-</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">BPM</div>
+                    <div className="text-sm font-black text-white mt-0.5">-</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Total Objects</div>
+                    <div className="text-sm font-black text-white mt-0.5">-</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
+                    <div className="text-sm font-black mt-0.5" style={getDifficultyColor(0)}>★ -</div>
+                  </div>
                 </div>
               </div>
-              <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-slate-300 leading-relaxed">
-                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1">Difficulty Info</div>
-                <div className="font-sans font-bold text-white text-sm">-</div>
-                <div className="mt-2 text-[10px] text-slate-500">
+              <div className="lazer-song-details-subbox">
+                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Difficulty Info</div>
+                <div className="font-sans font-bold text-white text-sm mt-0.5">-</div>
+                <div className="mt-1.5 text-[10px] text-slate-500">
                   Local ranking only — records set on this device for the selected chart.
                 </div>
               </div>
@@ -389,10 +396,12 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
     );
   }
 
-  // Derive status
-  const rawStatus = String((selectedMap as any).rankStatus || (selectedMap as any).status || '').toLowerCase();
-  const isCatalog = Boolean(selectedMap.catalogSetId || selectedMap.catalogMapId || selectedMap.isServerMap);
-  const statusLabel = rawStatus === 'loved' ? 'LOVED' : rawStatus === 'graveyard' ? 'GRAVEYARD' : isCatalog || rawStatus === 'ranked' ? 'RANKED' : 'LOCAL';
+  // Derive status: only a known saved rankStatus earns a server pill.
+  // The selected chart is checked first, then the song's other listed
+  // diffs — legacy downloads imported without one (and local .osz
+  // imports) show LOCAL rather than a false RANKED.
+  const resolvedStatus = resolveMapsRankStatus([selectedMap, ...(groupMaps ?? [])]);
+  const statusLabel = resolvedStatus === 'loved' ? 'LOVED' : resolvedStatus === 'graveyard' ? 'GRAVEYARD' : resolvedStatus === 'ranked' ? 'RANKED' : 'LOCAL';
   const statusPillClass = statusLabel === 'RANKED'
     ? 'lazer-status-pill is-ranked'
     : statusLabel === 'LOVED'
@@ -604,29 +613,31 @@ export const SongSelectLeftPanel: React.FC<SongSelectLeftPanelProps> = ({
       {/* 5. CONTENT BODY: DETAILS OR LOCAL RANKINGS — the only scroll region */}
       <div className="flex-1 min-h-0 overflow-y-auto lazer-left-content-scroll min-h-[220px] max-h-[360px]">
         {activeTab === 'details' ? (
-          <div className="space-y-3 text-xs font-mono pt-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Length</div>
-                <div className="text-sm font-black text-white mt-1">{durationFormatted}</div>
-              </div>
-              <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">BPM</div>
-                <div className="text-sm font-black text-white mt-1">{bpmSummary}</div>
-              </div>
-              <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Total Objects</div>
-                <div className="text-sm font-black text-white mt-1">{noteCount}</div>
-              </div>
-              <div className="rounded-xl bg-black/40 border border-white/5 p-3">
-                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
-                <div className="text-sm font-black mt-1" style={getDifficultyColor(currentStarRating)}>★ {currentStarRating.toFixed(2)}</div>
+          <div className="space-y-2.5 text-xs pt-2">
+            <div className="lazer-song-details-box">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Length</div>
+                  <div className="text-sm font-black text-white mt-0.5 tabular-nums">{durationFormatted}</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">BPM</div>
+                  <div className="text-sm font-black text-white mt-0.5 tabular-nums truncate" title={bpmSummary}>{bpmSummary}</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Total Objects</div>
+                  <div className="text-sm font-black text-white mt-0.5 tabular-nums">{noteCount}</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Stars</div>
+                  <div className="text-sm font-black mt-0.5 tabular-nums" style={getDifficultyColor(currentStarRating)}>★ {currentStarRating.toFixed(2)}</div>
+                </div>
               </div>
             </div>
-            <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-slate-300 leading-relaxed">
-              <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1">Difficulty Info</div>
-              <div className="font-sans font-bold text-white text-sm">{selectedMap.difficulty}</div>
-              <div className="mt-2 text-[10px] text-slate-500">
+            <div className="lazer-song-details-subbox">
+              <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Difficulty Info</div>
+              <div className="font-sans font-bold text-white text-sm mt-0.5">{selectedMap.difficulty}</div>
+              <div className="mt-1.5 text-[10px] text-slate-500">
                 Local ranking only — records set on this device for the selected chart.
               </div>
             </div>

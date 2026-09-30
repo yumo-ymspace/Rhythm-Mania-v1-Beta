@@ -69,6 +69,8 @@ export const NEKOHA_DOWNLOAD_ENDPOINT = 'https://mirror.nekoha.moe/api/download'
 
 const MAX_RESULTS = 50;
 const UPSTREAM_TIMEOUT_MS = 15000;
+const MAX_UPSTREAM_TEXT_LENGTH = 300;
+const MAX_UPSTREAM_JSON_BYTES = 2 * 1024 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -80,8 +82,31 @@ function asRecords(value: unknown): UnknownRecord[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
-function asString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value ? value : fallback;
+function asString(value: unknown, fallback: string, maxLength: number = MAX_UPSTREAM_TEXT_LENGTH): string {
+  if (typeof value !== 'string' || !value) return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
+function asTrustedCoverUrl(value: unknown, fallback: string): string {
+  if (typeof value !== 'string' || !value) return fallback;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 512) return fallback;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:') return fallback;
+    const host = parsed.hostname.toLowerCase();
+    // Official ppy CDN (strict path) plus the two known mirror hosts.
+    // Anything else (including javascript:/data:) falls back to ppy.
+    if (host === 'assets.ppy.sh') {
+      return parsed.pathname.startsWith('/beatmaps/') ? trimmed : fallback;
+    }
+    if (host === 'mirror.nekoha.moe' || host === 'catboy.best') return trimmed;
+  } catch {
+    // fall through to fallback
+  }
+  return fallback;
 }
 
 /**
@@ -216,8 +241,9 @@ export function mapNekohaSet(raw: unknown, allowed: Set<string>): MirrorCatalogS
   if (charts.length === 0) return null;
 
   const covers = isRecord(raw.covers) ? raw.covers : undefined;
-  const slimCoverUrl = asString(covers?.slimcover, '') || ppySlimCover(sourceSetId);
-  const coverUrl = asString(covers?.card, '') || slimCoverUrl;
+  const ppyFallback = ppySlimCover(sourceSetId);
+  const slimCoverUrl = asTrustedCoverUrl(covers?.slimcover, ppyFallback);
+  const coverUrl = asTrustedCoverUrl(covers?.card, slimCoverUrl);
   const bpmRaw = Number(raw.bpm);
   return {
     sourceSetId,
@@ -238,6 +264,20 @@ async function fetchJsonArray(url: string): Promise<unknown> {
     signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`mirror search failed (${response.status})`);
+  const headers = (response as unknown as { headers?: { get?: (name: string) => string | null } }).headers;
+  const contentLength = Number(headers?.get?.('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > MAX_UPSTREAM_JSON_BYTES) {
+    throw new Error('mirror search payload too large');
+  }
+  // Prefer text+byte-cap when available; fall back to json() for stubbed responses.
+  const textFn = (response as unknown as { text?: () => Promise<string> }).text;
+  if (typeof textFn === 'function') {
+    const text = await textFn.call(response);
+    if (new TextEncoder().encode(text).byteLength > MAX_UPSTREAM_JSON_BYTES) {
+      throw new Error('mirror search payload too large');
+    }
+    return JSON.parse(text);
+  }
   return response.json();
 }
 

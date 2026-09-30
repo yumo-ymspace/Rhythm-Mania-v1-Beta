@@ -20,6 +20,25 @@ export const ARGON_NOTE_ACCENT_RATIO = 0.82;
 export const ARGON_CORNER_RADIUS = 3.4;
 export const ARGON_COLUMN_GAP = 1;
 
+/**
+ * Argon automatic playfield sizing anchor: 4K spans 18% of the screen width,
+ * so one lane is always 4.5% of the screen width. Total width scales linearly
+ * with key count (1K = 4.5% … 4K = 18% … 10K = 45%), keeping lane width
+ * identical across key counts. Percent-based, so it tracks window resizes.
+ */
+export const ARGON_AUTO_WIDTH_BASE_KEYS = 4;
+export const ARGON_AUTO_WIDTH_BASE_PERCENT = 18;
+export const ARGON_AUTO_LANE_WIDTH_PERCENT =
+  ARGON_AUTO_WIDTH_BASE_PERCENT / ARGON_AUTO_WIDTH_BASE_KEYS;
+
+/** Total playfield width (% of screen width) for an argon key count. Capped at 100%. */
+export function getArgonPlayfieldWidthPercent(keyCount: number): number {
+  const n = Number.isFinite(keyCount)
+    ? Math.max(1, Math.min(10, Math.round(keyCount)))
+    : ARGON_AUTO_WIDTH_BASE_KEYS;
+  return Math.min(100, n * ARGON_AUTO_LANE_WIDTH_PERCENT);
+}
+
 export const DENSITY_BIN_COUNT = 64;
 
 export const ARGON_COLOUR_SPECIAL = '#a96aff';

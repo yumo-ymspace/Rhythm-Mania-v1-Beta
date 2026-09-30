@@ -13,8 +13,8 @@
 import { argonPaletteForKeyCount } from '../../render/argonSkin';
 import type { GameSettings } from '../../types';
 
-export const PLAYFIELD_WIDTH_MIN = 20;
-export const PLAYFIELD_WIDTH_MAX = 50;
+export const PLAYFIELD_WIDTH_MIN = 5;
+export const PLAYFIELD_WIDTH_MAX = 30;
 export const SCROLL_SPEED_MIN = 5;
 export const SCROLL_SPEED_MAX = 80;
 export const HISTORY_LIMIT_UNLIMITED = -1;
@@ -71,7 +71,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   noteSizeMultiplier: 1.0,
   receptorSizeMultiplier: 1.0,
   customSkinColors: ['#2e6b9e', '#eceff1', '#d32f2f', '#00b0ff', '#eab308'],
-  playfieldWidthPercent: 40,
+  playfieldWidthPercent: 15,
   selectedMods: [],
   bindPause: 'escape',
   bindRetry: 'r',

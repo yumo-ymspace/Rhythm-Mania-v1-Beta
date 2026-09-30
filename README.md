@@ -73,7 +73,7 @@ Replays are timestamped lane frames (schema v3, 1M local frame cap), exportable 
 
 ## Settings & storage
 
-Settings sections: General, Gameplay, Visual, Audio, Input, Miscellaneous. Notable defaults: 4K (`D F J K`), scroll `21`, offsets `0 ms`, playfield width `40%`, `renderDpr 1.5`, skin `argon`.
+Settings sections: General, Gameplay, Visual, Audio, Input, Miscellaneous. Notable defaults: 4K (`D F J K`), scroll `21`, offsets `0 ms`, playfield width `15%` (`5–30%`), `renderDpr 1.5`, skin `argon`.
 
 | Store | Data |
 | --- | --- |

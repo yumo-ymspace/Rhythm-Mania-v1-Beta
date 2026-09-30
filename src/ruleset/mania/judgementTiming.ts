@@ -61,3 +61,36 @@ export function getHoldTailJudgement(
 ): JudgementWindow {
   return resolveJudgementForError(endErrorMs, windows);
 }
+
+/**
+ * Lazer-compliant head/tap judgement as a JudgementWindow.
+ * Late Meh (errorMs > 0 && matched == 'bad') is impossible in lazer and
+ * converts to Miss. Use for all rice/head judgements.
+ */
+export function resolveLazerJudgementWindow(
+  errorMs: number,
+  windows: JudgementWindow[],
+): JudgementWindow {
+  const absoluteError = Math.abs(errorMs);
+  const matched = windows.find((window) => absoluteError <= window.windowMs) || windows[windows.length - 1];
+  if (errorMs > 0 && matched.type === 'bad') {
+    return windows.find((window) => window.type === 'miss') || windows[windows.length - 1];
+  }
+  return matched;
+}
+
+export const TAIL_RELEASE_LENIENCE = 1.5;
+
+/**
+ * Lazer-compliant tail judgement as a JudgementWindow.
+ * Applies 1.5x tail lenience (rawOffset / 1.5) plus the late-Meh -> Miss rule.
+ * Use for all hold-tail releases (v1/v2/v3) so the same physical release
+ * judges identically across rules versions.
+ */
+export function getLazerTailJudgementWindow(
+  rawOffsetMs: number,
+  windows: JudgementWindow[],
+): JudgementWindow {
+  const effectiveErrorMs = rawOffsetMs / TAIL_RELEASE_LENIENCE;
+  return resolveLazerJudgementWindow(effectiveErrorMs, windows);
+}

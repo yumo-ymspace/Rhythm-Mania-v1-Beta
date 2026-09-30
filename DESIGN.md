@@ -8,7 +8,7 @@
 | **Author** | Design (draft) |
 | **Date** | 2026-09-12 |
 | **Status** | Draft |
-| **App version** | `package.json` `"version": "latest"`; `metadata.json` / `index.html` title `v1 Beta`. `api/config.ts` + `api/health.ts` fall back to `0.9.8` only when metadata is missing |
+| **App version** | `package.json` `"version": "latest"`; `metadata.json` / `index.html` title `v1 Beta`. `api/config.ts` + `api/health.ts` fall back to `v1` only when metadata is missing |
 | **Visual SoT** | Every still under `visual-refs/` (measured). Not the previous `DESIGN.md`. Not the current React chrome |
 | **Behaviour SoT** | Shipped behaviour in `src/` (gameplay, scoring, storage), except where this document records a **user-locked override** |
 | **Audience** | Senior engineers implementing the lazer visual rebuild |

@@ -22,7 +22,12 @@ export const LAZER_COOKIE_MARK = `${LAZER_COOKIE_TITLE} ${LAZER_COOKIE_VERSION}`
 
 function splitCookieLabel(label: string): { title: string; version: string } {
   const trimmed = label.trim();
-  const match = trimmed.match(/^(.*?)\s+(v\d.*)\s*$/i);
+  // Display-only version tag: accepts `v` + anything (v1, v1 Beta, vBeta),
+  // bare numeric versions (1.0.0), and word channels (latest, beta, alpha,
+  // preview, rc, stable, next, dev, nightly, canary) with optional trailers.
+  // Gameplay version tags (PENAR, star-rating, beatmap Version, replay schema)
+  // stay numeric-only elsewhere; this splitter is user-facing chrome only.
+  const match = trimmed.match(/^(.*?)\s+(v\S.*|latest(?:\s+.*)?|beta(?:\s+.*)?|alpha(?:\s+.*)?|preview(?:\s+.*)?|rc(?:\s+.*)?|stable(?:\s+.*)?|next(?:\s+.*)?|dev(?:\s+.*)?|nightly(?:\s+.*)?|canary(?:\s+.*)?|\d[\w.\-]*(?:\s+.*)?)\s*$/i);
   if (match) return { title: match[1].trim() || trimmed, version: match[2].trim() };
   return { title: trimmed, version: '' };
 }

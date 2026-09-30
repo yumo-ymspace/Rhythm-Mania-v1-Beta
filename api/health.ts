@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     success: true,
     data: {
       status: 'ok',
-      version: metadata.version || '0.9.8',
+      version: metadata.version || 'v1',
       timestamp: new Date().toISOString(),
       environment: env.isProduction ? 'production' : 'development',
     },

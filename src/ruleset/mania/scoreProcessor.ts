@@ -128,12 +128,22 @@ export function computeModMultiplier(mods: string[] | undefined | null): number 
   if (!mods || mods.length === 0) return 1;
   let mult = 1;
   for (const modId of mods) {
-    const key = modId.startsWith('DA:') || modId.startsWith('DA_')
+    if (typeof modId !== 'string' || !modId) continue;
+    const upper = modId.toUpperCase();
+    const key = upper.startsWith('DA:') || upper.startsWith('DA_')
       ? 'DA'
-      : modId.startsWith('AC:') || modId.startsWith('AC_')
+      : upper.startsWith('AC:') || upper.startsWith('AC_')
         ? 'AC'
-        : modId;
-    const factor = MOD_SCORE_MULTIPLIERS[key] ?? MOD_SCORE_MULTIPLIERS[modId];
+        : upper === 'COVER' || upper === 'CO'
+          ? 'Cover'
+          : upper;
+    // Case-insensitive fallback: sanitized short-forms hit first; long-form
+    // aliases (e.g. ConstantSpeed) and lowercase inputs resolve here.
+    const factor =
+      MOD_SCORE_MULTIPLIERS[key] ??
+      MOD_SCORE_MULTIPLIERS[modId] ??
+      MOD_SCORE_MULTIPLIERS[upper] ??
+      MOD_SCORE_MULTIPLIERS[upper.charAt(0) + upper.slice(1).toLowerCase()];
     if (typeof factor === 'number') mult *= factor;
   }
   return mult;

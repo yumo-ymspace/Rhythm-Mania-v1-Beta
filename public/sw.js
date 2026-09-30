@@ -66,23 +66,45 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Claim clients immediately to let sw control the pages
-  event.waitUntil(self.clients.claim());
-  
-  // Clean up any stale caches from previous versions
+  // Claim clients and clean stale caches in a single waitUntil so neither
+  // task races the other.
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    (async () => {
+      await self.clients.claim();
+      const cacheNames = await caches.keys();
+      await Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME && cacheName !== BEATMAP_CACHE_NAME) {
             console.log('[Service Worker] Evicting stale cache:', cacheName);
             return caches.delete(cacheName);
           }
+          return Promise.resolve(false);
         })
       );
-    })
+      await trimCache(BEATMAP_CACHE_NAME, MAX_BEATMAP_ENTRIES);
+      await trimCache(CACHE_NAME, MAX_SHELL_ENTRIES);
+    })()
   );
 });
+
+const MAX_BEATMAP_ENTRIES = 50;
+const MAX_SHELL_ENTRIES = 200;
+
+async function trimCache(cacheName, maxEntries) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    if (keys.length > maxEntries) {
+      // Evict oldest-first (Cache keys() returns insertion order).
+      const excess = keys.length - maxEntries;
+      for (let i = 0; i < excess; i++) {
+        await cache.delete(keys[i]);
+      }
+    }
+  } catch {
+    /* cache trimming must never break activation */
+  }
+}
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
@@ -124,7 +146,8 @@ self.addEventListener('fetch', (event) => {
           console.log('[Service Worker] Downloading and caching beatmap file:', url.pathname);
           return fetch(event.request).then((networkResponse) => {
             if (networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
+              const clone = networkResponse.clone();
+              cache.put(event.request, clone).then(() => trimCache(BEATMAP_CACHE_NAME, MAX_BEATMAP_ENTRIES)).catch(() => {});
             }
             return networkResponse;
           }).catch((err) => {
@@ -151,7 +174,8 @@ self.addEventListener('fetch', (event) => {
           console.log('[Service Worker] Fetching background image from network:', url.pathname);
           return fetch(event.request).then((networkResponse) => {
             if (networkResponse.status === 200 || networkResponse.status === 304 || networkResponse.type === 'opaque') {
-              cache.put(event.request, networkResponse.clone());
+              const clone = networkResponse.clone();
+              cache.put(event.request, clone).then(() => trimCache(CACHE_NAME, MAX_SHELL_ENTRIES)).catch(() => {});
             }
             return networkResponse;
           });
@@ -162,10 +186,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 4. Network-First, Falling Back to Cache for core web application shell (HTML, JS, CSS, and metadata)
+  // Restricted to same-origin so third-party covers/assets are never written
+  // into the app-shell cache.
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
         if (
+          url.origin === self.location.origin &&
           event.request.url.startsWith('http') &&
           !url.pathname.startsWith('/api/') &&
           (networkResponse.status === 200 || networkResponse.status === 304)

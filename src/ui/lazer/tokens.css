@@ -2053,7 +2053,7 @@ html[data-ui="lazer"] {
 }
 
 .lazer-status-pill.is-graveyard {
-  background: rgba(255, 255, 255, 0.16);
+  background: #848b94;
   color: #2b2f36;
 }
 
@@ -2196,6 +2196,35 @@ html[data-ui="lazer"] {
   padding: 6px 26px 6px 16px;
   background: #22272A;
   clip-path: polygon(0 0, calc(100% - 9.6px) 0, calc(100% - 6.2px) 0.8px, calc(100% - 3.4px) 2.9px, calc(100% - 1.8px) 5.9px, calc(100% - 1.7px) 9.4px, calc(100% - 8.7px) calc(100% - 9.4px), calc(100% - 9.5px) calc(100% - 5.2px), calc(100% - 11.9px) calc(100% - 1.9px), calc(100% - 15.6px) calc(100% - 0.1px), calc(100% - 19.9px) 100%, 0 100%);
+}
+
+/* --- Details panels: the left-bottom song metadata restyled as the
+   reference HUD details card — an upper metadata box plus a lower wide
+   strip, both with the shell's 10.1° slanted right edge (top wider) and
+   Slant Fillet rounds on the two right joints. Same #22272A family fill
+   at 85% (a touch darker than the wedge so the card reads as one panel),
+   flat fill only: no borders, shadows, or sheens, clip-path would cut
+   them. Inner cells are plain label/value text (no per-cell boxes), like
+   the reference card. Content right padding clears the max slant inset
+   (24.5px / 21.0px) + 16px.
+   Assumed heights (content is fixed: 2x2 stat grid / label+name+note, so
+   they hold unless type sizes change): upper H=100 -> straight slant run
+   100 x tan(10.1°) ≈ 17.8px; lower H=80 -> run ≈ 14.3px. TR joint is the
+   acute 79.9° joint (T = 8/tan(40°) ≈ 9.6px), BR is the obtuse 100.1°
+   joint (T = 8/tan(50°) ≈ 6.7px); arcs sampled every ~25°, segment angles
+   flow 0° -> 10° -> 30° -> 50° -> 70° -> 90° -> 100° (slant) -> 110° ->
+   130° -> 150° -> 170° -> 180° with no flat or kink. Measure live and
+   retune if the content heights change. --- */
+.lazer-song-details-box {
+  padding: 12px 40px 12px 16px;
+  background: rgba(34, 39, 42, 0.85);
+  clip-path: polygon(0px 0, calc(100% - 9.6px) 0, calc(100% - 6.8px) 0.5px, calc(100% - 4.4px) 1.9px, calc(100% - 2.6px) 4px, calc(100% - 1.7px) 6.6px, calc(100% - 1.7px) 9.4px, calc(100% - 16.6px) calc(100% - 6.6px), calc(100% - 17.6px) calc(100% - 4px), calc(100% - 19.4px) calc(100% - 1.9px), calc(100% - 21.8px) calc(100% - 0.5px), calc(100% - 24.5px) 100%, 0px 100%);
+}
+
+.lazer-song-details-subbox {
+  padding: 10px 36px 10px 16px;
+  background: rgba(34, 39, 42, 0.85);
+  clip-path: polygon(0px 0, calc(100% - 9.6px) 0, calc(100% - 6.8px) 0.5px, calc(100% - 4.4px) 1.9px, calc(100% - 2.6px) 4px, calc(100% - 1.7px) 6.6px, calc(100% - 1.7px) 9.4px, calc(100% - 13.1px) calc(100% - 6.6px), calc(100% - 14px) calc(100% - 4px), calc(100% - 15.8px) calc(100% - 1.9px), calc(100% - 18.2px) calc(100% - 0.5px), calc(100% - 21px) 100%, 0px 100%);
 }
 
 /* Tabs + ranking/details body sit below the flush wedge with left gutter. */
@@ -2762,6 +2791,10 @@ html[data-ui="lazer"] {
 .lazer-status-pill,
 .lazer-song-wedge,
 .lazer-song-wedge *,
+.lazer-song-details-box,
+.lazer-song-details-box *,
+.lazer-song-details-subbox,
+.lazer-song-details-subbox *,
 .lazer-song-filter-stack,
 .lazer-song-filter-stack * {
   font-family: "Nunito", Inter, sans-serif;
@@ -2793,6 +2826,11 @@ html[data-ui="lazer"] {
   .lazer-song-infobox {
     margin: 6px 0 0 -16px;
     padding: 8px 12px 8px 16px;
+    clip-path: none;
+    border-radius: 8px;
+  }
+  .lazer-song-details-box,
+  .lazer-song-details-subbox {
     clip-path: none;
     border-radius: 8px;
   }
@@ -3055,37 +3093,46 @@ html[data-ui="lazer"] {
 }
 
 /* Sort/group/collection: each label pill and its dropdown are JOINED
-   into one unit (gap: 0 in the markup). Both keep the same 10.1°
-   (H = 28px, S = 5.0px, R4) so the pair still reads as one slanted
-   parallelogram. The OUTER edges (label left, select right) keep the
-   full R4 Slant Fillet arc. The INNER edges are a SLANTED DIVIDER,
-   parallel to the outer edges (10.1°, offsets 5px over H=28): the label
-   is cut from (100%,0) to (100% - 5px,100%) and the select from
-   (5px,0) to (0,100%). A parallel cut between two side-by-side boxes
-   would leave a wedge gap, so the select is pulled left by the slant
-   (margin-left: -5px) to nest under the label; its left padding and
-   min-width are bumped by the same 5px so its content and right edge
-   stay put. CRUCIAL: border-radius must be DIRECTIONAL — it rounds the
-   painted background even inside the clip-path, so a plain 6px would
-   show round outer corners on the dividing edge. Rounded only on the
-   outer edge; inner corners 0. Dropdown popups stay unclipped
-   rectangles (siblings of the clipped buttons; the row has no
-   clip-path). Hover brightens the fill. 16px padding clears ~3.9px. */
+   into one unit (gap: 0 in the markup). Both keep the same 10.1° outer
+   slant lean (H = 28px, S = 5.0px) with the left-side R4 cornering
+   throughout. The INNER joint is a SLANTED ROUNDED OVERLAP: the label's
+   right end leans at the same 10.1° (5px run over H=28, top wider) with
+   baked R4 rounds where it meets the top/bottom edges — TR is the acute
+   79.9° joint (T = 4/tan(40°) ≈ 4.8px), BR the obtuse 100.1° joint
+   (T = 4/tan(50°) ≈ 3.4px), arcs sampled every ~25° so segment angles flow
+   0° -> 10° -> 30° -> 50° -> 70° -> 90° -> 100° (slant) -> 110° -> 130° ->
+   150° -> 170° -> 180° with no flat or kink. The select nests 12px
+   underneath the label (margin-left: -12px) so the value box reads as
+   tucked under the label's slanted rounded end, seamlessly one control.
+   The select's OUTER right end carries the SAME R4 cornering as the left
+   side (same 10.1° slant, same R4 arcs) so both ends of the pair round
+   identically. The label paints above (position + z-index, opaque fill);
+   the select's left slanted divider hides fully in the overlap. The
+   select's left padding and min-width are bumped by the same 7px delta
+   (21->28, 101->108) so its content and right edge stay put. CRUCIAL:
+   border-radius stays DIRECTIONAL — it rounds the painted background even
+   inside the clip-path, so the label keeps 6px 0 0 6px and the select
+   0 6px 6px 0 (rounds would show on the dividing edge otherwise).
+   Dropdown popups stay unclipped rectangles (siblings of the clipped
+   buttons; the row has no clip-path). Hover brightens the fill. 16px
+   padding clears the 8.3px max inset. */
 .lazer-song-filter-row .lazer-filter-tab {
+  position: relative;
+  z-index: 1;
   padding: 5px 16px;
   font-size: 12px;
   background: #384247;
   border: 1px solid transparent;
   border-radius: 6px 0 0 6px;
   box-shadow: none;
-  clip-path: polygon(4.4px 3.3px, 4.9px 2.0px, 5.8px 0.9px, 7.0px 0.2px, 8.3px 0px, 100% 0px, calc(100% - 5px) 100%, 8.3px 100%, 3.6px calc(100% - 0.2px), 2.6px calc(100% - 0.7px), 1.7px calc(100% - 1.4px), 1.1px calc(100% - 2.4px), 0.8px calc(100% - 3.5px), 0.8px calc(100% - 4.7px));
+  clip-path: polygon(4.4px 3.3px, 4.9px 2.0px, 5.8px 0.9px, 7.0px 0.2px, 8.3px 0px, calc(100% - 4.8px) 0px, calc(100% - 3.4px) 0.2px, calc(100% - 2.2px) 0.9px, calc(100% - 1.3px) 2px, calc(100% - 0.8px) 3.3px, calc(100% - 0.8px) 4.7px, calc(100% - 4.4px) calc(100% - 3.3px), calc(100% - 4.9px) calc(100% - 2px), calc(100% - 5.8px) calc(100% - 0.9px), calc(100% - 7px) calc(100% - 0.2px), calc(100% - 8.3px) 100%, 8.3px 100%, 3.6px calc(100% - 0.2px), 2.6px calc(100% - 0.7px), 1.7px calc(100% - 1.4px), 1.1px calc(100% - 2.4px), 0.8px calc(100% - 3.5px), 0.8px calc(100% - 4.7px));
 }
 
 .lazer-song-filter-row .lazer-filter-select {
-  padding: 5px 16px 5px 21px;
+  padding: 5px 16px 5px 28px;
   font-size: 12px;
-  min-width: 101px;
-  margin-left: -5px;
+  min-width: 108px;
+  margin-left: -12px;
   background: #22272a;
   border: 1px solid transparent;
   border-radius: 0 6px 6px 0;
@@ -3214,7 +3261,7 @@ html[data-ui="lazer"] {
 
 .lazer-now-playing-meta {
   position: absolute;
-  top: 12px;
+  top: 20px;
   left: 15px;
   right: 15px;
   display: flex;
@@ -3262,12 +3309,12 @@ html[data-ui="lazer"] {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 10px;
-  height: 55px;
+  bottom: 0;
+  height: 65px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
+  padding: 5px 14px 14px;
   background: rgba(0, 0, 0, 0.5);
 }
 

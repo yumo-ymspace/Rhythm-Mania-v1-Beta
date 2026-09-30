@@ -43,14 +43,14 @@ export function parseMediaPaths(beatmapFileContent: string): ParsedMediaPaths {
     const trimmed = line.trim();
 
     if (trimmed.toLowerCase().startsWith('audiofilename:')) {
-      audioFilename = trimmed.substring(trimmed.indexOf(':') + 1).replace(/["']/g, '').trim();
+      audioFilename = sanitizeMediaFilename(trimmed.substring(trimmed.indexOf(':') + 1).replace(/["']/g, '').trim());
     }
 
     const videoMatch = trimmed.match(videoRegex);
     if (videoMatch && videoMatch[2]) {
       const parsedStart = Number(videoMatch[1]);
       videoStartTime = Number.isFinite(parsedStart) ? parsedStart : 0;
-      videoFilename = videoMatch[2].replace(/['"]/g, '').trim();
+      videoFilename = sanitizeMediaFilename(videoMatch[2].replace(/['"]/g, '').trim());
     }
 
     const bgMatch = trimmed.match(bgRegex);
@@ -59,11 +59,29 @@ export function parseMediaPaths(beatmapFileContent: string): ParsedMediaPaths {
       if (rawBg.includes(',')) {
         rawBg = rawBg.split(',')[0];
       }
-      bgFilename = rawBg.replace(/['"]/g, '').trim();
+      bgFilename = sanitizeMediaFilename(rawBg.replace(/['"]/g, '').trim());
     }
   }
 
   return { audioFilename, videoFilename, bgFilename, videoStartTime };
+}
+
+function sanitizeMediaFilename(raw: string): string {
+  if (!raw) return '';
+  const cleaned = raw.slice(0, 512).trim();
+  // Reject absolute paths, drive letters, traversals, and controls.
+  // Basename matching downstream means these can never resolve safely.
+  if (
+    !cleaned ||
+    cleaned.includes('..') ||
+    cleaned.startsWith('/') ||
+    cleaned.startsWith('\\') ||
+    /^[a-zA-Z]:/.test(cleaned) ||
+    /[\u0000-\u001f\u007f]/.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
 }
 
 /**

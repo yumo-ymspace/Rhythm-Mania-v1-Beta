@@ -125,10 +125,10 @@ export function handleCors(req: VercelRequest, res: VercelResponse): boolean {
   if (typeof requestOrigin === 'string' && isAllowedOrigin(requestOrigin)) {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', requestOrigin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Type, Authorization'
+      'X-Requested-With, Accept, Accept-Version, Content-Type'
     );
     res.setHeader('Vary', 'Origin');
   }
@@ -142,6 +142,15 @@ export function handleCors(req: VercelRequest, res: VercelResponse): boolean {
 
 export function isSameOriginRequest(req: VercelRequest): boolean {
   if (!validateRequestOrigin(req)) return false;
+
+  // Fail closed when neither Origin nor Referer is present on state-changing
+  // requests. GET-only public endpoints may still allow headerless reads.
+  const method = (req.method || 'GET').toUpperCase();
+  const hasOrigin = typeof req.headers.origin === 'string' && req.headers.origin.trim() !== '';
+  const hasReferer = typeof req.headers.referer === 'string' && req.headers.referer.trim() !== '';
+  if (!hasOrigin && !hasReferer && method !== 'GET' && method !== 'OPTIONS' && method !== 'HEAD') {
+    return false;
+  }
 
   const expectedOrigin = getRequestOrigin(req);
   const origin = req.headers.origin;
@@ -164,7 +173,9 @@ export function isSameOriginRequest(req: VercelRequest): boolean {
     }
   }
 
-  return true;
+  // Headerless GET/HEAD/OPTIONS reads are allowed (public catalog data);
+  // all other headerless methods were rejected above.
+  return method === 'GET' || method === 'OPTIONS' || method === 'HEAD';
 }
 
 export function requireSameOrigin(req: VercelRequest, res: VercelResponse): boolean {

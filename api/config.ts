@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     success: true,
     data: {
       appName: metadata.name || 'RhythmMania',
-      version: metadata.version || '0.9.8',
+      version: metadata.version || 'v1',
       supportedModes: [3],
       features: {
         accounts: false,

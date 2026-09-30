@@ -58,7 +58,7 @@ function collectExporterInfo(): ReplayClientInfo | null {
       timezoneOffset,
       screenWidth: typeof window !== 'undefined' ? window.screen?.width : undefined,
       screenHeight: typeof window !== 'undefined' ? window.screen?.height : undefined,
-      appVersion: 'v0.9.4',
+      appVersion: 'v1',
     };
   } catch { return null; }
 }
@@ -93,8 +93,12 @@ export function parseReplayImport(
   availableBeatmaps: Beatmap[] = []
 ): { records: PlayHistoryRecord[]; rejectedCount: number } {
   if (typeof text !== 'string') return { records: [], rejectedCount: 1 };
+  // Size-check on the raw input before trim/parse to avoid 2x transient memory.
+  if (new TextEncoder().encode(text).byteLength > MAX_IMPORT_FILE_BYTES) {
+    return { records: [], rejectedCount: 1 };
+  }
   const stripped = text.trim().replace(/^\uFEFF/, '');
-  if (!stripped || new TextEncoder().encode(stripped).byteLength > MAX_IMPORT_FILE_BYTES) {
+  if (!stripped) {
     return { records: [], rejectedCount: 1 };
   }
   let parsed: unknown;
@@ -108,18 +112,18 @@ export function parseReplayImport(
   if (Array.isArray(parsed)) {
     rawRecords = parsed;
   } else if (parsed && typeof parsed === 'object') {
-    const envelope = parsed as { records?: unknown; scoreState?: unknown; data?: unknown };
+    const envelope = parsed as { format?: unknown; records?: unknown; scoreState?: unknown; data?: unknown };
+    if (typeof envelope.format === 'string' && envelope.format !== REPLAY_EXPORT_FORMAT) {
+      return { records: [], rejectedCount: 1 };
+    }
     if (Array.isArray(envelope.records)) {
       rawRecords = envelope.records;
     } else if (Array.isArray(envelope.data)) {
       rawRecords = envelope.data;
     } else if (envelope.scoreState && typeof envelope.scoreState === 'object') {
       rawRecords = [parsed];
-    } else {
-      const vals = Object.values(parsed as Record<string, unknown>);
-      const maybeArr = vals.find(v => Array.isArray(v) && v.length > 0 && typeof v[0] === 'object');
-      if (Array.isArray(maybeArr)) rawRecords = maybeArr as unknown[];
     }
+    // Generic vals.find fallback removed: only explicit records/data/single-record shapes accepted.
   }
 
   if (rawRecords.length === 0) return { records: [], rejectedCount: 1 };

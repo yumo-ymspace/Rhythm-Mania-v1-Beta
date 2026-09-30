@@ -272,23 +272,63 @@ function getKeyDotColor(keyCount: number): string {
 }
 
 /**
- * Returns rank status badge info (Ranked, Loved, Graveyard, or Local)
+ * Rank-status resolution shared by the carousel banner pill and the
+ * left-panel wedge pill. `rankStatus` is written at catalog-download time
+ * (OnlineBeatmapCatalog) and preserved by sanitizeSavedBeatmap; maps
+ * imported before that carry no status, and those (like any map without a
+ * known status) resolve to null so both pills show LOCAL instead of a
+ * false RANKED.
+ */
+export type DisplayRankStatus = 'ranked' | 'loved' | 'graveyard';
+
+export function normalizeRankStatus(value: unknown): DisplayRankStatus | null {
+  switch (String(value ?? '').toLowerCase()) {
+    case 'ranked':
+    case 'approved':
+    case 'qualified':
+      return 'ranked';
+    case 'loved':
+      return 'loved';
+    case 'graveyard':
+      return 'graveyard';
+    default:
+      return null;
+  }
+}
+
+export function resolveMapRankStatus(map: Beatmap | null | undefined): DisplayRankStatus | null {
+  if (!map) return null;
+  const rec = map as Beatmap & { rankStatus?: unknown; status?: unknown };
+  return normalizeRankStatus(rec.rankStatus ?? rec.status);
+}
+
+/**
+ * First known status across a pool of maps (a song's listed diffs), so a
+ * chart without a saved status still picks up its set's status from the
+ * already-downloaded listing before falling back to LOCAL.
+ */
+export function resolveMapsRankStatus(maps: Array<Beatmap | null | undefined> | undefined): DisplayRankStatus | null {
+  if (!maps) return null;
+  for (const map of maps) {
+    const status = resolveMapRankStatus(map);
+    if (status) return status;
+  }
+  return null;
+}
+
+/**
+ * Returns rank status badge info (Ranked, Loved, Graveyard, or Local).
+ * Unknown statuses (including legacy downloads imported without a saved
+ * status) show LOCAL — never a default RANKED.
  */
 function getRankStatusBadge(group: CarouselSongGroup): { label: string; bgClass: string } {
-  // Check if any map in group is server-approved / catalog map
-  const firstMap = group.maps[0];
-  if (firstMap) {
-    const status = (firstMap as any).rankStatus || (firstMap as any).status;
-    if (status) {
-      const s = String(status).toLowerCase();
-      if (s === 'ranked') return { label: 'RANKED', bgClass: 'lazer-status-pill is-ranked' };
-      if (s === 'loved') return { label: 'LOVED', bgClass: 'lazer-status-pill is-loved' };
-      if (s === 'graveyard') return { label: 'GRAVEYARD', bgClass: 'lazer-status-pill is-graveyard' };
-    }
-    if (firstMap.catalogMapId || firstMap.isServerMap) {
-      return { label: 'RANKED', bgClass: 'lazer-status-pill is-ranked' };
-    }
-  }
+  // Scan the whole listed group, not just the first diff: a chart without
+  // a saved status inherits its set's status from already-downloaded
+  // siblings before falling back to LOCAL.
+  const status = resolveMapsRankStatus(group.maps);
+  if (status === 'ranked') return { label: 'RANKED', bgClass: 'lazer-status-pill is-ranked' };
+  if (status === 'loved') return { label: 'LOVED', bgClass: 'lazer-status-pill is-loved' };
+  if (status === 'graveyard') return { label: 'GRAVEYARD', bgClass: 'lazer-status-pill is-graveyard' };
   return { label: 'LOCAL', bgClass: 'lazer-status-pill is-graveyard' };
 }
 

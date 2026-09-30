@@ -89,8 +89,9 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function getZipUncompressedSize(file: JSZip.JSZipObject): number {
-  return (file as ZipObjectWithData)._data?.uncompressedSize ?? 0;
+function getZipUncompressedSize(file: JSZip.JSZipObject): number | undefined {
+  const size = (file as ZipObjectWithData)._data?.uncompressedSize;
+  return typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : undefined;
 }
 
 function isReplaySource(value: unknown): value is ReplaySource {
@@ -178,14 +179,16 @@ export function validateZipLimits(zip: JSZip): void {
     const fileObj = files[key];
     if (fileObj.dir) continue;
     
-    // Read uncompressed size from the zip header if available
+    // Header sizes are advisory only: a lying header must not bypass the
+    // streaming budget enforced in extractZipEntry. Unknown sizes are
+    // treated as unknown (skipped here, enforced during streaming).
     const uncompressedSize = getZipUncompressedSize(fileObj);
     
-    if (uncompressedSize > MAX_SINGLE_ENTRY_SIZE_BYTES) {
+    if (uncompressedSize !== undefined && uncompressedSize > MAX_SINGLE_ENTRY_SIZE_BYTES) {
       throw new Error(`Security Exception: File "${key}" exceeds single entry size limit (${(uncompressedSize / (1024 * 1024)).toFixed(1)} MB, limit: ${(MAX_SINGLE_ENTRY_SIZE_BYTES / (1024 * 1024)).toFixed(1)} MB)`);
     }
     
-    totalUncompressedSize += uncompressedSize;
+    totalUncompressedSize += uncompressedSize ?? 0;
   }
   
   const totalLimit = MAX_TOTAL_UNCOMPRESSED_SIZE_BYTES;
@@ -199,7 +202,7 @@ export function validateZipLimits(zip: JSZip): void {
  */
 export function validateZipEntrySize(fileObj: JSZip.JSZipObject, name: string): void {
   const uncompressedSize = getZipUncompressedSize(fileObj);
-  if (uncompressedSize > MAX_SINGLE_ENTRY_SIZE_BYTES) {
+  if (uncompressedSize !== undefined && uncompressedSize > MAX_SINGLE_ENTRY_SIZE_BYTES) {
     throw new Error(`Security Exception: File "${name}" exceeds single entry size limit (${(uncompressedSize / (1024 * 1024)).toFixed(1)} MB, limit: ${(MAX_SINGLE_ENTRY_SIZE_BYTES / (1024 * 1024)).toFixed(1)} MB)`);
   }
 }
@@ -211,9 +214,23 @@ export function validateStringColor(color: unknown, defaultColor: string): strin
   if (typeof color !== 'string') return defaultColor;
   const hexRegex = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
   if (hexRegex.test(color)) return color;
-  
-  const rgbRegex = /^rgba?\((\s*\d+\s*,){2}\s*\d+\s*(,\s*[0-9.]+\s*)?\)$/;
-  if (rgbRegex.test(color)) return color;
+
+  const rgbMatch = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([0-9.]+)\s*)?\)$/);
+  if (rgbMatch) {
+    const r = Number(rgbMatch[1]);
+    const g = Number(rgbMatch[2]);
+    const b = Number(rgbMatch[3]);
+    const a = rgbMatch[4] !== undefined ? Number(rgbMatch[4]) : 1;
+    if (
+      Number.isInteger(r) && r >= 0 && r <= 255 &&
+      Number.isInteger(g) && g >= 0 && g <= 255 &&
+      Number.isInteger(b) && b >= 0 && b <= 255 &&
+      Number.isFinite(a) && a >= 0 && a <= 1
+    ) {
+      return color;
+    }
+    return defaultColor;
+  }
 
   const basicColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'white', 'black', 'gray', 'grey', 'cyan', 'magenta', 'transparent'];
   if (basicColors.includes(color.toLowerCase())) return color;
@@ -349,7 +366,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     laneSeparatorOpacity: clamp(settings.laneSeparatorOpacity, 0, 1, defaultSettings.laneSeparatorOpacity || 0.30),
     noteSizeMultiplier: 1.0,
     receptorSizeMultiplier: 1.0,
-     playfieldWidthPercent: clamp(settings.playfieldWidthPercent, widthMin, widthMax, Math.max(widthMin, Math.min(widthMax, defaultSettings.playfieldWidthPercent || 40))),
+     playfieldWidthPercent: clamp(settings.playfieldWidthPercent, widthMin, widthMax, Math.max(widthMin, Math.min(widthMax, defaultSettings.playfieldWidthPercent || 15))),
     selectedMods: selectedMods,
     bindPause: sanitizeString(settings.bindPause, defaultSettings.bindPause || 'escape', 15),
     bindRetry: sanitizeString(settings.bindRetry, defaultSettings.bindRetry || 'r', 15),
@@ -538,16 +555,24 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
     // Preserve existing v2/v3 fields if already populated
     schemaVersion: typeof record.schemaVersion === 'number' ? record.schemaVersion : undefined,
     replaySource: isReplaySource(record.replaySource) ? record.replaySource : undefined,
-    catalogSetId: typeof record.catalogSetId === 'string' || record.catalogSetId === null
-      ? record.catalogSetId
-      : (typeof (record as UnknownRecord).sourceSetId === 'number' && Number.isFinite((record as UnknownRecord).sourceSetId as number)
-        ? `osuapi_${(record as UnknownRecord).sourceSetId}`
-        : undefined),
-    catalogMapId: typeof record.catalogMapId === 'string' || record.catalogMapId === null ? record.catalogMapId : undefined,
-    chartRevisionId: typeof record.chartRevisionId === 'string' || record.chartRevisionId === null ? record.chartRevisionId : undefined,
-    checksum: typeof record.checksum === 'string' ? record.checksum.slice(0, 128) : undefined,
+    catalogSetId: typeof record.catalogSetId === 'string'
+      ? sanitizeString(record.catalogSetId, 128) || undefined
+      : record.catalogSetId === null
+        ? null
+        : (typeof (record as UnknownRecord).sourceSetId === 'number' && Number.isFinite((record as UnknownRecord).sourceSetId as number)
+          ? `osuapi_${(record as UnknownRecord).sourceSetId}`
+          : undefined),
+    catalogMapId: typeof record.catalogMapId === 'string'
+      ? sanitizeString(record.catalogMapId, 128) || undefined
+      : record.catalogMapId === null ? null : undefined,
+    chartRevisionId: typeof record.chartRevisionId === 'string'
+      ? sanitizeString(record.chartRevisionId, 256) || undefined
+      : record.chartRevisionId === null ? null : undefined,
+    checksum: typeof record.checksum === 'string' && /^[a-f0-9]{32}$|^[a-f0-9]{64}$/i.test(record.checksum.trim())
+      ? record.checksum.trim().slice(0, 128)
+      : undefined,
     checksumAlgorithm: record.checksumAlgorithm === 'md5' || record.checksumAlgorithm === 'sha256' ? record.checksumAlgorithm : undefined,
-    beatmapHash: typeof record.beatmapHash === 'string' ? record.beatmapHash : undefined,
+    beatmapHash: typeof record.beatmapHash === 'string' ? sanitizeString(record.beatmapHash, 128) || undefined : undefined,
     uploadEligibility: isUploadEligibility(record.uploadEligibility) ? record.uploadEligibility : undefined,
     uploadStatus: isUploadStatus(record.uploadStatus) ? record.uploadStatus : undefined,
     isServerCatalogMap: typeof record.isServerCatalogMap === 'boolean' ? record.isServerCatalogMap : undefined,
@@ -558,8 +583,8 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
       : undefined,
     sourceSetId: typeof (record as UnknownRecord).sourceSetId === 'number' && Number.isFinite((record as UnknownRecord).sourceSetId as number) ? (record as UnknownRecord).sourceSetId as number : null,
     sourceChartId: typeof (record as UnknownRecord).sourceChartId === 'number' && Number.isFinite((record as UnknownRecord).sourceChartId as number) ? (record as UnknownRecord).sourceChartId as number : null,
-    beatmapDifficulty: typeof (record as UnknownRecord).beatmapDifficulty === 'string' ? String((record as UnknownRecord).beatmapDifficulty).slice(0, 100) : undefined,
-    playedBy: typeof (record as UnknownRecord).playedBy === 'string' ? String((record as UnknownRecord).playedBy).slice(0, 80) : null,
+    beatmapDifficulty: typeof (record as UnknownRecord).beatmapDifficulty === 'string' ? sanitizeString(String((record as UnknownRecord).beatmapDifficulty), 100) || undefined : undefined,
+    playedBy: typeof (record as UnknownRecord).playedBy === 'string' ? sanitizeString(String((record as UnknownRecord).playedBy), 80) || null : null,
     clientInfo: isRecord((record as UnknownRecord).clientInfo) ? (record as UnknownRecord).clientInfo as unknown as PlayHistoryRecord['clientInfo'] : null,
   };
 

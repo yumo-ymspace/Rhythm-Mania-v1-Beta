@@ -71,8 +71,8 @@ function integer(value: unknown, min: number, max: number): value is number {
 export function decodeCanonicalChart(value: unknown): CanonicalChart | null {
   if (!isRecord(value) || value.mode !== 3 || !integer(value.keyCount, 1, 10)) return null;
   if (
-    typeof value.chartRevisionId !== 'string' || value.chartRevisionId.length < 1 ||
-    typeof value.checksum !== 'string' || !finiteNumber(value.overallDifficulty, 0, 10) ||
+    typeof value.chartRevisionId !== 'string' || value.chartRevisionId.length < 1 || value.chartRevisionId.length > 256 ||
+    typeof value.checksum !== 'string' || !/^[a-f0-9]{32}$|^[a-f0-9]{64}$/i.test(value.checksum) || !finiteNumber(value.overallDifficulty, 0, 10) ||
     !finiteNumber(value.hpDrainRate, 0, 10) || !finiteNumber(value.durationMs, 1, 86_400_000) ||
     (value.checksumAlgorithm !== 'md5' && value.checksumAlgorithm !== 'sha256') ||
     !Array.isArray(value.notes) || value.notes.length === 0 || value.notes.length > MAX_NOTES ||

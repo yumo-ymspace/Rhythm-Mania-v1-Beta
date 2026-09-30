@@ -233,6 +233,15 @@ export function sanitizeSavedBeatmap(raw: unknown): SavedBeatmap | null {
     }
   }
   const coverUrl = safeCoverUrl(raw.coverUrl) || (sourceSetId ? `https://assets.ppy.sh/beatmaps/${sourceSetId}/covers/slimcover@2x.jpg` : undefined);
+  // Rank status is written at catalog-download time (OnlineBeatmapCatalog);
+  // the allowlist must preserve it or every reload would drop it and the
+  // song banners would fall back to LOCAL. Source truth is kept verbatim
+  // (approved/qualified included); display mapping lives in the resolver.
+  const rankStatusRaw = typeof raw.rankStatus === 'string' ? raw.rankStatus.toLowerCase().slice(0, 16) : undefined;
+  const rankStatus = rankStatusRaw === 'ranked' || rankStatusRaw === 'approved' || rankStatusRaw === 'qualified'
+    || rankStatusRaw === 'loved' || rankStatusRaw === 'graveyard' || rankStatusRaw === 'pending' || rankStatusRaw === 'wip'
+    ? rankStatusRaw
+    : undefined;
   const result: SavedBeatmap = {
     id: safeString(raw.id, 300),
     title: safeString(raw.title, 300, 'Unknown Title'),
@@ -258,9 +267,9 @@ export function sanitizeSavedBeatmap(raw: unknown): SavedBeatmap | null {
     videoStartTime: raw.videoStartTime === undefined ? undefined : finiteNumber(raw.videoStartTime, -1000000, 10000000) ?? undefined,
     previewTime: raw.previewTime === undefined ? undefined : finiteNumber(raw.previewTime, -1, 10000000) ?? undefined,
     mode: 3,
-    catalogSetId: typeof raw.catalogSetId === 'string' || raw.catalogSetId === null ? raw.catalogSetId : null,
+        catalogSetId: typeof raw.catalogSetId === 'string' || raw.catalogSetId === null ? raw.catalogSetId : null,
     catalogMapId: typeof raw.catalogMapId === 'string' || raw.catalogMapId === null ? raw.catalogMapId : null,
-    beatmapHash: safeString(raw.beatmapHash, 256) || undefined,
+    rankStatus,    beatmapHash: safeString(raw.beatmapHash, 256) || undefined,
     isServerMap: Boolean(raw.isServerMap),
     chartRevisionId: typeof raw.chartRevisionId === 'string' ? raw.chartRevisionId : undefined,
     checksum: safeString(raw.checksum, 128) || undefined,

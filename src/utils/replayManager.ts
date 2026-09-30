@@ -23,6 +23,13 @@ export const CURRENT_REPLAY_SCHEMA_VERSION = 3;
 export const RMR_EXTENSION = '.rmr';
 export const RMR_MIME_TYPE = 'application/x-rhythmmania-replay';
 
+function sanitizeIdString(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string') return '';
+  let cleaned = value.replace(/blob:/gi, '').replace(/javascript:/gi, '');
+  cleaned = cleaned.replace(/[^a-zA-Z0-9_\-\s.#:()]/g, '').trim();
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
+}
+
 export function collectClientInfo(): import('../types').ReplayClientInfo {
   let browser = 'unknown';
   let os = 'unknown';
@@ -251,41 +258,44 @@ export function migrateHistoryRecord(rawRecord: unknown, availableBeatmaps: Beat
   const rawKeyCount = typeof rawRecord.keyCount === 'number' && Number.isInteger(rawRecord.keyCount) && isSupportedKeyCount(rawRecord.keyCount) ? rawRecord.keyCount : 4;
   const rawReplaySource = rawRecord.replaySource === 'guest-local' || rawRecord.replaySource === 'account-local' || rawRecord.replaySource === 'server-remote' || rawRecord.replaySource === 'imported'
     ? rawRecord.replaySource : 'guest-local';
-  const recordId = typeof rawRecord.id === 'string' ? rawRecord.id : `replay_${Date.now()}`;
+  const recordId = typeof rawRecord.id === 'string' ? sanitizeIdString(rawRecord.id, 50) || `replay_${Date.now()}` : `replay_${Date.now()}`;
   const srcSet = typeof rawRecord.sourceSetId === 'number' && Number.isFinite(rawRecord.sourceSetId) ? rawRecord.sourceSetId : null;
   const srcChart = typeof rawRecord.sourceChartId === 'number' && Number.isFinite(rawRecord.sourceChartId) ? rawRecord.sourceChartId : null;
+  const cleanChecksum = typeof rawRecord.checksum === 'string' && /^[a-f0-9]{32}$|^[a-f0-9]{64}$/i.test(rawRecord.checksum.trim())
+    ? rawRecord.checksum.trim().slice(0, 128)
+    : undefined;
   return {
     id: recordId,
     timestamp: typeof rawRecord.timestamp === 'number' && Number.isFinite(rawRecord.timestamp) ? rawRecord.timestamp : Date.now(),
-    beatmapId,
-    beatmapTitle: typeof rawRecord.beatmapTitle === 'string' ? rawRecord.beatmapTitle : '',
-    beatmapArtist: typeof rawRecord.beatmapArtist === 'string' ? rawRecord.beatmapArtist : '',
+    beatmapId: sanitizeIdString(beatmapId, 100),
+    beatmapTitle: typeof rawRecord.beatmapTitle === 'string' ? sanitizeIdString(rawRecord.beatmapTitle, 100) : '',
+    beatmapArtist: typeof rawRecord.beatmapArtist === 'string' ? sanitizeIdString(rawRecord.beatmapArtist, 100) : '',
     keyCount: rawKeyCount,
     score: typeof rawRecord.score === 'number' ? rawRecord.score : 0,
     accuracy: typeof rawRecord.accuracy === 'number' ? rawRecord.accuracy : 0,
     maxCombo: typeof rawRecord.maxCombo === 'number' ? rawRecord.maxCombo : 0,
-    grade: typeof rawRecord.grade === 'string' ? rawRecord.grade : 'F',
+    grade: typeof rawRecord.grade === 'string' ? sanitizeIdString(rawRecord.grade, 5) || 'F' : 'F',
     replayFrames: replayFrames as ReplayFrame[],
     recordedSettings: rawRecord.recordedSettings as PlayHistoryRecord['recordedSettings'],
     mods: rawMods,
     schemaVersion: CURRENT_REPLAY_SCHEMA_VERSION,
     replaySource: rawReplaySource,
-    catalogSetId: typeof rawRecord.catalogSetId === 'string' || rawRecord.catalogSetId === null ? rawRecord.catalogSetId : catalogInfo.catalogSetId,
-    catalogMapId: typeof rawRecord.catalogMapId === 'string' || rawRecord.catalogMapId === null ? rawRecord.catalogMapId : catalogInfo.catalogMapId,
-    beatmapHash: hash,
+    catalogSetId: typeof rawRecord.catalogSetId === 'string' ? sanitizeIdString(rawRecord.catalogSetId, 128) || catalogInfo.catalogSetId : rawRecord.catalogSetId === null ? null : catalogInfo.catalogSetId,
+    catalogMapId: typeof rawRecord.catalogMapId === 'string' ? sanitizeIdString(rawRecord.catalogMapId, 128) || catalogInfo.catalogMapId : rawRecord.catalogMapId === null ? null : catalogInfo.catalogMapId,
+    beatmapHash: typeof hash === 'string' ? sanitizeIdString(hash, 128) : hash,
     uploadEligibility: 'ineligible_local_map',
     isFailed,
     scoreState: { ...rawScoreState, failed: isFailed, recordId: rawScoreState.recordId || recordId } as ScoreState,
     uploadStatus: 'local_only',
      isServerCatalogMap,
-    chartRevisionId: typeof rawRecord.chartRevisionId === 'string' || rawRecord.chartRevisionId === null ? rawRecord.chartRevisionId : catalogInfo.chartRevisionId,
-    checksum: typeof rawRecord.checksum === 'string' ? rawRecord.checksum : undefined,
+    chartRevisionId: typeof rawRecord.chartRevisionId === 'string' ? sanitizeIdString(rawRecord.chartRevisionId, 256) || catalogInfo.chartRevisionId : rawRecord.chartRevisionId === null ? null : catalogInfo.chartRevisionId,
+    checksum: cleanChecksum,
     checksumAlgorithm: rawRecord.checksumAlgorithm === 'md5' || rawRecord.checksumAlgorithm === 'sha256' ? rawRecord.checksumAlgorithm : undefined,
     ...getHoldRulesInfo(rawRecord),
     sourceSetId: srcSet ?? (catalogInfo.catalogSetId ? Number(String(catalogInfo.catalogSetId).replace(/^osuapi_/, '')) || null : null),
     sourceChartId: srcChart,
-    beatmapDifficulty: typeof rawRecord.beatmapDifficulty === 'string' ? rawRecord.beatmapDifficulty.slice(0, 100) : undefined,
-    playedBy: typeof rawRecord.playedBy === 'string' ? rawRecord.playedBy.slice(0, 80) : null,
+    beatmapDifficulty: typeof rawRecord.beatmapDifficulty === 'string' ? sanitizeIdString(rawRecord.beatmapDifficulty, 100) || undefined : undefined,
+    playedBy: typeof rawRecord.playedBy === 'string' ? sanitizeIdString(rawRecord.playedBy, 80) || null : null,
     clientInfo: isRecord(rawRecord.clientInfo) ? rawRecord.clientInfo as unknown as PlayHistoryRecord['clientInfo'] : null,
   };
 }
