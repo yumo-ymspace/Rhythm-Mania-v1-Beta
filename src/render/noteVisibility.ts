@@ -122,7 +122,8 @@ export function getVisibleNotes(
   if (out) out.length = 0;
   const paddingLimit = 100;
   const up = settings.upsurfaceNoteMode;
-  const noteOpacityVal = settings.noteOpacity ?? 1.0;
+  // Note opacity is permanently locked at 100% for all skins (non-adjustable).
+  const noteOpacityVal = 1.0;
   const coverState = computeCoverRatio(settings.selectedMods, combo, visualTime, breaks);
   const sorted = isSortedByTime(notes);
   const orderedNotes: readonly HitObject[] = sorted

@@ -15,6 +15,7 @@ import {
   Gamepad2,
   Keyboard,
   Monitor,
+  Paintbrush,
   SlidersHorizontal,
   Volume2,
   Wrench,
@@ -30,9 +31,11 @@ import {
 } from './defaultSettings';
 import { computeScrollTravelTimeMs } from '../../render/playfieldLayout';
 import BindingMatrix from './BindingMatrix';
+import LaneColorEditor from './LaneColorEditor';
+import SkinPicker from './SkinPicker';
 
 export type SectionId =
-  | 'general' | 'gameplay' | 'visual' | 'audio' | 'input' | 'miscellaneous';
+  | 'general' | 'gameplay' | 'visual' | 'audio' | 'input' | 'skins' | 'miscellaneous';
 
 export interface SectionDef {
   id: SectionId;
@@ -48,6 +51,7 @@ export const SECTIONS: SectionDef[] = [
   { id: 'visual',        label: 'Visual',        description: 'Display, video, and pixel ratio.',        icon: Monitor },
   { id: 'audio',         label: 'Audio',         description: 'Volumes and the universal audio offset.',          icon: Volume2 },
   { id: 'input',         label: 'Input',         description: 'Keyboard bindings per key count.',                 icon: Keyboard },
+  { id: 'skins',         label: 'Skins',         description: 'Skin selection, judgement text, lane separators, and lane colours.', icon: Paintbrush },
   { id: 'miscellaneous', label: 'Miscellaneous', description: 'Reset to defaults and other global actions.',      icon: Wrench },
 ];
 
@@ -93,6 +97,12 @@ export interface RowDef {
 const pct  = (v: number) => `${Math.round(v * 100)}%`;
 const num  = (v: number, s?: string) => `${v}${s ?? ''}`;
 const ms   = (v: number) => `${v}ms`;
+
+/** True when a non-argon (legacy/custom bar) skin is selected. Argon enforces its canonical palette. */
+const isNonArgonSkinSelected = (s: GameSettings): boolean => {
+  if (!s.skinId || s.skinId === 'argon') return false;
+  return s.squareRenderStyle === 'rhythmplus' || s.squareRenderStyle === 'rhythmplus-dynamic';
+};
 
 export const ROWS: RowDef[] = [
   // ── GENERAL ───────────────────────────────────────────────────────────
@@ -293,6 +303,51 @@ export const ROWS: RowDef[] = [
     description: '',
     control: { kind: 'custom', render: (api) => <BindingMatrix {...api} /> },
     defaultValue: DEFAULT_SETTINGS.bindings,
+  },
+
+  // ── SKINS ─────────────────────────────────────────────────────────────
+  {
+    id: 'skinId', section: 'skins', label: 'Skin',
+    description: 'Argon default or a legacy RhythmPlus bar skin. Argon enforces canonical column colours per key count.',
+    control: { kind: 'custom', render: (api) => <SkinPicker settings={api.settings} update={api.update} /> },
+    defaultValue: DEFAULT_SETTINGS.skinId,
+    keywords: ['skin', 'theme', 'argon', 'rhythmplus', 'legacy', 'classic', 'dynamic', 'appearance'],
+  },
+  {
+    id: 'judgementOpacity', section: 'skins', label: 'Judgement text opacity',
+    description: 'Set the visibility of PERFECT, GREAT, and other judgements.',
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
+    defaultValue: DEFAULT_SETTINGS.judgementOpacity,
+    keywords: ['judgement', 'judgment', 'text', 'perfect', 'great', 'opacity', 'skin'],
+  },
+  {
+    id: 'judgementSize', section: 'skins', label: 'Judgement text size',
+    description: 'Scale judgement text from 10% to 100% of its full size (default 50%).',
+    control: { kind: 'slider', min: 0.1, max: 1.0, step: 0.05, format: pct, percent: true },
+    defaultValue: DEFAULT_SETTINGS.judgementSize,
+    keywords: ['judgement', 'judgment', 'text', 'size', 'scale', 'skin'],
+  },
+  {
+    id: 'judgementPositionY', section: 'skins', label: 'Judgement text position',
+    description: 'Vertical position as a percentage of the playfield height measured from the top — 20% sits near the top, 85% sits down by the receptors (default 50%, centre).',
+    control: { kind: 'slider', min: 20, max: 85, step: 1, suffix: '%' },
+    defaultValue: DEFAULT_SETTINGS.judgementPositionY,
+    keywords: ['judgement', 'judgment', 'text', 'position', 'vertical', 'height', 'skin'],
+  },
+  {
+    id: 'laneSeparatorOpacity', section: 'skins', label: 'Lane separator opacity',
+    description: 'Set the visibility of lane divider lines.',
+    control: { kind: 'slider', min: 0, max: 1, step: 0.05, format: pct, percent: true },
+    defaultValue: DEFAULT_SETTINGS.laneSeparatorOpacity,
+    keywords: ['lane', 'separator', 'divider', 'line', 'opacity', 'skin'],
+  },
+  {
+    id: 'receptorColorsByKeyCount', section: 'skins', label: 'Lane colours',
+    description: 'Set each lane colour for every supported key count. Hidden while the Argon skin is selected (Argon uses its canonical palette).',
+    control: { kind: 'custom', render: (api) => <LaneColorEditor settings={api.settings} update={api.update} /> },
+    defaultValue: DEFAULT_SETTINGS.receptorColorsByKeyCount,
+    keywords: ['lane', 'colour', 'color', 'receptor', 'column', 'palette', 'skin'],
+    showWhen: isNonArgonSkinSelected,
   },
 
   // ── MISCELLANEOUS ─────────────────────────────────────────────────────

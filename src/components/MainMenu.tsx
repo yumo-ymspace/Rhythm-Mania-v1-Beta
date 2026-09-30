@@ -30,11 +30,11 @@ import { playMenuSound } from '../utils/menuSounds';
 export type LazerMenuPhase = 'idle' | 'top-level' | 'play';
 
 export interface MainMenuItem {
-  id: 'select' | 'history' | 'skins' | 'settings';
+  id: 'select' | 'history' | 'settings';
   title: string;
   subtitle: string;
   badge?: string;
-  icon: 'play' | 'history' | 'skins' | 'settings';
+  icon: 'play' | 'history' | 'settings';
   accentColor: string;
   gradient: string;
   primary?: boolean;
@@ -60,15 +60,6 @@ export const MAIN_MENU_ITEMS: readonly MainMenuItem[] = [
     icon: 'history',
     accentColor: '#f59e0b',
     gradient: 'from-[#d97706] to-[#f59e0b]',
-  },
-  {
-    id: 'skins',
-    title: 'Skins',
-    subtitle: 'Argon & playfield themes',
-    badge: 'THEMES',
-    icon: 'skins',
-    accentColor: '#06b6d4',
-    gradient: 'from-[#0284c7] to-[#06b6d4]',
   },
   {
     id: 'settings',
@@ -125,7 +116,7 @@ function isIdleActivationKey(event: KeyboardEvent): boolean {
 }
 
 export type MainMenuProps = {
-  onNavigate: (screen: 'select' | 'history' | 'skins') => void;
+  onNavigate: (screen: 'select' | 'history') => void;
   onOpenSettings: () => void;
   onOpenBrowse?: () => void;
   phase?: LazerMenuPhase;

@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { RotateCcw, X } from 'lucide-react';
 import type { GameSettings } from '../../types';
 import type { SectionId, RowDef } from './settingsRegistry';
 import { SECTIONS, SUBGROUPS, ROWS } from './settingsRegistry';
@@ -22,6 +22,7 @@ import SettingsSelect from './controls/SettingsSelect';
 import SettingsButton from './controls/SettingsButton';
 import SettingsText from './controls/SettingsText';
 import SettingsSearchBar from './SettingsSearchBar';
+import { getSelectedStyle, styleSettings } from './skinStyles';
 
 interface SettingsPaneProps {
   activeSection: SectionId;
@@ -130,12 +131,8 @@ export default function SettingsPane({
       );
     } else if (row.control.kind === 'slider') {
       const isPercent = row.control.percent === true;
-      const baseMin = (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
-          ? 0.60
-        : row.control.min;
-      const baseMax = (row.id === 'noteSizeMultiplier' || row.id === 'receptorSizeMultiplier')
-          ? 1.00
-        : row.control.max;
+      const baseMin = row.control.min;
+      const baseMax = row.control.max;
       // Percent sliders show whole 0-100 integers and parse back to 0-1.
       const sliderMin = isPercent ? Math.round(baseMin * 100) : baseMin;
       const sliderMax = isPercent ? Math.round(baseMax * 100) : baseMax;
@@ -224,6 +221,77 @@ export default function SettingsPane({
 
        if (row.id === 'bindings') {
         return <div key={row.id} className="w-full">{controlNode}</div>;
+      }
+      if (row.id === 'skinId') {
+        // Composite setting (skinId + squareRenderStyle): compare the resolved
+        // style (default is Argon) and reset both keys together.
+        const skinChanged = getSelectedStyle(settings) !== 'argon';
+        return (
+          <div key={row.id} className="settings-row group">
+            <div className="settings-rail" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] font-sans font-medium text-[#ececf5] select-none flex-1">
+                  {row.label}
+                </span>
+              </div>
+              <p className="text-xs text-[#a3a3c2] font-sans mt-1">{row.description}</p>
+              <div className="mt-2 w-full">{controlNode}</div>
+            </div>
+            <div className="flex items-start justify-end gap-1 shrink-0 -mr-1">
+              {skinChanged ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    update(styleSettings('argon'));
+                  }}
+                  title={`Reset "${row.label}" to default`}
+                  aria-label={`Reset "${row.label}" to default`}
+                  className="flex w-7 h-9 shrink-0 items-center justify-center rounded-lg border border-[#a99bff]/40 bg-[#8a7dff]/30 text-white hover:bg-[#8a7dff]/45 active:scale-95 transition cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              ) : (
+                <span aria-hidden="true" className="w-7 h-9 shrink-0" />
+              )}
+            </div>
+          </div>
+        );
+      }
+      if (row.id === 'receptorColorsByKeyCount') {
+        return (
+          <div key={row.id} className="settings-row group">
+            <div className="settings-rail" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] font-sans font-medium text-[#ececf5] select-none flex-1">
+                  {row.label}
+                </span>
+              </div>
+              <p className="text-xs text-[#a3a3c2] font-sans mt-1">{row.description}</p>
+              <div className="mt-2 w-full">{controlNode}</div>
+            </div>
+            <div className="flex items-start justify-end gap-1 shrink-0 -mr-1">
+              {isChanged ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetRow(row.id);
+                  }}
+                  title={`Reset "${row.label}" to default`}
+                  aria-label={`Reset "${row.label}" to default`}
+                  className="flex w-7 h-9 shrink-0 items-center justify-center rounded-lg border border-[#a99bff]/40 bg-[#8a7dff]/30 text-white hover:bg-[#8a7dff]/45 active:scale-95 transition cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              ) : (
+                <span aria-hidden="true" className="w-7 h-9 shrink-0" />
+              )}
+            </div>
+          </div>
+        );
       }
     }
 

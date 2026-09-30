@@ -1871,7 +1871,9 @@ export default function GameplayCanvas({
   // Judgement scoring evaluator. explicitTime is the corrected event-time
   // audio clock; falls back to the last render-loop time for rAF-driven callers.
   // Per-column head lookup: the lane list is time-sorted, so advance the
-  // cursor past settled heads and scan only a small window. Falls back to a
+  // cursor past fully-settled notes and scan only a small window. The cursor
+  // is shared across head/active-hold/grace/release searches, so settling
+  // must be predicate-independent. Falls back to a
   // full scan when holds resolve out of order (re-press, grace, salvage).
   const findEarliestInColumn = (
     colIndex: number,
@@ -1883,17 +1885,26 @@ export default function GameplayCanvas({
     }
     let cursor = columnCursorRef.current[colIndex] || 0;
     if (cursor < 0) cursor = 0;
-    if (cursor >= lane.length) cursor = Math.max(0, lane.length - 1);
-    // Settle the cursor: heads that can never be hit again are skipped. Holds
-    // with an open tail stay pinned so re-presses still find them.
-    while (cursor < lane.length && !isHeadOpen(lane[cursor])) {
-      const n = lane[cursor];
-      const tailOpen = n.type === 'hold' && (
-        (n.holdState && n.holdState.isHeadJudged && !n.holdState.isTailJudged) ||
-        (n.isHit && !n.isReleased && !n.isHoldFailed) ||
-        (n.isMissed && !n.isHit && !n.isReleased && !n.isHoldFailed)
-      );
-      if (tailOpen) break;
+    if (cursor > lane.length) cursor = lane.length;
+    // Settle the cursor past notes that are fully resolved for EVERY lookup,
+    // never just "not open for this predicate". The same cursor is shared by
+    // head, active-hold, grace, and release searches; advancing past a note
+    // that is still hittable for another predicate (e.g. skipping unjudged
+    // taps while searching for an active hold) desyncs the lane so presses
+    // select a far-future note, read as too-early, and are ignored while the
+    // imminent note times out as a miss. Holds with an open tail stay pinned
+    // so re-presses still find them.
+    const isFullySettled = (n: HitObject): boolean => {
+      if (n.type !== 'hold') return n.isHit || n.isMissed;
+      if (n.holdRulesVersion === LAZER_HOLD_RULES_VERSION && n.holdState) {
+        return n.holdState.isHeadJudged && n.holdState.isTailJudged;
+      }
+      if (n.holdRulesVersion === HOLD_TICK_RULES_VERSION) {
+        return !!n.isReleased;
+      }
+      return (!!n.isReleased || !!n.isHoldFailed) && (!!n.isHit || !!n.isMissed);
+    };
+    while (cursor < lane.length && isFullySettled(lane[cursor])) {
       cursor++;
     }
     columnCursorRef.current[colIndex] = cursor;
@@ -3420,6 +3431,17 @@ export default function GameplayCanvas({
     tickHoldsRef.current = notesRef.current.filter(
       (n) => n.type === 'hold' && n.nextTailTickTime !== undefined,
     );
+    // simulateGameToTime builds brand-new note objects, so the per-column
+    // views (which hold object identities) must be rebuilt and the shared
+    // input cursors rewound with the miss/autoplay cursors.
+    {
+      const perColumn: HitObject[][] = Array.from({ length: beatmap.keyCount }, () => []);
+      for (const n of notesRef.current) {
+        if (n.column >= 0 && n.column < beatmap.keyCount) perColumn[n.column].push(n);
+      }
+      columnNotesRef.current = perColumn;
+      columnCursorRef.current = new Array(beatmap.keyCount).fill(0);
+    }
     missCursorRef.current = 0;
     autoplayCursorRef.current = 0;
 
@@ -3932,9 +3954,15 @@ export default function GameplayCanvas({
     mainAudio.seekGameplayTimeMs(newTimeMs);
     audioTimeRef.current = newTimeMs;
     lastSongTimeRef.current = newTimeMs;
-    songTimeJumpRef.current = true;
-    missCursorRef.current = 0;
-    autoplayCursorRef.current = 0;
+                                 songTimeJumpRef.current = true;
+                                 missCursorRef.current = 0;
+                                 autoplayCursorRef.current = 0;
+                                 columnCursorRef.current = new Array(beatmap.keyCount).fill(0);
+    // handleSeek mutates note flags in place (same identities), so the
+    // per-column views stay valid but the shared input cursors must rewind
+    // with the timeline, otherwise presses after a backward seek scan from a
+    // stale lane position.
+    columnCursorRef.current = new Array(beatmap.keyCount).fill(0);
     smoothOffsetRef.current = settings.audioOffset;
     snapVideoToAudio(newTimeMs, false);
     
@@ -4890,7 +4918,7 @@ export default function GameplayCanvas({
                 className="absolute inset-x-0 flex flex-col items-center justify-center transition-transform duration-150"
                 style={{
                   top: `${settings.judgementPositionY ?? 50}%`,
-                  transform: `translateY(-50%) scale(${settings.judgementSize ?? 1.0})`,
+                  transform: `translateY(-50%) scale(${settings.judgementSize ?? 0.5})`,
                   transformOrigin: 'center center',
                 }}
               >

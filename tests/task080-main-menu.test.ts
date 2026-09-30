@@ -19,9 +19,9 @@ import { MAIN_MENU_ITEMS, RESOURCE_LINKS } from '../src/components/MainMenu';
 
 describe('TASK-080: Main Menu - Lazer Parity and Stacked Actions', () => {
   describe('Main Menu Action Definitions', () => {
-    it('defines exactly 4 core offline destinations', () => {
+    it('defines exactly 3 core offline destinations', () => {
       const ids = MAIN_MENU_ITEMS.map((item) => item.id);
-      expect(ids).toEqual(['select', 'history', 'skins', 'settings']);
+      expect(ids).toEqual(['select', 'history', 'settings']);
     });
 
     it('designates Play (select) as the primary action', () => {
@@ -33,16 +33,11 @@ describe('TASK-080: Main Menu - Lazer Parity and Stacked Actions', () => {
       expect(playItem?.icon).toBe('play');
     });
 
-    it('contains valid secondary actions for history, skins, and settings', () => {
+    it('contains valid secondary actions for history and settings', () => {
       const historyItem = MAIN_MENU_ITEMS.find((item) => item.id === 'history');
       expect(historyItem).toBeDefined();
       expect(historyItem?.title).toBe('History');
       expect(historyItem?.primary).toBeFalsy();
-
-      const skinsItem = MAIN_MENU_ITEMS.find((item) => item.id === 'skins');
-      expect(skinsItem).toBeDefined();
-      expect(skinsItem?.title).toBe('Skins');
-      expect(skinsItem?.primary).toBeFalsy();
 
       const settingsItem = MAIN_MENU_ITEMS.find((item) => item.id === 'settings');
       expect(settingsItem).toBeDefined();

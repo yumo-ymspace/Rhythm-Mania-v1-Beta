@@ -67,8 +67,9 @@ export function isArgonSkin(settings: PlayfieldVisualSettings): boolean {
   return isArgonSkinId(settings.skinId);
 }
 
-export function getArgonNoteHeight(settings: PlayfieldVisualSettings): number {
-  return ARGON_NOTE_HEIGHT * (settings.noteSizeMultiplier ?? 1);
+export function getArgonNoteHeight(_settings: PlayfieldVisualSettings): number {
+  // Note size is permanently locked at 100% for all skins (non-adjustable).
+  return ARGON_NOTE_HEIGHT;
 }
 
 export function getArgonColumnColor(keyCount: number, columnIndex: number): string {

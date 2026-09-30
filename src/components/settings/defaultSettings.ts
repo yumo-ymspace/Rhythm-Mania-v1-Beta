@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   noteOpacity: 1.0,
   receptorOpacity: 1.0,
   judgementOpacity: 1.0,
-  judgementSize: 1.0,
+  judgementSize: 0.5,
   judgementPositionY: 50,
   laneSeparatorOpacity: 0.30,
   noteSizeMultiplier: 1.0,

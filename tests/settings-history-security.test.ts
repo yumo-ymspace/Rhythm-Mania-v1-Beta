@@ -170,13 +170,17 @@ describe('settings, history, and URL boundaries', () => {
     expect(record?.catalogSetId).toBe('osuapi_12345');
   });
 
-  it('clamps noteSizeMultiplier and receptorSizeMultiplier to 0.60-1.00', () => {
+  it('locks note/receptor size and opacity at 100% (non-adjustable)', () => {
     const clean = sanitizeSettings({
       noteSizeMultiplier: 0.1,
       receptorSizeMultiplier: 2.5,
+      noteOpacity: 0.2,
+      receptorOpacity: 0.3,
     }, DEFAULT_SETTINGS);
-    expect(clean.noteSizeMultiplier).toBe(0.60);
-    expect(clean.receptorSizeMultiplier).toBe(1.00);
+    expect(clean.noteSizeMultiplier).toBe(1.0);
+    expect(clean.receptorSizeMultiplier).toBe(1.0);
+    expect(clean.noteOpacity).toBe(1.0);
+    expect(clean.receptorOpacity).toBe(1.0);
   });
 
   it('preserves lockScrollSpeedDuringPlay and showPenarDuringPlay toggles', () => {

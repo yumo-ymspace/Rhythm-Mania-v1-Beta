@@ -132,7 +132,8 @@ export function getNoteVisualY(
   columnWidth: number,
   settings: PlayfieldVisualSettings
 ): number {
-  const noteScale = settings.noteSizeMultiplier ?? 1;
+  // Note size is permanently locked at 100% for all skins (non-adjustable).
+  const noteScale = 1;
   const noteHeight = (settings.squareRenderStyle === 'rhythmplus' || settings.squareRenderStyle === 'rhythmplus-dynamic')
     ? 8 * noteScale
     : isArgonSkin(settings)

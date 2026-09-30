@@ -34,7 +34,7 @@ import {
   ALL_SKINS,
   getSelectedStyle,
   styleSettings,
-} from '../src/components/SkinScreen';
+} from '../src/components/settings/skinStyles';
 import { DEFAULT_SETTINGS } from '../src/components/settings/defaultSettings';
 
 describe('Argon column colours', () => {
@@ -113,7 +113,7 @@ describe('Argon column colours', () => {
 
 });
 
-describe('TASK-082: Skin screen Argon default and legacy catalog', () => {
+describe('TASK-082: Skin styles Argon default and legacy catalog', () => {
   it('identifies Argon as the default skin and lists 2 legacy bar skins', () => {
     expect(DEFAULT_SKIN.id).toBe('argon');
     expect(DEFAULT_SKIN.category).toBe('default');

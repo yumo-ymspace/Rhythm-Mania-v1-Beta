@@ -33,7 +33,7 @@ Hit notes on a vertical playfield in time with music. Import `.osu` / `.osz` / `
 - **Playfield:** single WebGL2 renderer (batched quads), equal-width lanes, upscroll/downscroll, scroll speed `5–80` (default `21`).
 - **Skins:** `argon` (default), `rhythmplus`, `rhythmplus-dynamic`.
 - **Audio:** Web Audio gameplay clock, pre-decoded instant menu sounds, song previews while browsing, optional background video with PI drift sync.
-- **Routes:** `/` menu, `/select`, `/play`, `/results`, `/history`, `/skins`; `/settings` opens the settings drawer. Unknown and legacy `/profile/*` routes fall back to menu.
+- **Routes:** `/` menu, `/select`, `/play`, `/results`, `/history`. Unknown and legacy `/profile/*`, `/settings`, and `/skins` routes fall back to menu.
 
 ## Quick start
 

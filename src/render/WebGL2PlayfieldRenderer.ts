@@ -389,9 +389,10 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
     this.quadCount = 0;
 
     const upscroll = !!settingsSlice.upsurfaceNoteMode;
-    const noteScale = settingsSlice.noteSizeMultiplier ?? 1;
-    const receptorScale = settingsSlice.receptorSizeMultiplier ?? 1;
-    const receptorOpacity = settingsSlice.receptorOpacity ?? 1;
+    // Note/receptor size + opacity are permanently locked at 100% for all skins (non-adjustable).
+    const noteScale = 1;
+    const receptorScale = 1;
+    const receptorOpacity = 1;
     const noteHeight = getArgonNoteHeight(settingsSlice);
     const keyCount = this.keyCount;
 

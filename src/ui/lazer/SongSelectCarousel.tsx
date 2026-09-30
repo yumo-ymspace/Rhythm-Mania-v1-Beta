@@ -68,6 +68,8 @@ export interface SongSelectCarouselProps {
   topOverlayPx?: number;
 }
 
+// Legacy picture fallback: still filtered out of usable bg URLs so old
+// cached values fall through to the flat #22272a strip below.
 const DEFAULT_BANNER = '/backgrounds/Ferineon.webp';
 
 function isUsableMemoryBg(url: unknown): url is string {
@@ -107,7 +109,8 @@ function getPersistedBannerUrl(packageId: string, bgFilename: string): Promise<s
 
 /**
  * Song banner art: slimcover from assets.ppy.sh when it exists/loads, else
- * the local background png/jpg centred and smallened (contain, not cover).
+ * the local background png/jpg centred and smallened (contain, not cover),
+ * else a flat #22272a blank strip (no picture art).
  * Local art is read from the memory cache first, then the persisted
  * IndexedDB backgrounds store (written at download time), so the fallback
  * shows quickly without re-decompressing the .osz.
@@ -210,8 +213,8 @@ const SongBannerArt = memo(function SongBannerArt({ group }: { group: CarouselSo
 
   return (
     <div
-      className="absolute inset-0 bg-cover bg-center pointer-events-none"
-      style={{ backgroundImage: `url("${sanitizeCssUrl(DEFAULT_BANNER)}")` }}
+      className="absolute inset-0 pointer-events-none"
+      style={{ backgroundColor: '#22272a' }}
     />
   );
 });

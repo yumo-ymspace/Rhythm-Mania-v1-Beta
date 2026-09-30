@@ -15,7 +15,6 @@ import { MainMenu } from './components/MainMenu';
 import SettingsScreen from './components/SettingsScreen';
 import PersonalHistoryScreen from './components/PersonalHistoryScreen';
 import OnlineBeatmapCatalog from './components/OnlineBeatmapCatalog';
-import SkinScreen from './components/SkinScreen';
 import { GameScreen, GameSettings, Beatmap, ScoreState, ReplayFrame, PlayHistoryRecord } from './types';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import SongSelect from './components/SongSelect';
@@ -98,11 +97,14 @@ import {
 
 type AppRoute = {
   screen: GameScreen;
-  settingsOpen: boolean;
 };
 
 function isRemovedProfilePath(pathname: string): boolean {
   return pathname === '/profile' || pathname.startsWith('/profile/');
+}
+
+function isRemovedSettingsPath(pathname: string): boolean {
+  return pathname === '/settings';
 }
 
 /** Effective output level for the game launch menu song. */
@@ -132,12 +134,9 @@ function resolveRoute(pathname: string): AppRoute {
     '/play': 'play',
     '/results': 'results',
     '/history': 'history',
-    '/settings': 'menu',
-    '/skins': 'skins',
   };
   return {
     screen: paths[pathname] || 'menu',
-    settingsOpen: pathname === '/settings',
   };
 }
 
@@ -182,10 +181,10 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Sync screen from URL path. Retired /profile routes fall back to the menu.
+  // Sync screen from URL path. Retired /profile and /settings routes fall back to the menu.
   useEffect(() => {
     const route = resolveRoute(path);
-    if (isRemovedProfilePath(path) || ((route.screen === 'play' || route.screen === 'results') && !selectedBeatmap)) {
+    if (isRemovedProfilePath(path) || isRemovedSettingsPath(path) || ((route.screen === 'play' || route.screen === 'results') && !selectedBeatmap)) {
       setCurrentScreen('menu');
       setShowSettings(false);
       if (typeof window !== 'undefined' && window.location.pathname === path) {
@@ -195,7 +194,6 @@ export default function App() {
       return;
     }
     setCurrentScreen(route.screen);
-    setShowSettings(route.settingsOpen);
   }, [path, selectedBeatmap]);
 
   // Globally intercept local link clicks to enable single-page transitions
@@ -255,7 +253,6 @@ export default function App() {
     return DEFAULT_SETTINGS;
   });
   const [menuBgUrl] = useState<string>(() => getRandomDefaultBackground());
-  const [skinBgUrl] = useState<string>(() => getRandomDefaultBackground());
   const [historyBgUrl, setHistoryBgUrl] = useState<string>(() => getRandomDefaultBackground());
 
   // Song Select owns its own backdrop (dim overlay + triangle-field fallback
@@ -267,12 +264,11 @@ export default function App() {
   const activeBackgroundUrl = React.useMemo(() => {
     if (currentScreen === 'select') return '';
     if (currentScreen === 'history') return historyBgUrl;
-    if (currentScreen === 'skins') return skinBgUrl;
     if (currentScreen === 'results') {
       return selectedBeatmap?.bgUrl || menuBgUrl;
     }
     return menuBgUrl;
-  }, [currentScreen, historyBgUrl, skinBgUrl, selectedBeatmap, menuBgUrl]);
+  }, [currentScreen, historyBgUrl, selectedBeatmap, menuBgUrl]);
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showFindBeatmapOverlay, setShowFindBeatmapOverlay] = useState<boolean>(false);
@@ -1547,14 +1543,15 @@ export default function App() {
           ? 'rhythmplus-dynamic'
           : updated.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : undefined,
          receptorColorsByKeyCount: updated.receptorColorsByKeyCount || {},
-        noteOpacity: updated.noteOpacity !== undefined ? Number(updated.noteOpacity) : 1.0,
-        receptorOpacity: updated.receptorOpacity !== undefined ? Number(updated.receptorOpacity) : 1.0,
+        // Note/receptor size + opacity are permanently locked at 100% for all skins (non-adjustable).
+        noteOpacity: 1.0,
+        receptorOpacity: 1.0,
         judgementOpacity: updated.judgementOpacity !== undefined ? Number(updated.judgementOpacity) : 1.0,
-         judgementSize: updated.judgementSize !== undefined ? Number(updated.judgementSize) : 1.0,
+         judgementSize: updated.judgementSize !== undefined ? Math.max(0.1, Math.min(1.0, Number(updated.judgementSize))) : 0.5,
          judgementPositionY: updated.judgementPositionY !== undefined ? Math.max(20, Math.min(85, Number(updated.judgementPositionY))) : 50,
         laneSeparatorOpacity: updated.laneSeparatorOpacity !== undefined ? Number(updated.laneSeparatorOpacity) : 0.30,
-        noteSizeMultiplier: updated.noteSizeMultiplier !== undefined ? Math.max(0.60, Math.min(1.00, Number(updated.noteSizeMultiplier))) : 1.0,
-        receptorSizeMultiplier: updated.receptorSizeMultiplier !== undefined ? Math.max(0.60, Math.min(1.00, Number(updated.receptorSizeMultiplier))) : 1.0,
+        noteSizeMultiplier: 1.0,
+        receptorSizeMultiplier: 1.0,
          playfieldWidthPercent,
         selectedMods: updated.selectedMods || [],
         bindPause: updated.bindPause !== undefined ? String(updated.bindPause) : 'escape',
@@ -1738,7 +1735,7 @@ export default function App() {
     <div
       id="application-container" 
       className={`bg-[#050508] text-white flex flex-col font-sans selection:bg-cyan-300 selection:text-[#041321] relative h-screen h-dvh ${
-        (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results' || currentScreen === 'skins') ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden'
+        (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results') ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden'
       }`}
     >
       <LazerDebugSmoke />
@@ -1811,7 +1808,7 @@ export default function App() {
       <main
         id="app-main-viewport"
         className={`flex-1 flex flex-col min-h-0 relative ${
-          (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results' || currentScreen === 'skins')
+          (currentScreen === 'menu' || currentScreen === 'play' || currentScreen === 'select' || currentScreen === 'history' || currentScreen === 'results')
             ? 'w-full h-full'
             : 'py-6 md:py-12 px-4 md:px-6 z-10'
         }${showLazerToolbar ? ' pt-[40px]' : ''}`}
@@ -1837,23 +1834,6 @@ export default function App() {
                 inputDisabled={showSettings || showFindBeatmapOverlay}
                 menuMotionUncapped={settings.uncappedMenuMotion === true}
               />
-            </motion.div>
-          )}
-
-          {currentScreen === 'skins' && (
-            <motion.div
-              key="skins"
-              variants={PAGE_TRANSITION_VARIANTS}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="h-full w-full overflow-hidden"
-            >
-                <SkinScreen
-                  settings={settings}
-                  updateSettings={updateSettings}
-                  onBack={() => navigateScreen('menu')}
-                />
             </motion.div>
           )}
 

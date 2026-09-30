@@ -308,8 +308,6 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     return result;
   };
 
-  const sizeMin = 0.60;
-  const sizeMax = 1.00;
   const widthMin = PLAYFIELD_WIDTH_MIN;
   const widthMax = PLAYFIELD_WIDTH_MAX;
 
@@ -343,14 +341,15 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
       ? 'rhythmplus-dynamic'
       : settings.squareRenderStyle === 'rhythmplus' ? 'rhythmplus' : undefined,
     receptorColorsByKeyCount: sanitizeLanePalettes(settings.receptorColorsByKeyCount, defaultSettings.receptorColorsByKeyCount),
-    noteOpacity: clamp(settings.noteOpacity, 0, 1, defaultSettings.noteOpacity || 1.0),
-    receptorOpacity: clamp(settings.receptorOpacity, 0, 1, defaultSettings.receptorOpacity || 1.0),
+    // Note/receptor size + opacity are permanently locked at 100% for all skins (non-adjustable).
+    noteOpacity: 1.0,
+    receptorOpacity: 1.0,
     judgementOpacity: clamp(settings.judgementOpacity, 0, 1, defaultSettings.judgementOpacity || 1.0),
-    judgementSize: clamp(settings.judgementSize, 0.5, 2, defaultSettings.judgementSize || 1.0),
+    judgementSize: clamp(settings.judgementSize, 0.1, 1.0, defaultSettings.judgementSize || 0.5),
     judgementPositionY: clamp(settings.judgementPositionY, 20, 85, defaultSettings.judgementPositionY || 50),
     laneSeparatorOpacity: clamp(settings.laneSeparatorOpacity, 0, 1, defaultSettings.laneSeparatorOpacity || 0.30),
-    noteSizeMultiplier: clamp(settings.noteSizeMultiplier, sizeMin, sizeMax, defaultSettings.noteSizeMultiplier || 1.0),
-    receptorSizeMultiplier: clamp(settings.receptorSizeMultiplier, sizeMin, sizeMax, defaultSettings.receptorSizeMultiplier || 1.0),
+    noteSizeMultiplier: 1.0,
+    receptorSizeMultiplier: 1.0,
      playfieldWidthPercent: clamp(settings.playfieldWidthPercent, widthMin, widthMax, Math.max(widthMin, Math.min(widthMax, defaultSettings.playfieldWidthPercent || 40))),
     selectedMods: selectedMods,
     bindPause: sanitizeString(settings.bindPause, defaultSettings.bindPause || 'escape', 15),

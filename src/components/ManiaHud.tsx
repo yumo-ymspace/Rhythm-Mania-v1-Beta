@@ -352,6 +352,12 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
  * Recreates the ArgonScoreCounter from osu!(lazer) Argon skin.
  * In ArgonSkin.cs: ShowLabel = false (no "Score" label),
  * sits on top of the wedges, tabular digits, 6 display digits with wireframe background.
+ *
+ * Visual: glassy dark-navy capsule with a thick glossy chrome rail running
+ * along the top edge that bends down on the right (flat top, smooth elbow,
+ * short down-leg), plus a thin hairline extending left. Digits sit inside
+ * the glass, right-aligned, white with a soft glow; leading slots render as
+ * faint wireframe zeros.
  */
 export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   score,
@@ -365,6 +371,7 @@ export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   const minDigits = 6;
   const paddedZerosCount = Math.max(0, minDigits - scoreStr.length);
   const wireframeZeros = '0'.repeat(paddedZerosCount);
+  const railPath = 'M 52 9 H 216 C 236 9 245 13 253 27 L 260 38 Q 262 42 268 42 H 312';
 
   // Every digit (and every wireframe placeholder) gets its own fixed-width
   // slot so Orbitron's proportional figures can't push neighbouring digits
@@ -375,25 +382,114 @@ export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   return (
     <div
       id="argon-score-counter"
-      className={`font-display font-black tracking-tight tabular-nums select-none flex items-baseline justify-end leading-none ${className}`}
+      className={`relative select-none ${className}`}
+      style={{ width: 320, height: 52 }}
       aria-label={`Score: ${safeScore}`}
     >
-      {wireframeZeros.split('').map((z, i) => (
-        <span
-          key={`wireframe-${i}`}
-          className="opacity-25 text-white select-none w-[1ch] text-center shrink-0"
-        >
-          {z}
-        </span>
-      ))}
-      {scoreStr.split('').map((d, i) => (
-        <span
-          key={`digit-${i}`}
-          className="text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
-        >
-          {d}
-        </span>
-      ))}
+      <svg
+        width={320}
+        height={52}
+        viewBox="0 0 320 52"
+        className="absolute inset-0 overflow-visible"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="scoreGlass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#14324f" stopOpacity="0.85" />
+            <stop offset="45%" stopColor="#0a1c31" stopOpacity="0.72" />
+            <stop offset="100%" stopColor="#04070d" stopOpacity="0.88" />
+          </linearGradient>
+          <linearGradient id="scoreChrome" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="28%" stopColor="#e6eef6" />
+            <stop offset="46%" stopColor="#93a3b5" />
+            <stop offset="50%" stopColor="#5b6b7e" />
+            <stop offset="56%" stopColor="#d7e3ef" />
+            <stop offset="78%" stopColor="#f8fbff" />
+            <stop offset="100%" stopColor="#c4d2e0" />
+          </linearGradient>
+          <linearGradient id="scoreHairline" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#7ed7fd" stopOpacity="0" />
+            <stop offset="100%" stopColor="#9fd8f5" stopOpacity="0.65" />
+          </linearGradient>
+        </defs>
+
+        {/* Dark glass body under the rail */}
+        <rect
+          x="52"
+          y="13"
+          width="260"
+          height="31"
+          rx="6"
+          fill="url(#scoreGlass)"
+          stroke="rgba(255,255,255,0.14)"
+          strokeWidth="1"
+        />
+        {/* Soft blue inner glow at the bottom of the glass */}
+        <rect
+          x="56"
+          y="34"
+          width="252"
+          height="8"
+          rx="4"
+          fill="#1c4a73"
+          opacity="0.25"
+        />
+
+        {/* Thin hairline extending left from the chrome rail */}
+        <rect x="2" y="8" width="52" height="2" rx="1" fill="url(#scoreHairline)" />
+
+        {/* Thick glossy chrome rail: flat top with a smooth bent down-leg right */}
+        <path
+          d={railPath}
+          fill="none"
+          stroke="url(#scoreChrome)"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Specular highlight along the top of the tube */}
+        <path
+          d={railPath}
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.8"
+          transform="translate(0 -1.6)"
+        />
+        {/* Faint dark under-shadow so the tube lifts off the glass */}
+        <path
+          d={railPath}
+          fill="none"
+          stroke="#020409"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.55"
+          transform="translate(0 3.4)"
+        />
+      </svg>
+
+      <div className="font-display font-medium tabular-nums absolute inset-0 flex items-center justify-end leading-none pr-4 tracking-[0.12em]">
+        {wireframeZeros.split('').map((z, i) => (
+          <span
+            key={`wireframe-${i}`}
+            className="opacity-25 text-white select-none w-[1ch] text-center shrink-0"
+          >
+            {z}
+          </span>
+        ))}
+        {scoreStr.split('').map((d, i) => (
+          <span
+            key={`digit-${i}`}
+            className="text-white [text-shadow:0_0_7px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
+          >
+            {d}
+          </span>
+        ))}
+      </div>
     </div>
   );
 });
@@ -752,15 +848,14 @@ export const ManiaHud = React.memo(function ManiaHud({
           {/* Procedural Argon Wedges */}
           <ArgonWedgePieces width={380} height={72} />
 
-          {/* Score Counter: sits on wedges, origin top-right */}
+          {/* Score Counter: chrome rail + glass, origin top-left */}
           <div
-            className="absolute top-0 left-0 w-full h-full flex items-center justify-end pr-14 sm:pr-16"
+            className="absolute top-0 left-0 w-full h-full flex items-start justify-start"
             style={{
-              // Position score counter right-aligned inside the sheared wedge area
-              transform: 'translateY(-2px)',
+              transform: 'translateY(4px)',
             }}
           >
-            <ArgonScoreCounter score={score} className="text-3xl sm:text-4xl" />
+            <ArgonScoreCounter score={score} className="text-[26px]" />
           </div>
         </div>
 

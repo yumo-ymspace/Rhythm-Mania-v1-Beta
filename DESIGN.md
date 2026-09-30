@@ -285,7 +285,7 @@ Motion: card 400ms OutQuint 0.96→1 + fade; sides stagger 60ms. Compact: main f
 
 **13. Settings** (`SettingsDrawer` + registry; IA unchanged). Actual rows: General `localDisplayName, menuCursorEnabled, enableSongPreview`; Visual `playfieldWidthPercent, backgroundDim, songSelectBackgroundDim, disableVideo, videoOffset, disableComboBurst, showFpsCounter, uncappedMenuMotion, renderDpr`; Gameplay `scrollSpeed, lockScrollSpeedDuringPlay, showPenarDuringPlay, upsurfaceNoteMode, visualOffset, enableMapSV`; Audio `musicVolume, previewVolume, launchMusicVolume, masterVolume, hitsoundVolume, audioOffset, compensateOutputLatency, offsetWizard(button)`; Input `bindings`; Misc `restoreDefaults`. There is no `progressBarTop/menuBackgroundDim/disableParticles/babylonFloor/limitDprToOne/gameplayBackgroundBlur` row (limitDprToOne only migrates to `renderDpr`).
 
-**14. Skins** (`/skins`, `SkinScreen`). `skinId` is `argon` (default) or `custom` + `squareRenderStyle` (`rhythmplus` filled slim bars / `rhythmplus-dynamic` outlined); `rhythmmania-3d` collapses to argon. Classic/3D/circular as separate ids are removed. No listing-like overlay without a still.
+**14. Skins** (Settings `Skins` section: `SkinPicker` + `skinStyles`; no standalone page/route). `skinId` is `argon` (default) or `custom` + `squareRenderStyle` (`rhythmplus` filled slim bars / `rhythmplus-dynamic` outlined); `rhythmmania-3d` collapses to argon. Classic/3D/circular as separate ids are removed. No listing-like overlay without a still.
 
 **15. History** (`/history`, `PersonalHistoryScreen`). Entries: `/history` route, Options "View play history", Results side cards. No menu wedge. Untouched empty copy otherwise; if touched, "No records yet!".
 
@@ -316,7 +316,7 @@ Playwright-mandatory; shear never clips targets. Toolbar keeps Settings/Home/Lis
 | Listing | `src/components/OnlineBeatmapCatalog.tsx` (chrome only; helper stays) |
 | PlayerLoader | new `src/components/PlayerLoader.tsx`, first paint of `/play` |
 | HUD / notes / in-play | `ManiaHud.tsx` / `WebGL2PlayfieldRenderer.ts`, `argonSkin.ts`, `flashlight.ts` / `GameplayCanvas.tsx` + shared PlayerLoader groups |
-| Pause/fail, Results, Settings, Skins, History | `PauseOverlay.tsx` / `ResultsScreen.tsx` / `settings/*` / `SkinScreen.tsx` / `PersonalHistoryScreen.tsx` |
+| Pause/fail, Results, Settings, Skins, History | `PauseOverlay.tsx` / `ResultsScreen.tsx` / `settings/*` (incl. `SkinPicker`, `skinStyles`) / `PersonalHistoryScreen.tsx` |
 | Argon CSS, judgements, PENAR, density, preview | `src/index.css` / `ruleset/mania/judgements.ts` (display names) / `utils/penar.ts` / `argonSkin.computeSongDensityBins` / `utils/previewPlayer.ts` |
 
 Never copy `visual-refs/` into `public/`.

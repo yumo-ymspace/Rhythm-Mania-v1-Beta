@@ -302,14 +302,18 @@ export interface GameSettings {
   customSkinName?: string;
   squareRenderStyle?: 'rhythmplus' | 'rhythmplus-dynamic';
   receptorColorsByKeyCount?: Record<number, string[]>; // per-lane receptor colors for 1K-10K
-  noteOpacity?: number; // 0.1 to 1.0 (opacity for note visuals)
-  receptorOpacity?: number; // 0.1 to 1.0 (opacity for landline keys receptors)
+  /** @deprecated Locked at 1.0 (100%) for all skins; non-adjustable. Kept for legacy save compat. */
+  noteOpacity?: number;
+  /** @deprecated Locked at 1.0 (100%) for all skins; non-adjustable. Kept for legacy save compat. */
+  receptorOpacity?: number;
 
-  noteSizeMultiplier?: number; // separate multiplier for falling notes
-  receptorSizeMultiplier?: number; // scale multiplier for receptors
+  /** @deprecated Locked at 1.0 (100%) for all skins; non-adjustable. Kept for legacy save compat. */
+  noteSizeMultiplier?: number;
+  /** @deprecated Locked at 1.0 (100%) for all skins; non-adjustable. Kept for legacy save compat. */
+  receptorSizeMultiplier?: number;
 
   judgementOpacity?: number; // 0.0 to 1.0 (opacity for judgement text)
-  judgementSize?: number; // 0.5 to 1.5 (font size scaling multiplier)
+  judgementSize?: number; // 0.1 to 1.0 (font size scaling multiplier, default 0.5 = 50%)
   judgementPositionY?: number; // vertical screen position in percent
   laneSeparatorOpacity?: number; // 0.0 to 1.0 (opacity for lane divider lines)
   playfieldWidthPercent?: number; // width of lanes as percent of screen width (33 to 50)
@@ -328,4 +332,4 @@ export interface GameSettings {
   difficultyAdjust?: DifficultyAdjustSettings; // Difficulty Adjust (DA) mod overrides
 }
 
-export type GameScreen = 'menu' | 'select' | 'play' | 'results' | 'settings' | 'skins' | 'calibrate' | 'history';
+export type GameScreen = 'menu' | 'select' | 'play' | 'results' | 'settings' | 'calibrate' | 'history';
