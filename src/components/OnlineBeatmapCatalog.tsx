@@ -17,7 +17,6 @@ import {
   Search, X, Music, Check, Loader, Download, Info, ChevronDown,
   LayoutGrid, ListMusic,
 } from 'lucide-react';
-import { FooterBackButton } from '../ui/lazer/FooterBackButton';
 import { Beatmap } from '../types';
 import { parseBeatmap, parseMediaPaths } from '../utils/beatmapParser';
 import { storageManager } from '../utils/storageManager';
@@ -238,6 +237,14 @@ export default function OnlineBeatmapCatalog({
       'F4',
       'F6',
     ]);
+    // The settings drawer stacks on top of the listing (backdrop z-[130] /
+    // drawer z-[140] over the listing panel z-[110]), so while it is open
+    // Escape belongs to settings: yield without closing the listing (a
+    // single Escape must not close both overlays at once). The drawer's
+    // own trap closes settings; the listing closes on the next Escape.
+    const isSettingsOnTop = () =>
+      typeof document !== 'undefined' &&
+      Boolean(document.querySelector('[data-settings-drawer]'));
     // Capture-phase trap: runs before background window listeners (song
     // select, toolbar) so they never see these keys.
     const trap = (e: KeyboardEvent) => {
@@ -245,6 +252,7 @@ export default function OnlineBeatmapCatalog({
         // Let the search field handle typing/Enter. Escape still closes the
         // listing without leaking to Song Select behind it.
         if (e.key === 'Escape') {
+          if (isSettingsOnTop()) return;
           e.preventDefault();
           e.stopPropagation();
           onClose();
@@ -252,6 +260,7 @@ export default function OnlineBeatmapCatalog({
         return;
       }
       if (e.key === 'Escape') {
+        if (isSettingsOnTop()) return;
         e.preventDefault();
         e.stopPropagation();
         onClose();
@@ -575,7 +584,7 @@ export default function OnlineBeatmapCatalog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed right-4 top-4 z-[130] flex max-w-sm items-stretch overflow-hidden rounded-2xl border border-white/15 bg-[#141522]/95 text-white shadow-[0_15px_40px_rgba(0,0,0,0.7),0_0_20px_rgba(255,204,34,0.1)] backdrop-blur-xl"
+      className="fixed right-4 top-4 z-[165] flex max-w-sm items-stretch overflow-hidden rounded-2xl border border-white/15 bg-[#141522]/95 text-white shadow-[0_15px_40px_rgba(0,0,0,0.7),0_0_20px_rgba(255,204,34,0.1)] backdrop-blur-xl"
     >
       <div className="flex w-12 shrink-0 items-center justify-center border-r border-emerald-500/30 bg-emerald-500/20 text-emerald-400">
         <Check className="h-5 w-5" />
@@ -839,16 +848,6 @@ export default function OnlineBeatmapCatalog({
                     <div className="py-16 px-8 flex flex-col items-center justify-center text-center">
                       <p className="lazer-listing-empty">… nope, nothing found.</p>
                     </div>
-                  )}
-                </div>
-                <div className="flex-none flex items-center justify-between px-4 md:px-8 py-2.5 border-t border-white/10 bg-black/25">
-                  <FooterBackButton onClick={onClose} label="back" />
-                  {(sortedManifest.length > 0 || submittedSearchTerm.trim()) && (
-                    <span className="text-[11px] text-[#9aa0ab]">
-                      {sortedManifest.length > 0
-                        ? `${sortedManifest.length} ${sortedManifest.length === 1 ? 'match' : 'matches'}`
-                        : 'no matches'}
-                    </span>
                   )}
                 </div>
               </>

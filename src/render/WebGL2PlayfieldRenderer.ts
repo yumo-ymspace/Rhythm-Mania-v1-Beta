@@ -127,7 +127,7 @@ void main() {
     if (vGlyph < 1.5) {
       float halfW = gsize * 0.38;
       float halfH = gsize * 0.22;
-      float t = max(2.5 * uDpr, gsize * 0.14);
+      float t = max(4.2 * uDpr, gsize * 0.23);
       float cyy = cy;
       vec2 gp = vec2(p.x, gy);
       vec2 a = vec2(cx - halfW, cyy - halfH);
@@ -136,7 +136,7 @@ void main() {
       float d = min(segDist(gp, a, bb), segDist(gp, bb, c));
       mask = 1.0 - smoothstep(t * 0.5 - aa2, t * 0.5 + aa2, d);
     } else {
-      float barH = 5.0 * uDpr;
+      float barH = 8.0 * uDpr;
       float cyy = cy;
       vec2 qq = abs(vec2(p.x - cx, gy - cyy)) - vec2(max(gsize * 0.5 - barH * 0.5, 0.0), 0.0);
       float d = length(max(qq, 0.0)) + min(max(qq.x, qq.y), 0.0) - barH * 0.5;

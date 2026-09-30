@@ -303,12 +303,13 @@ describe('osu!(lazer) mania hit window fixtures (TASK-011)', () => {
       expect(marvelous.name).toBe('PERFECT');
       expect(marvelous.baseScore).toBe(305);
       expect(marvelous.hpDelta).toBe(3);
-      expect(marvelous.color).toBe('#22d3ee');
+      expect(marvelous.color).toBe('#B9E9FF');
 
       const perfect = windows.find((w) => w.type === 'perfect')!;
       expect(perfect.name).toBe('GREAT');
       expect(perfect.baseScore).toBe(300);
       expect(perfect.hpDelta).toBe(2);
+      expect(perfect.color).toBe('#8FD8FF');
 
       const miss = windows.find((w) => w.type === 'miss')!;
       expect(miss.name).toBe('MISS');

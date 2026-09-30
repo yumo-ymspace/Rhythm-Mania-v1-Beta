@@ -163,13 +163,6 @@ export const ROWS: RowDef[] = [
     showWhen: (s) => !s.disableVideo,
   },
   {
-    id: 'disableComboBurst', section: 'visual', label: 'Disable combo burst',
-    description: 'Hide the combo milestone popup shown every 50 combo during gameplay.',
-    control: { kind: 'toggle' },
-    defaultValue: DEFAULT_SETTINGS.disableComboBurst,
-    keywords: ['combo', 'burst', 'milestone', 'popup', '50', 'celebration'],
-  },
-  {
     id: 'showFpsCounter', section: 'visual', label: 'Show FPS counter',
     description: 'Display a small performance readout (FPS, frame time, input latency) in the corner on every screen.',
     control: { kind: 'toggle' },

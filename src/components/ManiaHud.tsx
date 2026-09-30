@@ -177,9 +177,6 @@ export interface ManiaHudProps {
   hp: number; // 0..100
   accuracy?: number; // 0..100
   combo?: number;
-  // Pop-animation generation: the combo number renders live, but the pop
-  // re-fires only when this key changes (bumped at the 3Hz slow tier).
-  comboPopKey?: number;
   penar?: PenarBreakdown | null;
   showPenar?: boolean;
   keyCount?: number;
@@ -199,9 +196,10 @@ export interface ManiaHudProps {
 
 /**
  * ArgonWedgePiece component
- * Recreates the procedural double-stacked skewed wedges from osu!(lazer) Argon skin.
- * In ArgonSkin.cs: two stacked pieces (~380x72), second piece offset by (4, 5),
- * Shear = (0.8, 0), CornerRadius = 10, AccentColour = #66CCFF with 0% to 25% vertical gradient.
+ * Single parallelogram slab behind the score digits: straight vertical left
+ * edge, right edge slanted like `/` (top-right corner sits further right
+ * than the bottom-right). Flat fills only — no stroke/box outline. A second
+ * slab offset by (4, 5) sits behind for depth.
  */
 export const ArgonWedgePieces = React.memo(function ArgonWedgePieces({
   width = 380,
@@ -212,9 +210,9 @@ export const ArgonWedgePieces = React.memo(function ArgonWedgePieces({
   height?: number;
   className?: string;
 }) {
-  // Shear factor 0.8 on X axis: shear offset = height * 0.8 = 57.6
-  const shearOffset = height * 0.8;
-  const rectWidth = Math.max(10, width - shearOffset);
+  // `/` slant: top-right extends `slant` px further right than bottom-right.
+  const slant = Math.min(64, Math.round(height * 0.66));
+  const points = `0,0 ${width},0 ${width - slant},${height} 0,${height}`;
 
   return (
     <div className={`relative pointer-events-none select-none ${className}`} style={{ width, height }}>
@@ -239,59 +237,16 @@ export const ArgonWedgePieces = React.memo(function ArgonWedgePieces({
           </linearGradient>
         </defs>
 
-        {/* Back / Second Wedge (offset 4, 5) */}
+        {/* Back slab (offset 4, 5) */}
         <g transform="translate(4, 5)">
-          <g transform="matrix(1 0 0.8 1 0 0)">
-            <rect
-              x="0"
-              y="0"
-              width={rectWidth}
-              height={height}
-              rx="var(--argon-wedge-radius, 10px)"
-              ry="var(--argon-wedge-radius, 10px)"
-              fill="url(#argonWedgeBackdrop)"
-              stroke="var(--argon-accent, #66CCFF)"
-              strokeOpacity="0.12"
-              strokeWidth="1"
-            />
-            <rect
-              x="0"
-              y="0"
-              width={rectWidth}
-              height={height}
-              rx="var(--argon-wedge-radius, 10px)"
-              ry="var(--argon-wedge-radius, 10px)"
-              fill="url(#argonWedgeGradient)"
-              opacity="0.6"
-            />
-          </g>
+          <polygon points={points} fill="url(#argonWedgeBackdrop)" opacity="0.6" />
+          <polygon points={points} fill="url(#argonWedgeGradient)" opacity="0.6" />
         </g>
 
-        {/* Front / Primary Wedge (offset 0, 0) */}
+        {/* Front slab (offset 0, 0) */}
         <g transform="translate(0, 0)">
-          <g transform="matrix(1 0 0.8 1 0 0)">
-            <rect
-              x="0"
-              y="0"
-              width={rectWidth}
-              height={height}
-              rx="var(--argon-wedge-radius, 10px)"
-              ry="var(--argon-wedge-radius, 10px)"
-              fill="url(#argonWedgeBackdrop)"
-              stroke="var(--argon-accent, #66CCFF)"
-              strokeOpacity="0.25"
-              strokeWidth="1"
-            />
-            <rect
-              x="0"
-              y="0"
-              width={rectWidth}
-              height={height}
-              rx="var(--argon-wedge-radius, 10px)"
-              ry="var(--argon-wedge-radius, 10px)"
-              fill="url(#argonWedgeGradient)"
-            />
-          </g>
+          <polygon points={points} fill="url(#argonWedgeBackdrop)" />
+          <polygon points={points} fill="url(#argonWedgeGradient)" />
         </g>
       </svg>
     </div>
@@ -300,9 +255,12 @@ export const ArgonWedgePieces = React.memo(function ArgonWedgePieces({
 
 /**
  * ArgonHealthDisplay component
- * Recreates the top-left horizontal health display from osu!(lazer) Argon skin.
- * In ArgonSkin.cs: width ~300, bar height 30, position ~(50, 20),
- * with a short horizontal accent line (45x3) beside it at x=0.
+ * The thick flat chrome rail (flat top with a smooth bent down-leg on the
+ * right) IS the health bar, with a thin hairline extending left. HP depletes
+ * the chrome fill from right to left over a dark empty track; below 20 the
+ * fill turns red. No pill/capsule — the score digits sit plainly underneath.
+ * The fill is a single flat stroke: no inner highlight or shadow strokes,
+ * so no seam line shows inside the tube.
  */
 export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
   hp,
@@ -313,35 +271,94 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
 }) {
   const clampedHp = Math.max(0, Math.min(100, hp));
   const isCritical = clampedHp < 20;
+  // Long rail with wide, soft elbows: flat top, gradual sweep into the
+  // diagonal, rounded ease (no kink) into the final horizontal leg.
+  const railPath = 'M 52 10 H 224 C 250 10 262 15 271 30 L 278 41 C 281 47 285 48 291 48 H 352';
 
   return (
-    <div className={`flex items-center gap-2 pointer-events-none select-none ${className}`}>
-      {/* Short horizontal accent line beside health display (45x3, rounded-full) */}
-      <div
-        className="w-[45px] h-[3px] rounded-full bg-[#7ED7FD]/80 shrink-0"
-        aria-hidden="true"
-      />
-
-      {/* Health bar container (width 300px, height 30px, pill shape) */}
+    <div
+      className={`pointer-events-none select-none ${className}`}
+      style={{ width: 360, height: 56 }}
+    >
       <div
         id="argon-health-display"
-        className="w-[min(300px,calc(100vw-80px))] h-[30px] rounded-full bg-slate-950/85 border border-white/15 p-[3px] relative overflow-hidden"
         role="progressbar"
         aria-valuenow={Math.round(clampedHp)}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label="Health"
       >
-        {/* Fill bar: transition-none since the parent flushes quantized HP at
-            12.5Hz — a CSS transition would restart on every flush. */}
-        <div
-          className={`h-full rounded-full transition-none ${
-            isCritical
-              ? 'bg-rose-100'
-              : 'bg-white'
-          }`}
-          style={{ width: `${clampedHp}%` }}
-        />
+        <svg
+          width={360}
+          height={56}
+          viewBox="0 0 360 56"
+          className="overflow-visible block"
+          aria-hidden="true"
+        >
+          <defs>
+            {/* Near-white vertical sheen: the gradient maps over the whole
+                rail bounding box, so the diagonal would sit in any dark
+                middle band — keep mid stops bright so the bend never grays */}
+            <linearGradient id="healthChrome" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="42%" stopColor="#f5f8fb" />
+              <stop offset="55%" stopColor="#e9eef3" />
+              <stop offset="70%" stopColor="#f7fafc" />
+              <stop offset="100%" stopColor="#ffffff" />
+            </linearGradient>
+            <linearGradient id="healthChromeLow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ffffff" />
+              <stop offset="30%" stopColor="#ffd9de" />
+              <stop offset="46%" stopColor="#f2556f" />
+              <stop offset="54%" stopColor="#c22a44" />
+              <stop offset="62%" stopColor="#fda4af" />
+              <stop offset="80%" stopColor="#fff1f2" />
+              <stop offset="100%" stopColor="#f3b3be" />
+            </linearGradient>
+            <linearGradient id="healthHairline" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#7ed7fd" stopOpacity="0" />
+              <stop offset="100%" stopColor="#9fd8f5" stopOpacity="0.65" />
+            </linearGradient>
+          </defs>
+
+          {/* Thin hairline extending left from the rail */}
+          <rect x="2" y="8" width="52" height="2" rx="1" fill="url(#healthHairline)" />
+
+          {/* Dark empty track along the full rail */}
+          <path
+            d={railPath}
+            fill="none"
+            stroke="rgba(6,11,22,0.9)"
+            strokeWidth="11"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d={railPath}
+            fill="none"
+            stroke="rgba(255,255,255,0.14)"
+            strokeWidth="11.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.35"
+          />
+
+          {/* HP fill: flat chrome, depleting right-to-left (dash from path start).
+              No centered highlight or offset shadow: those painted a visible
+              seam line inside the tube. */}
+          {clampedHp > 0 && (
+            <path
+              d={railPath}
+              fill="none"
+              pathLength={100}
+              strokeDasharray={`${clampedHp} 100`}
+              stroke={isCritical ? 'url(#healthChromeLow)' : 'url(#healthChrome)'}
+              strokeWidth="11"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+        </svg>
       </div>
     </div>
   );
@@ -349,15 +366,8 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
 
 /**
  * ArgonScoreCounter component
- * Recreates the ArgonScoreCounter from osu!(lazer) Argon skin.
- * In ArgonSkin.cs: ShowLabel = false (no "Score" label),
- * sits on top of the wedges, tabular digits, 6 display digits with wireframe background.
- *
- * Visual: glassy dark-navy capsule with a thick glossy chrome rail running
- * along the top edge that bends down on the right (flat top, smooth elbow,
- * short down-leg), plus a thin hairline extending left. Digits sit inside
- * the glass, right-aligned, white with a soft glow; leading slots render as
- * faint wireframe zeros.
+ * Plain digits with no capsule, label, or rail: tabular digits with faint
+ * wireframe leading zeros, sitting underneath the chrome-rail health bar.
  */
 export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   score,
@@ -371,7 +381,6 @@ export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   const minDigits = 6;
   const paddedZerosCount = Math.max(0, minDigits - scoreStr.length);
   const wireframeZeros = '0'.repeat(paddedZerosCount);
-  const railPath = 'M 52 9 H 216 C 236 9 245 13 253 27 L 260 38 Q 262 42 268 42 H 312';
 
   // Every digit (and every wireframe placeholder) gets its own fixed-width
   // slot so Orbitron's proportional figures can't push neighbouring digits
@@ -382,114 +391,25 @@ export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
   return (
     <div
       id="argon-score-counter"
-      className={`relative select-none ${className}`}
-      style={{ width: 320, height: 52 }}
+      className={`font-display font-medium tabular-nums select-none flex items-baseline justify-end leading-none tracking-[0.12em] ${className}`}
       aria-label={`Score: ${safeScore}`}
     >
-      <svg
-        width={320}
-        height={52}
-        viewBox="0 0 320 52"
-        className="absolute inset-0 overflow-visible"
-        aria-hidden="true"
-      >
-        <defs>
-          <linearGradient id="scoreGlass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#14324f" stopOpacity="0.85" />
-            <stop offset="45%" stopColor="#0a1c31" stopOpacity="0.72" />
-            <stop offset="100%" stopColor="#04070d" stopOpacity="0.88" />
-          </linearGradient>
-          <linearGradient id="scoreChrome" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="28%" stopColor="#e6eef6" />
-            <stop offset="46%" stopColor="#93a3b5" />
-            <stop offset="50%" stopColor="#5b6b7e" />
-            <stop offset="56%" stopColor="#d7e3ef" />
-            <stop offset="78%" stopColor="#f8fbff" />
-            <stop offset="100%" stopColor="#c4d2e0" />
-          </linearGradient>
-          <linearGradient id="scoreHairline" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#7ed7fd" stopOpacity="0" />
-            <stop offset="100%" stopColor="#9fd8f5" stopOpacity="0.65" />
-          </linearGradient>
-        </defs>
-
-        {/* Dark glass body under the rail */}
-        <rect
-          x="52"
-          y="13"
-          width="260"
-          height="31"
-          rx="6"
-          fill="url(#scoreGlass)"
-          stroke="rgba(255,255,255,0.14)"
-          strokeWidth="1"
-        />
-        {/* Soft blue inner glow at the bottom of the glass */}
-        <rect
-          x="56"
-          y="34"
-          width="252"
-          height="8"
-          rx="4"
-          fill="#1c4a73"
-          opacity="0.25"
-        />
-
-        {/* Thin hairline extending left from the chrome rail */}
-        <rect x="2" y="8" width="52" height="2" rx="1" fill="url(#scoreHairline)" />
-
-        {/* Thick glossy chrome rail: flat top with a smooth bent down-leg right */}
-        <path
-          d={railPath}
-          fill="none"
-          stroke="url(#scoreChrome)"
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Specular highlight along the top of the tube */}
-        <path
-          d={railPath}
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity="0.8"
-          transform="translate(0 -1.6)"
-        />
-        {/* Faint dark under-shadow so the tube lifts off the glass */}
-        <path
-          d={railPath}
-          fill="none"
-          stroke="#020409"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity="0.55"
-          transform="translate(0 3.4)"
-        />
-      </svg>
-
-      <div className="font-display font-medium tabular-nums absolute inset-0 flex items-center justify-end leading-none pr-4 tracking-[0.12em]">
-        {wireframeZeros.split('').map((z, i) => (
-          <span
-            key={`wireframe-${i}`}
-            className="opacity-25 text-white select-none w-[1ch] text-center shrink-0"
-          >
-            {z}
-          </span>
-        ))}
-        {scoreStr.split('').map((d, i) => (
-          <span
-            key={`digit-${i}`}
-            className="text-white [text-shadow:0_0_7px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
-          >
-            {d}
-          </span>
-        ))}
-      </div>
+      {wireframeZeros.split('').map((z, i) => (
+        <span
+          key={`wireframe-${i}`}
+          className="opacity-25 text-white select-none w-[1ch] text-center shrink-0"
+        >
+          {z}
+        </span>
+      ))}
+      {scoreStr.split('').map((d, i) => (
+        <span
+          key={`digit-${i}`}
+          className="text-white [text-shadow:0_0_7px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.9)] w-[1ch] text-center shrink-0"
+        >
+          {d}
+        </span>
+      ))}
     </div>
   );
 });
@@ -558,7 +478,7 @@ export const ArgonPenarCounter = React.memo(function ArgonPenarCounter({
 /**
  * ArgonComboCounter component
  * Recreates the large combo counter from osu!(lazer) Argon skin.
- * Positioned bottom-left, scale ~1.3, bumping on combo increase.
+ * Positioned bottom-left, scale ~1.3, static size (no pop on combo increase).
  */
 export const ArgonComboCounter = React.memo(function ArgonComboCounter({
   combo = 0,
@@ -569,13 +489,10 @@ export const ArgonComboCounter = React.memo(function ArgonComboCounter({
 }) {
   if (combo <= 0) return null;
 
-  // The number updates on every parent render (fast tier), but the pop
-  // animation only re-fires when the parent remounts this node via its
-  // `key` (slow 3Hz tier) — no per-combo remount from inside.
   return (
     <div
       id="argon-combo-counter"
-      className={`flex flex-col items-start leading-none font-display select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] [text-shadow:0_2px_6px_rgba(0,0,0,0.95)] animate-combo-pop ${className}`}
+      className={`flex flex-col items-start leading-none font-display select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] [text-shadow:0_2px_6px_rgba(0,0,0,0.95)] ${className}`}
       aria-label={`Combo: ${combo}`}
     >
       <div className="text-5xl sm:text-6xl font-[900] tracking-tighter text-white">
@@ -616,7 +533,7 @@ export const ArgonKeyCounter = React.memo(function ArgonKeyCounter({
         <div
           key={k.id}
           id={`argon-key-box-${k.id}`}
-          className="w-8 sm:w-9 h-11 sm:h-12 rounded-lg bg-slate-950/85 border border-white/15 flex flex-col items-center justify-between py-1 px-0.5 transition-colors duration-75"
+          className="w-8 sm:w-9 h-11 sm:h-12 rounded-lg bg-slate-950/85 border border-white/15 flex flex-col items-center justify-between py-1 px-0.5 transition-all duration-50 ease-out"
         >
           <span className="font-display text-[10px] sm:text-[11px] font-bold uppercase text-slate-300 select-none">
             {k.label}
@@ -816,7 +733,6 @@ export const ManiaHud = React.memo(function ManiaHud({
   hp,
   accuracy = 100,
   combo = 0,
-  comboPopKey = 0,
   penar,
   showPenar = true,
   keyCount = 4,
@@ -838,21 +754,23 @@ export const ManiaHud = React.memo(function ManiaHud({
       id="mania-hud"
       className={`absolute inset-0 pointer-events-none select-none z-30 overflow-hidden ${className}`}
     >
-      {/* TOP-LEFT CLUSTER: Health display, Wedges, and Score */}
-      <div className="absolute top-2.5 sm:top-5 left-2.5 sm:left-[50px] flex flex-col items-start origin-top-left scale-[0.62] sm:scale-[0.88] md:scale-100">
-        {/* Health display row */}
-        <ArgonHealthDisplay hp={hp} />
+      {/* TOP-LEFT CLUSTER: flush to the screen left edge */}
+      <div className="absolute top-2.5 sm:top-5 left-0 flex flex-col items-start origin-top-left scale-[0.62] sm:scale-[0.88] md:scale-100">
+        {/* Health bar: thick glossy chrome rail on the topmost layer */}
+        <div className="relative z-50 -mb-6">
+          <ArgonHealthDisplay hp={hp} />
+        </div>
 
-        {/* Wedges + Score container */}
-        <div className="relative mt-2" style={{ width: 380, height: 72 }}>
-          {/* Procedural Argon Wedges */}
-          <ArgonWedgePieces width={380} height={72} />
+        {/* Score slab + digits */}
+        <div className="relative" style={{ width: 320, height: 60 }}>
+          {/* Parallelogram score slab (straight left, `/` slant right) */}
+          <ArgonWedgePieces width={320} height={60} />
 
-          {/* Score Counter: chrome rail + glass, origin top-left */}
+          {/* Score Counter: plain digits, shifted left */}
           <div
-            className="absolute top-0 left-0 w-full h-full flex items-start justify-start"
+            className="absolute top-0 left-0 w-full h-full flex items-start justify-end pr-20 sm:pr-24"
             style={{
-              transform: 'translateY(4px)',
+              transform: 'translateY(12px)',
             }}
           >
             <ArgonScoreCounter score={score} className="text-[26px]" />
@@ -883,11 +801,9 @@ export const ManiaHud = React.memo(function ManiaHud({
         rightCanvasRef={rightHitErrorCanvasRef}
       />
 
-      {/* BOTTOM-LEFT: Combo Counter. The number updates every render (fast
-          tier) but the pop animation only re-fires when comboPopKey changes
-          (slow 3Hz tier) via the remount key. */}
+      {/* BOTTOM-LEFT: Combo Counter. Static size, updates every render (fast tier). */}
       <div className={`absolute left-4 sm:left-[50px] ${isReplayMode || isAutoplay ? 'bottom-24 sm:bottom-28' : 'bottom-6 sm:bottom-8'}`}>
-        <ArgonComboCounter key={`argon-combo-pop-${comboPopKey}`} combo={combo} />
+        <ArgonComboCounter combo={combo} />
       </div>
 
       {/* BOTTOM-RIGHT: Key Counter */}

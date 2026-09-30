@@ -70,7 +70,7 @@ export default function SettingInfoTip({ label, text }: SettingInfoTipProps) {
         <div
           id={tipId}
           role="tooltip"
-          className="fixed z-[70] rounded-md bg-[#1d1c2d] border border-black/40 shadow-2xl px-3 py-2 text-[11px] leading-snug text-[#cfcfe4] font-sans"
+          className="fixed z-[150] rounded-md bg-[#1d1c2d] border border-black/40 shadow-2xl px-3 py-2 text-[11px] leading-snug text-[#cfcfe4] font-sans"
           style={{
             left: pos.left,
             top: pos.top,

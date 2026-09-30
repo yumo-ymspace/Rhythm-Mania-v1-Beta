@@ -1530,7 +1530,6 @@ export default function App() {
         songSelectBackgroundDim: Number(updated.songSelectBackgroundDim !== undefined ? updated.songSelectBackgroundDim : 0),
         disableVideo: Boolean(updated.disableVideo),
         videoOffset: Number(updated.videoOffset !== undefined ? updated.videoOffset : 0),
-        disableComboBurst: Boolean(updated.disableComboBurst),
         renderDpr: (() => {
           const num = Number(updated.renderDpr);
           if (num === 1 || num === 1.5 || num === 2) return num;

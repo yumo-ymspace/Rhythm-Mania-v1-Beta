@@ -36,7 +36,7 @@ export default function ConfirmModal({ isOpen, message, onConfirm, onCancel }: C
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-[#232230] border border-black/30 rounded-md shadow-2xl max-w-sm w-full p-5 space-y-4 animate-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-labelledby="settings-confirm-title">
         <div className="flex items-center gap-3 text-[#e8b400]">
           <AlertCircle className="w-5 h-5" />

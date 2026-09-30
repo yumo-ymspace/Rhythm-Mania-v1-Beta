@@ -329,7 +329,6 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     songSelectBackgroundDim: clamp(settings.songSelectBackgroundDim, 0, 1, defaultSettings.songSelectBackgroundDim ?? 0),
     disableVideo: Boolean(settings.disableVideo),
     videoOffset: clamp(settings.videoOffset, -10000, 10000, defaultSettings.videoOffset || 0),
-    disableComboBurst: Boolean(settings.disableComboBurst),
     renderDpr: sanitizeRenderDprSetting(settings, defaultSettings),
     skinId: (() => {
       const cleaned = sanitizeString(settings.skinId, defaultSettings.skinId || 'argon');

@@ -748,7 +748,9 @@ html[data-ui="lazer"] {
 
 /* While the beatmap listing is open the toolbar stays on top of the
    listing overlay (backdrop z-100, panel z-110) with the listing icon
-   highlighted pink. */
+   highlighted pink. The settings drawer stacks above both (backdrop
+   z-[130], drawer z-[140]), so opening settings from the toolbar while
+   the listing is open covers the toolbar and the listing. */
 .lazer-toolbar.is-above-listing {
   z-index: 120;
 }
@@ -3323,7 +3325,7 @@ html[data-ui="lazer"] {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 10px;
+  height: 12px;
   display: flex;
   align-items: flex-end;
   cursor: pointer;
@@ -3338,13 +3340,14 @@ html[data-ui="lazer"] {
 .lazer-now-playing-progress-track {
   width: 100%;
   height: 5px;
-  background: rgba(255, 210, 75, 0.35);
+  background: rgba(255, 255, 255, 0.2);
   transition: height 200ms ease;
+  overflow: hidden;
 }
 
 .lazer-now-playing-progress:hover .lazer-now-playing-progress-track,
 .lazer-now-playing-progress:focus-visible .lazer-now-playing-progress-track {
-  height: 10px;
+  height: 12px;
 }
 
 .lazer-now-playing-progress-fill {

@@ -135,10 +135,14 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
       customSkinName: undefined,
       videoOffset: 0,
       disableVideo: false,
-      disableComboBurst: false,
     });
   };
 
+  // Overlay stack (see OnlineBeatmapCatalog): listing backdrop z-100 /
+  // panel z-110, elevated toolbar z-120, settings backdrop z-[130] /
+  // drawer z-[140], settings tooltips z-[150], settings modals z-[160].
+  // Settings always stacks on top of the beatmap listing so opening it
+  // from the toolbar while the listing is open never hides it behind.
   return (
     <>
       <AnimatePresence>
@@ -146,9 +150,9 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
           <>
             <motion.div
               key="backdrop"
-              className="fixed inset-0 z-40 backdrop-blur-sm"
+              className="fixed inset-0 z-[130] backdrop-blur-sm"
               onClick={onClose}
-              aria-hidden 
+              aria-hidden
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -157,7 +161,7 @@ export default function SettingsDrawer({ open, onClose, settings, updateSettings
             <motion.aside
               key="drawer"
               data-settings-drawer
-              className="settings-shell fixed inset-y-0 left-0 z-50 w-full md:w-[640px] md:max-w-[92vw] flex flex-col md:flex-row"
+              className="settings-shell fixed inset-y-0 left-0 z-[140] w-full md:w-[640px] md:max-w-[92vw] flex flex-col md:flex-row"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

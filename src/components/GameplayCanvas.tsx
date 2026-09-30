@@ -311,10 +311,9 @@ interface HitErrorTick {
 
 // All ManiaHud overlay work flushes on two tiers so the overlay stays cheap
 // while feeling live. The fast tier (12.5Hz) owns React score/combo/HP/
-// accuracy/judgement/burst, progress + time labels, key-counter DOM, and
+// accuracy/judgement, progress + time labels, key-counter DOM, and
 // hit-error meters. The slow tier (3Hz) owns the live PENAR counter (slow
-// moving, costs a difficulty-table lookup), the FPS readout, and the
-// combo-pop animation generation. The playfield canvas itself still renders
+// moving, costs a difficulty-table lookup) and the FPS readout. The playfield canvas itself still renders
 // every rAF; only the DOM/React overlay is throttled.
 export const MANIA_HUD_UPDATE_INTERVAL_MS = 80;
 export const MANIA_HUD_SLOW_UPDATE_INTERVAL_MS = 333;
@@ -488,9 +487,7 @@ export default function GameplayCanvas({
         timers: [
           finishTimeoutRef.current,
           uiJudgementTimeoutRef.current,
-          comboBurstTimeoutRef.current,
           scrollTimeoutRef.current,
-          notificationTimeoutRef.current,
         ].filter((timer): timer is ReturnType<typeof setTimeout> => timer !== null),
         video: videoRef.current,
         videoSync: syncControllerRef.current,
@@ -579,65 +576,6 @@ export default function GameplayCanvas({
       await FullscreenManager.exitFocusMode();
     }
   };
-  const [showOffsetNotification, setShowOffsetNotification] = useState<boolean>(false);
-  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showLockedScrollNotification, setShowLockedScrollNotification] = useState<boolean>(false);
-  const lockedScrollNotificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Monitor real-time latency offset keys + and - during gameplay, and intercept scroll speed hotkeys
-  useEffect(() => {
-    const handleOffsetKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
-        return;
-      }
-
-      // Check for F3 / F4 or Ctrl+/- / Ctrl+= (scroll speed attempts)
-      if (e.key === 'F3' || e.key === 'F4' || ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+' || e.key === '-'))) {
-        e.preventDefault();
-        const isLocked = (isPlayingRef.current || !isPrePlayRef.current) && (settingsRef.current.lockScrollSpeedDuringPlay !== false);
-        if (isLocked) {
-          setShowLockedScrollNotification(true);
-          if (lockedScrollNotificationTimeoutRef.current) clearTimeout(lockedScrollNotificationTimeoutRef.current);
-          lockedScrollNotificationTimeoutRef.current = setTimeout(() => {
-            setShowLockedScrollNotification(false);
-          }, 1800);
-        }
-        return;
-      }
-
-      if (!e.ctrlKey && !e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
-          const nextOffset = settings.audioOffset + 5;
-          if (updateSettings) {
-            updateSettings({ audioOffset: nextOffset });
-            setShowOffsetNotification(true);
-            if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
-            notificationTimeoutRef.current = setTimeout(() => {
-              setShowOffsetNotification(false);
-            }, 1800);
-          }
-        } else if (e.key === '-' || e.key === '_') {
-          const nextOffset = settings.audioOffset - 5;
-          if (updateSettings) {
-            updateSettings({ audioOffset: nextOffset });
-            setShowOffsetNotification(true);
-            if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
-            notificationTimeoutRef.current = setTimeout(() => {
-              setShowOffsetNotification(false);
-            }, 1800);
-          }
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleOffsetKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleOffsetKeyDown);
-      if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
-      if (lockedScrollNotificationTimeoutRef.current) clearTimeout(lockedScrollNotificationTimeoutRef.current);
-    };
-  }, [settings.audioOffset, updateSettings]);
-  
   // Game state refs (to avoid stale closures in high-frequency keyboard/requestAnimationFrame loops)
   const isPlayingRef = useRef<boolean>(true);
   const audioStartPendingRef = useRef<boolean>(false);
@@ -712,15 +650,10 @@ export default function GameplayCanvas({
 
   const [uiScore, setUiScore] = useState<number>(0);
   const [uiCombo, setUiCombo] = useState<number>(0);
-  // Combo pop animation generation: bumped at most at the 3Hz slow tier so
-  // the number itself stays live at 12.5Hz while the remount + pop animation
-  // never restarts faster than ~333ms.
-  const [uiComboPop, setUiComboPop] = useState<number>(0);
   const [uiHp, setUiHp] = useState<number>(100);
   const [uiAccuracy, setUiAccuracy] = useState<number>(100);
   const [uiPenar, setUiPenar] = useState<PenarBreakdown | null>(null);
   const [uiJudgement, setUiJudgement] = useState<{ text: string; color: string; time: number } | null>(null);
-  const [comboBurst, setComboBurst] = useState<number | null>(null);
   // Throttled HUD sync: applyJudgement only writes these refs (no setState in
   // the input path). The rAF loop flushes to React on the fast 12.5Hz tier,
   // so per-note reconciliation never blocks judgement or audio.
@@ -732,10 +665,8 @@ export default function GameplayCanvas({
   // full-chart rating mid-map awards near-final PENAR after a few notes.
   const timedPenarRef = useRef<TimedManiaDifficultyAttributes[]>([]);
   const hudJudgementRef = useRef<{ text: string; color: string; time: number } | null>(null);
-  const hudBurstRef = useRef<{ value: number; time: number } | null>(null);
   const lastHudFlushRef = useRef<number>(0);
   const lastHudSlowFlushRef = useRef<number>(0);
-  const lastComboPopRef = useRef<number>(0);
   const lastMeterSigRef = useRef<string>('');
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [unpauseCountdown, setUnpauseCountdown] = useState<number>(0);
@@ -823,6 +754,64 @@ export default function GameplayCanvas({
       if (boxEl) boxEl.classList.remove('argon-key-active');
     }
   };
+
+  // Single-lane press highlight, written synchronously so the bottom-right
+  // key boxes react on the input event itself instead of waiting for the
+  // next rAF / 80ms HUD flush. Count text still flushes on the slow tier.
+  const setKeyBoxActiveImmediate = (colIndex: number, pressed: boolean) => {
+    if (colIndex < 0 || colIndex >= beatmap.keyCount) return;
+    let cached = keyCounterElsRef.current;
+    if (cached.length !== beatmap.keyCount) {
+      cacheKeyCounterEls();
+      cached = keyCounterElsRef.current;
+    }
+    let boxEl = cached[colIndex]?.box ?? null;
+    if (!boxEl) {
+      boxEl = document.getElementById(`argon-key-box-${colIndex}`);
+      const els = cached[colIndex];
+      if (els) els.box = boxEl;
+    }
+    if (!boxEl) return;
+    const isActive = boxEl.classList.contains('argon-key-active');
+    if (pressed !== isActive) {
+      if (pressed) boxEl.classList.add('argon-key-active');
+      else boxEl.classList.remove('argon-key-active');
+    }
+  };
+
+  // Per-frame press-highlight sync (class-only, no innerText reads): keeps
+  // replay/autoplay/hold visuals at frame latency instead of the 80ms HUD
+  // tier. Cheap: at most 10 cached class toggles, no layout reads.
+  const flushKeyBoxesFast = () => {
+    const pressed = keysPressedRef.current;
+    let cached = keyCounterElsRef.current;
+    if (cached.length !== beatmap.keyCount) {
+      cacheKeyCounterEls();
+      cached = keyCounterElsRef.current;
+    }
+    for (let i = 0; i < beatmap.keyCount; i++) {
+      const els = cached[i];
+      let boxEl = els?.box ?? null;
+      if (!boxEl) {
+        boxEl = document.getElementById(`argon-key-box-${i}`);
+        if (els) els.box = boxEl;
+      }
+      if (boxEl) {
+        const shouldActive = !!pressed[i];
+        const isActive = boxEl.classList.contains('argon-key-active');
+        if (shouldActive !== isActive) {
+          if (shouldActive) boxEl.classList.add('argon-key-active');
+          else boxEl.classList.remove('argon-key-active');
+        }
+      }
+    }
+  };
+  // Ref-stable handle so the input-event effect (mounted once) can write the
+  // highlight synchronously without a stale closure.
+  const keyBoxActiveRef = useRef(setKeyBoxActiveImmediate);
+  keyBoxActiveRef.current = setKeyBoxActiveImmediate;
+  const flushKeyBoxesFastRef = useRef(flushKeyBoxesFast);
+  flushKeyBoxesFastRef.current = flushKeyBoxesFast;
   const progressBarRef = useRef<HTMLElement | HTMLInputElement | null>(null);
   const isScrubbingRef = useRef<boolean>(false);
   // Last flushed overlay values so the fast HUD flush skips redundant DOM writes.
@@ -841,6 +830,13 @@ export default function GameplayCanvas({
   const isReplayMode = !!replayRecord;
   const isAutoplay = !isReplayMode && ((settings.selectedMods || []).includes('AT') || (settings.selectedMods || []).includes('CN'));
   const isCinema = !isReplayMode && (settings.selectedMods || []).includes('CN');
+  // AT-only keypress visuals: CN cinema hides the playfield chassis, so it
+  // keeps the legacy autoplay path (judgement only, no lane/key-box presses).
+  const showAutoplayKeys = isAutoplay && !isCinema;
+  // Tap press hold time: how long a tap head keeps the lane + key box lit.
+  // Long enough to survive one fast-HUD flush so the flash is always visible,
+  // short enough that streams don't look stuck.
+  const AUTOPLAY_TAP_VISUAL_MS = 90;
 
   /** Map-failed sting, played once per run (never in replays/autoplay). */
   const playFailSoundOnce = () => {
@@ -871,7 +867,6 @@ export default function GameplayCanvas({
   const adaptiveSpeedAvgErrorRef = useRef<number>(0);
   const finishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uiJudgementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const comboBurstTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unpauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef<boolean>(true);
@@ -897,9 +892,7 @@ export default function GameplayCanvas({
         timers: [
           finishTimeoutRef.current,
           uiJudgementTimeoutRef.current,
-          comboBurstTimeoutRef.current,
           scrollTimeoutRef.current,
-          notificationTimeoutRef.current,
         ].filter((timer): timer is ReturnType<typeof setTimeout> => timer !== null),
         video: videoRef.current,
         videoSync: syncControllerRef.current,
@@ -930,6 +923,10 @@ export default function GameplayCanvas({
   // decremented on tail events. Lets the per-frame lane-state update run in
   // O(keys) instead of scanning every note for holding holds.
   const autoplayHoldCountRef = useRef<number[]>([]);
+  // Per-lane autoplay tap release times (judgeTime ms): tap heads press the
+  // lane + bottom-right key box like a real keydown, released when judgeTime
+  // passes the expiry. Frame-driven (not setTimeout) so pause/seek stay safe.
+  const autoplayTapReleaseRef = useRef<number[]>([]);
   const lastAutoplayTimeRef = useRef<number>(0);
   const [loadingAudioProgress, setLoadingAudioProgress] = useState<number>(0);
   const [isAudioLoaded, setIsAudioLoaded] = useState<boolean>(false);
@@ -1097,6 +1094,7 @@ export default function GameplayCanvas({
     missCursorRef.current = 0;
     autoplayCursorRef.current = 0;
     autoplayHoldCountRef.current = new Array(beatmap.keyCount).fill(0);
+    autoplayTapReleaseRef.current = new Array(beatmap.keyCount).fill(Number.NEGATIVE_INFINITY);
     lastAutoplayTimeRef.current = 0;
     // Per-column views share the same note object identities, so judgement
     // flags stay in sync; each lane list stays time-sorted via the global sort.
@@ -1207,18 +1205,14 @@ export default function GameplayCanvas({
     hudPendingRef.current.hp = 100;
     hudPendingRef.current.accuracy = 100;
     hudJudgementRef.current = null;
-    hudBurstRef.current = null;
     lastHudFlushRef.current = 0;
     lastHudSlowFlushRef.current = 0;
-    lastComboPopRef.current = 0;
     lastMeterSigRef.current = '';
     setUiScore(0);
     setUiCombo(0);
-    setUiComboPop(0);
     setUiHp(100);
     setUiAccuracy(100);
     setUiJudgement(null);
-    setComboBurst(null);
     setIsPaused(false);
     setIsFailed(false);
     failSoundPlayedRef.current = false;
@@ -1562,6 +1556,7 @@ export default function GameplayCanvas({
       keysPressedRef.current[colIndex] = true;
       activeColumnsRef.current[colIndex] = true;
       laneGlowRef.current[colIndex] = 1.0;
+      keyBoxActiveRef.current(colIndex, true);
       if (hasKeyPressedOnceRef.current) {
         hasKeyPressedOnceRef.current[colIndex] = true;
       }
@@ -1596,10 +1591,11 @@ export default function GameplayCanvas({
       }
       keysPressedRef.current[colIndex] = false;
       activeColumnsRef.current[colIndex] = false;
+      keyBoxActiveRef.current(colIndex, false);
       if (holdRulesVersion === HOLD_TICK_RULES_VERSION && tickHoldsRef.current.length > 0) {
         advanceHoldTailTicks(tickHoldsRef.current, inputTime, keysPressedRef.current, note => applyJudgement(missJudg, note.column));
       }
-      
+       
       triggerReleaseEvent(colIndex, inputTime);
 
       if (!isReplayMode) {
@@ -1697,6 +1693,7 @@ export default function GameplayCanvas({
         if (keysPressedRef.current[i]) {
           keysPressedRef.current[i] = false;
           activeColumnsRef.current[i] = false;
+          keyBoxActiveRef.current(i, false);
         }
       }
     };
@@ -2337,9 +2334,6 @@ export default function GameplayCanvas({
       if (state.combo > state.maxCombo) {
         state.maxCombo = state.combo;
       }
-      if (state.combo >= 50 && state.combo % 50 === 0 && !settingsRef.current.disableComboBurst) {
-        hudBurstRef.current = { value: state.combo, time: Date.now() };
-      }
       
       if (judg.type === 'marvelous') state.marvelousCount++;
       else if (judg.type === 'perfect') state.perfectCount++;
@@ -2672,8 +2666,8 @@ export default function GameplayCanvas({
       // Two-tier HUD flush: the fast 12.5Hz tier owns every live
       // ManiaHud/DOM update (React score/combo/HP/accuracy/judgement/burst,
       // progress + time labels, break label, key-counter DOM, hit-error
-      // meters). The slow 3Hz tier owns the live PENAR counter, the FPS
-      // readout, and the combo-pop animation generation. The playfield
+      // meters). The slow 3Hz tier owns the live PENAR counter and the FPS
+      // readout. The playfield
       // canvas above still renders every rAF.
       {
         const nowMs = performance.now();
@@ -2788,13 +2782,6 @@ export default function GameplayCanvas({
             if (j) hudJudgementRef.current = null;
             setUiJudgement((prev) => (prev === null ? prev : null));
           }
-          const b = hudBurstRef.current;
-          if (b && wallNow - b.time < 900) {
-            setComboBurst((prev) => (prev === b.value ? prev : b.value));
-          } else {
-            if (b) hudBurstRef.current = null;
-            setComboBurst((prev) => (prev === null ? prev : null));
-          }
 
           // Key-counter DOM (counts + active classes) at the fast tier. Flush
           // unconditionally with cached handles: press/release states change
@@ -2867,14 +2854,6 @@ export default function GameplayCanvas({
           });
           const flushedPenar = scoreStateRef.current.penar ?? null;
           setUiPenar((prev) => (prev === flushedPenar ? prev : flushedPenar));
-
-          // Combo-pop generation at 3Hz: the number itself updates on the
-          // fast tier, but the remount + pop animation only re-fires here.
-          const liveCombo = scoreStateRef.current.combo;
-          if (liveCombo !== lastComboPopRef.current) {
-            lastComboPopRef.current = liveCombo;
-            setUiComboPop((prev) => (prev === liveCombo ? prev : liveCombo));
-          }
         }
       }
 
@@ -3034,11 +3013,40 @@ export default function GameplayCanvas({
                 });
 
                 updateKeyCounterUi(n.column, true, true);
-                if (n.type !== 'hold') {
-                  setTimeout(() => updateKeyCounterUi(n.column, false, false), 60);
-                } else {
-                  // Track the held lane incrementally so the per-frame
-                  // receptor update stays O(keys) (see below).
+                if (showAutoplayKeys) {
+                  // Replay-style press: lane receptor + bottom-right key box
+                  // light via keysPressed (flushed to DOM), same sources as
+                  // live/replay input. Judgement stays forced marvelous.
+                  keysPressedRef.current[n.column] = true;
+                  activeColumnsRef.current[n.column] = true;
+                  if (hasKeyPressedOnceRef.current) {
+                    hasKeyPressedOnceRef.current[n.column] = true;
+                  }
+                  if (n.type !== 'hold') {
+                    // Tap: hold the visual press briefly; the per-frame
+                    // maintenance below releases it (pause/seek safe).
+                    let expiries = autoplayTapReleaseRef.current;
+                    if (expiries.length !== beatmap.keyCount) {
+                      expiries = new Array(beatmap.keyCount).fill(Number.NEGATIVE_INFINITY);
+                      autoplayTapReleaseRef.current = expiries;
+                    }
+                    expiries[n.column] = Math.max(
+                      expiries[n.column] ?? Number.NEGATIVE_INFINITY,
+                      evt.eventTime + AUTOPLAY_TAP_VISUAL_MS,
+                    );
+                  } else {
+                    // Track the held lane incrementally so the per-frame
+                    // receptor update stays O(keys) (see below).
+                    const counts = autoplayHoldCountRef.current;
+                    if (counts.length !== beatmap.keyCount) {
+                      autoplayHoldCountRef.current = new Array(beatmap.keyCount).fill(0);
+                    }
+                    autoplayHoldCountRef.current[n.column] =
+                      (autoplayHoldCountRef.current[n.column] || 0) + 1;
+                  }
+                } else if (n.type === 'hold') {
+                  // Cinema legacy path: holds track the lane, taps only bump
+                  // the counter (no lane/key-box press).
                   const counts = autoplayHoldCountRef.current;
                   if (counts.length !== beatmap.keyCount) {
                     autoplayHoldCountRef.current = new Array(beatmap.keyCount).fill(0);
@@ -3069,7 +3077,16 @@ export default function GameplayCanvas({
                   const counts = autoplayHoldCountRef.current;
                   const next = Math.max(0, (counts[n.column] || 1) - 1);
                   counts[n.column] = next;
-                  if (next === 0) {
+                  if (showAutoplayKeys) {
+                    // Keep the lane lit if a tap flash is still active in
+                    // the same column (hold + tap overlap).
+                    const tapActive =
+                      (autoplayTapReleaseRef.current[n.column] ?? Number.NEGATIVE_INFINITY) > judgeTime;
+                    if (next === 0 && !tapActive) {
+                      keysPressedRef.current[n.column] = false;
+                      activeColumnsRef.current[n.column] = false;
+                    }
+                  } else if (next === 0) {
                     keysPressedRef.current[n.column] = false;
                     activeColumnsRef.current[n.column] = false;
                   }
@@ -3123,6 +3140,11 @@ export default function GameplayCanvas({
                 if (holding) rebuilt[n.column] = (rebuilt[n.column] || 0) + 1;
               }
               autoplayHoldCountRef.current = rebuilt;
+              if (showAutoplayKeys) {
+                // Timeline jumped backwards: taps from the future must not
+                // stay lit.
+                autoplayTapReleaseRef.current = new Array(beatmap.keyCount).fill(Number.NEGATIVE_INFINITY);
+              }
               for (let col = 0; col < beatmap.keyCount; col++) {
                 const held = rebuilt[col] > 0;
                 keysPressedRef.current[col] = held;
@@ -3131,15 +3153,43 @@ export default function GameplayCanvas({
             }
             lastAutoplayTimeRef.current = judgeTime;
             const counts = autoplayHoldCountRef.current;
-            for (let col = 0; col < beatmap.keyCount; col++) {
-              if ((counts[col] || 0) > 0) {
-                laneGlowRef.current[col] = Math.max(laneGlowRef.current[col] || 0, 0.8);
+            if (showAutoplayKeys) {
+              // Replay-style sustain: holds + active tap flashes drive the
+              // receptors, lane glow, and bottom-right key boxes every frame.
+              let expiries = autoplayTapReleaseRef.current;
+              if (expiries.length !== beatmap.keyCount) {
+                expiries = new Array(beatmap.keyCount).fill(Number.NEGATIVE_INFINITY);
+                autoplayTapReleaseRef.current = expiries;
+              }
+              for (let col = 0; col < beatmap.keyCount; col++) {
+                const held = (counts[col] || 0) > 0;
+                const tapActive = (expiries[col] ?? Number.NEGATIVE_INFINITY) > judgeTime;
+                const shouldPressed = held || tapActive;
+                if (shouldPressed) {
+                  keysPressedRef.current[col] = true;
+                  activeColumnsRef.current[col] = true;
+                  laneGlowRef.current[col] = Math.max(laneGlowRef.current[col] || 0, 0.8);
+                } else if ((counts[col] || 0) === 0) {
+                  keysPressedRef.current[col] = false;
+                  activeColumnsRef.current[col] = false;
+                }
+              }
+            } else {
+              for (let col = 0; col < beatmap.keyCount; col++) {
+                if ((counts[col] || 0) > 0) {
+                  laneGlowRef.current[col] = Math.max(laneGlowRef.current[col] || 0, 0.8);
+                }
               }
             }
           }
         }
 
         if (!isReplayMode) checkAutonomousMisses(judgeTime);
+
+        // Frame-latency key-box highlights (class-only): replay/autoplay/hold
+        // state set above reaches the DOM this frame instead of the 80ms HUD
+        // tier. Live keydown/up already write synchronously on the event.
+        flushKeyBoxesFastRef.current();
         
         // Continuous Video-Audio phase lock (PI PLL + transport snaps elsewhere)
         if (videoRef.current) {
@@ -3499,11 +3549,9 @@ export default function GameplayCanvas({
       hudPendingRef.current.accuracy = 100;
       lastHudFlushRef.current = 0;
       lastHudSlowFlushRef.current = 0;
-      lastComboPopRef.current = 0;
       lastMeterSigRef.current = '';
       setUiScore(0);
       setUiCombo(0);
-      setUiComboPop(0);
       setUiHp(100);
       setUiAccuracy(100);
       return;
@@ -3875,11 +3923,9 @@ export default function GameplayCanvas({
     hudPendingRef.current.accuracy = scoreStateRef.current.accuracy;
     lastHudFlushRef.current = 0;
     lastHudSlowFlushRef.current = 0;
-    lastComboPopRef.current = scoreStateRef.current.combo;
     lastMeterSigRef.current = '';
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
-    setUiComboPop(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
     setUiAccuracy(scoreStateRef.current.accuracy);
   };
@@ -3925,6 +3971,22 @@ export default function GameplayCanvas({
           if (note.column >= 0 && note.column < beatmap.keyCount) holdingByColumn[note.column] = true;
         }
       }
+      // Rebuild the incremental hold refcounts so the per-frame autoplay
+      // maintenance keeps seek-restored holds lit (taps never persist).
+      const rebuiltCounts = new Array(beatmap.keyCount).fill(0);
+      for (const note of notesRef.current) {
+        if (note.type !== 'hold') continue;
+        if (note.endTime !== undefined && note.endTime <= boundedTime) continue;
+        const holding = note.holdState
+          ? (note.holdState.isHolding && !note.holdState.isTailJudged)
+          : (note.isHit && !note.isReleased && !note.isHoldFailed);
+        if (holding && note.column >= 0 && note.column < beatmap.keyCount) {
+          rebuiltCounts[note.column] = (rebuiltCounts[note.column] || 0) + 1;
+        }
+      }
+      autoplayHoldCountRef.current = rebuiltCounts;
+      autoplayTapReleaseRef.current = new Array(beatmap.keyCount).fill(Number.NEGATIVE_INFINITY);
+      lastAutoplayTimeRef.current = boundedTime;
       for (let col = 0; col < beatmap.keyCount; col++) {
         keysPressedRef.current[col] = holdingByColumn[col];
         activeColumnsRef.current[col] = holdingByColumn[col];
@@ -3941,11 +4003,9 @@ export default function GameplayCanvas({
     hudPendingRef.current.accuracy = scoreStateRef.current.accuracy;
     lastHudFlushRef.current = 0;
     lastHudSlowFlushRef.current = 0;
-    lastComboPopRef.current = scoreStateRef.current.combo;
     lastMeterSigRef.current = '';
     setUiScore(scoreStateRef.current.score);
     setUiCombo(scoreStateRef.current.combo);
-    setUiComboPop(scoreStateRef.current.combo);
     setUiHp(scoreStateRef.current.hp);
     setUiAccuracy(scoreStateRef.current.accuracy);
   };
@@ -4009,13 +4069,11 @@ export default function GameplayCanvas({
     }
     for (const timer of [
       uiJudgementTimeoutRef.current,
-      comboBurstTimeoutRef.current,
       scrollTimeoutRef.current,
     ]) {
       if (timer !== null) clearTimeout(timer);
     }
     uiJudgementTimeoutRef.current = null;
-    comboBurstTimeoutRef.current = null;
     scrollTimeoutRef.current = null;
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -4055,6 +4113,9 @@ export default function GameplayCanvas({
     lastFrameWallRef.current = 0;
     missCursorRef.current = 0;
     autoplayCursorRef.current = 0;
+    autoplayHoldCountRef.current = new Array(beatmap.keyCount).fill(0);
+    autoplayTapReleaseRef.current = new Array(beatmap.keyCount).fill(Number.NEGATIVE_INFINITY);
+    lastAutoplayTimeRef.current = 0;
     audioStartPendingRef.current = true;
     void mainAudio.playAsync(beatmap.bpm, settings.audioOffset, startDelayMs).then(() => {
       audioStartPendingRef.current = false;
@@ -4541,25 +4602,6 @@ export default function GameplayCanvas({
       <div 
         className="flex-1 w-full h-full flex flex-col items-center relative bg-slate-950 overflow-hidden text-slate-100"
       >
-        {/* FLOATING REAL-TIME CALIBRATION HUD TOAST */}
-        {showOffsetNotification && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-25 bg-slate-950/95 border border-cyan-500/65 shadow-[0_0_20px_rgba(34,211,238,0.3)] text-cyan-400 font-mono text-xs font-black uppercase tracking-widest px-5 py-2.5 rounded-full flex items-center gap-3 transition-all">
-            <span className="animate-pulse">● LATENCY ADJUSTED</span>
-            <span className="text-white bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
-              {settings.audioOffset > 0 ? `+${settings.audioOffset}` : settings.audioOffset}ms
-            </span>
-          </div>
-        )}
-
-        {showLockedScrollNotification && (
-          <div id="scroll-locked-toast" className="absolute top-20 left-1/2 -translate-x-1/2 z-25 bg-slate-950/95 border border-amber-500/65 shadow-[0_0_20px_rgba(245,158,11,0.3)] text-amber-400 font-mono text-xs font-black uppercase tracking-widest px-5 py-2.5 rounded-full flex items-center gap-3 transition-all">
-            <span className="animate-pulse">🔒 SCROLL SPEED LOCKED MID-MAP</span>
-            <span className="text-white bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
-              {lockedScrollSpeedRef.current}x (~{computeScrollTravelTimeMs(lockedScrollSpeedRef.current)}ms)
-            </span>
-          </div>
-        )}
-
         {/* VIDEO FORMAT WARNING (soft notice — not a pipeline error) */}
         {videoFormatWarning && showVideoFormatWarning && !isPrePlay && (
           <div className="absolute top-24 right-4 bg-amber-950/80 border border-amber-500/40 p-3 rounded-lg text-[11px] font-sans text-amber-100 z-50 max-w-sm shadow-2xl animate-fade-in backdrop-blur-sm">
@@ -4607,7 +4649,6 @@ export default function GameplayCanvas({
             penar={uiPenar}
             showPenar={settings.showPenarDuringPlay !== false}
             combo={uiCombo}
-            comboPopKey={uiComboPop}
             keyCount={beatmap.keyCount}
             keyLabels={settings.bindings[beatmap.keyCount] || []}
             playfieldWidthPercent={settings.playfieldWidthPercent ?? 40}
@@ -4922,36 +4963,15 @@ export default function GameplayCanvas({
                   transformOrigin: 'center center',
                 }}
               >
-                {/* Combo numbers & burst (Legacy skins only; Argon places combo bottom-left) */}
-                {settings.skinId !== 'argon' && uiCombo > 4 && (
-                  <div
-                    className="absolute bottom-full pb-2 flex flex-col items-center justify-end gap-1 whitespace-nowrap"
-                  >
-                    {comboBurst !== null && (
-                      <div key={`burst-${comboBurst}`} className="rounded-full border-2 border-amber-300/70 bg-amber-400/20 px-8 py-3 text-2xl font-black uppercase tracking-[0.35em] text-amber-200 shadow-[0_0_35px_rgba(251,191,36,0.65)] animate-combo-pop">
-                        {comboBurst}x
-                      </div>
-                    )}
-                    <div key={`combo-${uiComboPop}`} className="flex flex-col items-center justify-center animate-combo-pop">
-                      <span className="text-6xl font-[900] tracking-tighter text-slate-100 [text-shadow:0_2px_6px_rgba(0,0,0,0.95)]">
-                        {uiCombo}
-                      </span>
-                      <span className="text-[10px] font-black tracking-[0.25em] text-cyan-400 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] uppercase mt-1">
-                        COMBO
-                      </span>
-                    </div>
-                  </div>
-                )}
-
                 {/* Judgement popup */}
                 {uiJudgement && (
                   <div 
                     key={`judg-${uiJudgement.time}`}
-                    className="text-center text-5xl font-[900] tracking-widest uppercase drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] animate-judgement-pulse whitespace-nowrap"
+                    className="text-center text-5xl font-[300] tracking-[0.35em] uppercase drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] animate-judgement-pulse whitespace-nowrap"
                     style={{ 
                       color: uiJudgement.color,
                       textShadow: `0 0 15px currentColor`,
-                      fontFamily: "'Orbitron', system-ui, sans-serif",
+                      fontFamily: "'Nunito', system-ui, sans-serif",
                     }}
                   >
                     {uiJudgement.text}

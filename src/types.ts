@@ -295,7 +295,6 @@ export interface GameSettings {
   songSelectBackgroundDim?: number; // song select cover artwork dim overlay opacity (0 to 1)
   disableVideo?: boolean; // whether background video playback is completely disabled
   videoOffset?: number; // manual user adjuster for video playback delay (milliseconds)
-  disableComboBurst?: boolean; // hide the combo milestone burst popup
   renderDpr?: number; // user-selectable canvas device pixel ratio: 1, 1.5, or 2
   skinId?: string; // 'argon' (default) | 'custom' (RhythmPlus bar skins set 'custom' + squareRenderStyle)
   customSkinColors?: string[]; // user parsed custom colors: [blueKeyColor, whiteKeyColor, accentKeyColor, cyanKeyColor, holdNoteColor]

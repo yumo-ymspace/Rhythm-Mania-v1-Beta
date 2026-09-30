@@ -41,8 +41,8 @@ export const JUDGEMENT_UPPERCASE_NAMES: Record<JudgementType, string> = {
 };
 
 export const JUDGEMENT_COLORS: Record<JudgementType, { color: string; glowColor: string }> = {
-  marvelous: { color: '#22d3ee', glowColor: 'rgba(34,211,238,0.5)' },
-  perfect: { color: '#3b82f6', glowColor: 'rgba(59,130,246,0.4)' },
+  marvelous: { color: '#B9E9FF', glowColor: 'rgba(185,233,255,0.5)' },
+  perfect: { color: '#8FD8FF', glowColor: 'rgba(143,216,255,0.45)' },
   great: { color: '#4ade80', glowColor: 'rgba(74,222,128,0.3)' },
   good: { color: '#fb923c', glowColor: 'rgba(251,146,60,0.25)' },
   bad: { color: '#facc15', glowColor: 'rgba(250,204,21,0.35)' },

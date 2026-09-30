@@ -29,28 +29,36 @@ describe('ManiaHud and Argon HUD components (TASK-052)', () => {
     expect(html).toContain('42702');
   });
 
-  it('ArgonHealthDisplay clamps health to 0..100 and renders horizontal accent line', () => {
+  it('ArgonHealthDisplay clamps health to 0..100 on the chrome rail', () => {
     const html85 = renderToStaticMarkup(
       React.createElement(ArgonHealthDisplay, { hp: 85 })
     );
-    expect(html85).toContain('width:85%');
+    expect(html85).toContain('id="argon-health-display"');
     expect(html85).toContain('aria-valuenow="85"');
-    // Accent line is 45px wide
-    expect(html85).toContain('w-[45px]');
+    // HP fill depletes the chrome rail via dash array, full track underneath
+    expect(html85).toContain('stroke-dasharray="85 100"');
+    expect(html85).toContain('url(#healthChrome)');
+    expect(html85).not.toContain('url(#healthChromeLow)');
 
     // Clamps over 100
     const html120 = renderToStaticMarkup(
       React.createElement(ArgonHealthDisplay, { hp: 120 })
     );
-    expect(html120).toContain('width:100%');
+    expect(html120).toContain('stroke-dasharray="100 100"');
     expect(html120).toContain('aria-valuenow="100"');
 
-    // Clamps below 0
+    // Clamps below 0: no fill path rendered
     const htmlNeg = renderToStaticMarkup(
       React.createElement(ArgonHealthDisplay, { hp: -10 })
     );
-    expect(htmlNeg).toContain('width:0%');
+    expect(htmlNeg).not.toContain('stroke-dasharray');
     expect(htmlNeg).toContain('aria-valuenow="0"');
+
+    // Critical HP turns the rail red
+    const htmlLow = renderToStaticMarkup(
+      React.createElement(ArgonHealthDisplay, { hp: 10 })
+    );
+    expect(htmlLow).toContain('url(#healthChromeLow)');
   });
 
   it('ArgonScoreCounter displays 6 digits with wireframe template and no "Score" label', () => {
@@ -60,6 +68,8 @@ describe('ManiaHud and Argon HUD components (TASK-052)', () => {
     );
     expect(html0).not.toContain('SCORE');
     expect(html0).not.toContain('>Score<');
+    // No capsule/rail around the digits — plain digit row only
+    expect(html0).not.toContain('<svg');
     // 6 fixed-width digit slots, 5 of them wireframe placeholders
     expect(html0.match(/w-\[1ch\]/g)).toHaveLength(6);
     expect(html0.match(/opacity-25/g)).toHaveLength(5);
@@ -85,18 +95,21 @@ describe('ManiaHud and Argon HUD components (TASK-052)', () => {
     expect(html1m).not.toContain('opacity-25');
   });
 
-  it('ArgonWedgePieces renders stacked wedges with shear matrix and #66CCFF accent', () => {
+  it('ArgonWedgePieces renders stacked parallelograms with `/` slant and no outline', () => {
     const html = renderToStaticMarkup(
-      React.createElement(ArgonWedgePieces, { width: 380, height: 72 })
+      React.createElement(ArgonWedgePieces, { width: 320, height: 60 })
     );
 
-    // Matrix shear (1 0 0.8 1 0 0)
-    expect(html).toContain('matrix(1 0 0.8 1 0 0)');
-    // Both front and back offset wedges
+    // Parallelogram slabs: straight left, right edge slanted like `/`
+    // (top-right x=320 further right than bottom-right x=320-slant)
+    expect(html).toContain('<polygon');
+    expect(html).toContain('0,0 320,0 280,60 0,60');
+    // Both front and back offset slabs
     expect(html).toContain('translate(4, 5)');
     expect(html).toContain('translate(0, 0)');
-    // Accent colour #66CCFF
+    // Accent colour #66CCFF, flat fills only — no stroke/box outline
     expect(html).toContain('#66CCFF');
+    expect(html).not.toContain('stroke=');
   });
 
   it('shows replay badge only when isReplayMode is true', () => {

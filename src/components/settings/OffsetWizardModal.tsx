@@ -171,7 +171,7 @@ export default function OffsetWizardModal({ initial, onApply, onClose }: OffsetW
 
   return (
     <div 
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[160] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

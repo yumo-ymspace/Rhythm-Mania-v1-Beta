@@ -48,7 +48,6 @@ export const DEFAULT_SETTINGS: Readonly<GameSettings> = Object.freeze({
   songSelectBackgroundDim: 0,
   disableVideo: false,
   videoOffset: 0,
-  disableComboBurst: false,
   renderDpr: 1.5,
   skinId: 'argon',
   receptorColorsByKeyCount: {
