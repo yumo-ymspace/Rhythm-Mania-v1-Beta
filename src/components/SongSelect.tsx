@@ -1648,6 +1648,7 @@ export default function SongSelect({
         onStartPlay={() => handleStartPlay()}
         canPlay={Boolean(selectedCustomMap)}
         selectedModsCount={(settings.selectedMods || []).length}
+        selectedMods={settings.selectedMods || []}
         previewBpm={selectedCustomMap?.bpm || 120}
         isOptionsOpen={showOptionsMenu}
         optionsContent={

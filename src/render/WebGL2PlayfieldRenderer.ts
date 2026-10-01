@@ -456,15 +456,36 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
         if (dark) this.quadRgb(ix, 0, iw, height, dark, 0.8, ARGON_CORNER_RADIUS);
         const press = Math.max(col.glow, col.pressed ? 1 : 0);
         if (press > 0) {
-          // Pressed-lane glow as a bottom-weighted alpha gradient in normal
-          // blending.
+          // Pressed-lane glow, concentrated around the receptor: the bottom
+          // third of the note lane above it and the top half of the key strip
+          // below it, peak alpha at the judgement line (normal blending).
           const base = laneBase[i];
           if (base) {
-            const bottomAlpha = 0.6 * press;
-            if (upscroll) this.pushQuadNumbers(ix, 0, iw, receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
-            else this.pushQuadNumbers(ix, receptorY, iw, height - receptorY, base[0], base[1], base[2], 0, base[0], base[1], base[2], bottomAlpha, 0);
+            const peak = 0.5 * press;
+            const above = receptorY / 3;
+            const below = (height - receptorY) / 2;
+            this.pushQuadNumbers(ix, receptorY - above, iw, above, base[0], base[1], base[2], 0, base[0], base[1], base[2], peak, 0);
+            this.pushQuadNumbers(ix, receptorY, iw, below, base[0], base[1], base[2], peak, base[0], base[1], base[2], 0, 0);
           }
         }
+      }
+    }
+
+    // Measure guide lines (visual only, osu!lazer mania parity): thin white
+    // lines scrolling with the beat, brighter on the downbeat of every
+    // time-signature group, fading out 150ms after crossing the receptor.
+    // Never hit objects — drawn behind holds and notes.
+    const frameBarLines = frame.barLines;
+    if (settingsSlice.showBarLines !== false && frameBarLines && frameBarLines.length > 0) {
+      const nowMs = frame.timeMs;
+      for (let i = 0; i < frameBarLines.length; i++) {
+        const guide = frameBarLines[i];
+        const pastMs = nowMs - guide.time;
+        const fade = pastMs <= 0 ? 1 : Math.max(0, 1 - pastMs / 150);
+        if (fade <= 0.001) continue;
+        const guideH = guide.major ? 1.7 : 1.2;
+        const guideAlpha = (guide.major ? 0.5 : 0.2) * fade;
+        this.quadRgb(0, guide.y - guideH / 2, width, guideH, whiteRgb, guideAlpha, 0);
       }
     }
 

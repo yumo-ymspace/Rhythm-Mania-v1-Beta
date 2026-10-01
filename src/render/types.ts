@@ -53,6 +53,13 @@ export interface VisibleNote {
   styleKey: string;
 }
 
+/** A culled, scroll-projected measure guide line for the current frame. */
+export interface BarLineVisual {
+  y: number;
+  time: number;
+  major: boolean;
+}
+
 export interface HitErrorTick {
   id: string;
   error: number;
@@ -83,6 +90,7 @@ export interface PlayfieldVisualSettings {
   backgroundDim?: number;
   enableMapSV?: boolean;
   playfieldWidthPercent?: number;
+  showBarLines?: boolean;
 }
 
 export interface PlayfieldFrame {
@@ -103,6 +111,8 @@ export interface PlayfieldFrame {
   isMobile?: boolean;
   combo?: number;
   breaks?: Array<{ startTime: number; endTime: number }>;
+  /** Purely visual measure guide lines (osu!lazer mania parity). */
+  barLines?: BarLineVisual[];
 }
 
 export interface ResolvedSkin {

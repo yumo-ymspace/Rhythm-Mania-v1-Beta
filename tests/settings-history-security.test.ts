@@ -110,7 +110,7 @@ describe('settings, history, and URL boundaries', () => {
     expect(clean.bindings[5]).toEqual(['d', 'f', ' ', 'j', 'k']);
   });
 
-  it('preserves canonical history identity and rejects non-boolean replay keys', () => {
+  it('preserves canonical history identity and filters non-boolean replay keys', () => {
     const raw = {
       id: 'record-1', timestamp: 1, beatmapId: 'map', beatmapTitle: 'Title', beatmapArtist: 'Artist',
       keyCount: 2, score: 100, accuracy: 100, maxCombo: 1, grade: 'S', isFailed: false,
@@ -121,7 +121,12 @@ describe('settings, history, and URL boundaries', () => {
         { time: 10, keysPressed: ['yes', false] },
       ],
     };
-    expect(sanitizeHistoryRecord(raw, DEFAULT_SETTINGS)).toBeNull();
+    // Hostile frames are filtered so the play survives; the score is kept.
+    const filtered = sanitizeHistoryRecord(raw, DEFAULT_SETTINGS);
+    expect(filtered).not.toBeNull();
+    expect(filtered?.replayFrames).toEqual([
+      { time: 20, keysPressed: [false, false] },
+    ]);
 
     const valid = sanitizeHistoryRecord({
       ...raw,

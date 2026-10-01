@@ -318,6 +318,7 @@ export interface GameSettings {
   judgementOpacity?: number; // 0.0 to 1.0 (opacity for judgement text)
   judgementSize?: number; // 0.1 to 1.0 (font size scaling multiplier, default 0.5 = 50%)
   judgementPositionY?: number; // vertical screen position in percent
+  comboPositionY?: number; // vertical screen position of the combo counter in percent (separate from judgement text)
   laneSeparatorOpacity?: number; // 0.0 to 1.0 (opacity for lane divider lines)
   playfieldWidthPercent?: number; // width of lanes as percent of screen width (5 to 30, default 15)
   selectedMods?: string[]; // list of active gameplay modifiers (e.g., 'NF', 'HD', 'HR', 'DT')
@@ -326,6 +327,7 @@ export interface GameSettings {
   bindSkipIntro?: string; // gameplay skip-intro keybind
   compensateOutputLatency?: boolean; // subtract measured baseLatency+outputLatency from the judgement clock
   enableMapSV?: boolean;
+  showBarLines?: boolean; // visual-only osu!lazer-style measure guide lines across the lanes
   enableSongPreview?: boolean; // play an audio preview of the selected map on Song Select
   showFpsCounter?: boolean; // render a small performance readout (FPS, frame time, input latency) on every screen
   uncappedMenuMotion?: boolean; // render the menu background at full display rate instead of the ~30fps eco throttle

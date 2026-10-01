@@ -93,7 +93,7 @@ describe('rmr replay import', () => {
     expect(parsed.records[0].isFailed).toBe(true);
   });
 
-  it('imports a BOM-prefixed envelope and still rejects hostile local frames', () => {
+  it('imports a BOM-prefixed envelope and filters hostile local frames instead of dropping the play', () => {
     const text = `\uFEFF${JSON.stringify({
       format: 'rhythmmania-replay-export',
       schemaVersion: 3,
@@ -101,9 +101,12 @@ describe('rmr replay import', () => {
       records: [mashcoreRecord],
     })}`;
     expect(parseReplayImport(text, DEFAULT_SETTINGS, []).records).toHaveLength(1);
-    expect(sanitizeHistoryRecord({
+    const filtered = sanitizeHistoryRecord({
       ...mashcoreRecord,
       replayFrames: [{ time: 10, keysPressed: ['yes', false, false, false] }],
-    }, DEFAULT_SETTINGS)).toBeNull();
+    }, DEFAULT_SETTINGS);
+    expect(filtered).not.toBeNull();
+    expect(filtered?.replayFrames).toEqual([]);
+    expect(filtered?.score).toBe(mashcoreRecord.score);
   });
 });

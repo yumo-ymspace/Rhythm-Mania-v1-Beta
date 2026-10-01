@@ -25,7 +25,7 @@ import { storageManager } from './utils/storageManager';
 import { convertBeatmapKeyCount, parseBeatmap } from './utils/beatmapParser';
 import { preloadBeatmapBackgrounds, unpackBeatmap } from './utils/unpackHelper';
 import { sanitizeSettings, sanitizeHistoryRecord, sanitizeCssUrl, MAX_COMPRESSED_SIZE_BYTES, validateZipLimits, createZipExtractionBudget, decodeBoundedUtf8 } from './utils/securityLimits';
-import { createPlayHistoryRecord, migrateAndNormalizeBeatmaps, computeBeatmapHash, findMatchingBeatmap } from './utils/replayManager';
+import { createPlayHistoryRecord, migrateAndNormalizeBeatmaps, computeBeatmapHash, findMatchingBeatmap, persistPlayHistory, PLAY_HISTORY_STORAGE_KEY } from './utils/replayManager';
 import { HOLD_TICK_RULES_VERSION, holdTickIntervalMs } from './utils/holdTickRules';
 import { LAZER_HOLD_RULES_VERSION } from './ruleset/mania/holdNote';
 import { applyBeatmapMods } from './ruleset/mania/beatmapMods';
@@ -809,7 +809,7 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const storedHistory = localStorage.getItem('rhythm_mania_v1_play_history');
+        const storedHistory = localStorage.getItem(PLAY_HISTORY_STORAGE_KEY);
         if (storedHistory) {
           const parsed = JSON.parse(storedHistory);
           if (Array.isArray(parsed)) {
@@ -818,10 +818,13 @@ export default function App() {
                 allowFailed: Boolean((item as { replaySource?: string } | null)?.replaySource === 'imported'),
               }))
               .filter((item): item is PlayHistoryRecord => item !== null);
-            setPlayHistory(sanitized);
-            if (sanitized.length !== parsed.length) {
-              localStorage.setItem('rhythm_mania_v1_play_history', JSON.stringify(sanitized));
-            }
+            // Quota-safe: if sanitization dropped entries (or the payload no
+            // longer fits), persist the pruned list with oldest-first eviction
+            // so disk and memory never diverge into ghost plays.
+            const persisted = sanitized.length !== parsed.length
+              ? persistPlayHistory(sanitized)
+              : sanitized;
+            setPlayHistory(persisted);
           }
         }
         
@@ -870,11 +873,7 @@ export default function App() {
       }).filter((item): item is PlayHistoryRecord => item !== null);
 
       if (changed && typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('rhythm_mania_v1_play_history', JSON.stringify(reSanitized));
-        } catch (e) {
-          console.error('Failed to persist re-migrated play history:', e);
-        }
+        return persistPlayHistory(reSanitized);
       }
       return changed ? reSanitized : prev;
     });
@@ -895,11 +894,7 @@ export default function App() {
     setPlayHistory(prev => {
       const updated = prev.filter(r => r.id !== id);
       if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('rhythm_mania_v1_play_history', JSON.stringify(updated));
-        } catch (e) {
-          console.error('Failed to persist history deleted state:', e);
-        }
+        return persistPlayHistory(updated);
       }
       return updated;
     });
@@ -936,11 +931,7 @@ export default function App() {
     setPlayHistory(prev => {
        const merged = historyLimit > 0 ? [...fresh, ...prev].slice(0, historyLimit) : [...fresh, ...prev];
       if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('rhythm_mania_v1_play_history', JSON.stringify(merged));
-        } catch (e) {
-          console.error('Failed to persist imported replays:', e);
-        }
+        return persistPlayHistory(merged);
       }
       return merged;
     });
@@ -1053,8 +1044,7 @@ export default function App() {
         setPlayHistory(prev => {
           if (normalizedLimit > 0 && prev.length > normalizedLimit) {
             const truncated = prev.slice(0, normalizedLimit);
-            localStorage.setItem('rhythm_mania_v1_play_history', JSON.stringify(truncated));
-            return truncated;
+            return persistPlayHistory(truncated);
           }
           return prev;
         });
@@ -1612,11 +1602,9 @@ export default function App() {
       setPlayHistory(prev => {
          const appended = historyLimit > 0 ? [newRecord, ...prev].slice(0, historyLimit) : [newRecord, ...prev];
         if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('rhythm_mania_v1_play_history', JSON.stringify(appended));
-          } catch (e) {
-            console.error('History save error:', e);
-          }
+          // Quota-safe: evict oldest-first until the payload fits so the
+          // newest play is never a memory-only ghost that vanishes on reload.
+          return persistPlayHistory(appended);
         }
         return appended;
       });

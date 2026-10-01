@@ -481,7 +481,11 @@ const HEX_CLIP = 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)';
  * osu!lazer-style mod row: hex icon on the left, bold name plus
  * single-line description on the right. Selected rows fill with the
  * category colour; incompatible rows dim until hovered; coming-soon
- * rows render greyed and never toggle.
+ * rows render greyed and never toggle. Row corner standard is R8
+ * (rounded-lg, a true circular arc on these straight rectangles) across
+ * every row variant: active, inactive, coming-soon, disabled, preset
+ * cards, and key-conversion buttons — one step tighter than the R10
+ * slanted column shells they sit in.
  */
 export const LazerModCard: React.FC<LazerModCardProps> = ({
   mod,
@@ -683,7 +687,25 @@ interface ModPreset {
 }
 
 const PRESETS_KEY = 'rhythm_mania_v1_mod_presets';
-const COLUMN_CLIP = 'polygon(26px 0, 100% 0, calc(100% - 26px) 100%, 0 100%)';
+/* Mod column shell: parallelogram (26px slant run both edges) with TRUE
+   CIRCULAR R10 fillets baked into every corner (Slant Fillet method — a
+   border-radius cannot round a clip-path cut). Reference H = 630px at
+   1600x900 (column stretch = viewport minus banner/toolbar/footer);
+   theta = atan(26/630) = 2.36deg. TL/BR are obtuse 92.36deg joints
+   (T = 10/tan(46.18deg) = 9.6px), TR/BL acute 87.64deg joints
+   (T = 10/tan(43.82deg) = 10.4px), arcs sampled every ~20deg so segment
+   angles flow 0 -> 9 -> 27 -> 46 -> 64 -> 83 -> 92 (right slant) -> ...
+   -> 180 (bottom) -> ... -> 272 (left slant) -> ... -> 351 -> 0 with no
+   flat or kink (verified monotonic). Every fillet point is a FIXED offset
+   from its own corner, so top corners use absolute px while bottom
+   corners anchor with calc(100% - Ypx) — the polygon stays exact at ANY
+   column height and any column width. The 40px category colour band is
+   full-bleed paint inside the clipped layer, so its top corners inherit
+   the fillets. Content overlays keep px-[30px] inset, which clears the
+   26px slant everywhere (fillets only pull paint inward). R10 reads one
+   step rounder than the R8 mod rows inside. */
+const COLUMN_CLIP =
+  'polygon(35.6px 0.0px, calc(100% - 10.4px) 0.0px, calc(100% - 7.3px) 0.5px, calc(100% - 4.4px) 2.0px, calc(100% - 2.2px) 4.3px, calc(100% - 0.8px) 7.2px, calc(100% - 0.4px) 10.4px, calc(100% - 25.6px) calc(100% - 9.6px), calc(100% - 26.2px) calc(100% - 6.6px), calc(100% - 27.7px) calc(100% - 3.9px), calc(100% - 29.9px) calc(100% - 1.8px), calc(100% - 32.6px) calc(100% - 0.5px), calc(100% - 35.6px) 100%, 10.4px 100%, 7.3px calc(100% - 0.5px), 4.4px calc(100% - 2.0px), 2.2px calc(100% - 4.3px), 0.8px calc(100% - 7.2px), 0.4px calc(100% - 10.4px), 25.6px 9.6px, 26.2px 6.6px, 27.7px 3.9px, 29.9px 1.8px, 32.6px 0.5px, 35.6px 0.0px)';
 
 function loadPresets(): ModPreset[] {
   try {
@@ -815,15 +837,17 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] flex flex-col bg-black/60 font-sans text-slate-100"
+          className="fixed inset-0 z-[100] flex flex-col bg-black/30 font-sans text-slate-100"
           style={{ willChange: 'opacity' }}
         >
-          {/* Dim + blur the song select behind, click outside panels closes */}
+          {/* Beatmap-listing side dims at bg-black/30 with no blur; match that
+              dim here and keep a light 2px blur so row text stays readable
+              over the song select behind. Click outside panels closes. */}
           <button
             type="button"
             aria-label="Close mod select"
             onClick={onClose}
-            className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-[2px]"
+            className="absolute inset-0 cursor-default backdrop-blur-[2px]"
           />
           <div className="relative flex-1 min-h-0 flex flex-col">
             {/* Top info banner */}
@@ -971,9 +995,9 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                 h-full (not min-h-full) so tall columns scroll instead of growing
                 and getting clipped by the outer overflow-y-hidden. */}
             <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden lazer-columns-scroll">
-              <div className="flex gap-4 lg:gap-5 px-2 sm:px-6 lg:px-10 py-4 items-stretch h-full w-max min-w-full">
+              <div className="flex gap-2 lg:gap-3 px-2 sm:px-6 lg:px-10 py-4 items-stretch h-full w-max min-w-full">
                 {/* Personal Presets column */}
-                <section aria-label="Personal Presets" className="relative w-[270px] lg:w-[290px] shrink-0 h-full min-h-0 flex flex-col">
+                <section aria-label="Personal Presets" className="relative w-[300px] lg:w-[320px] shrink-0 h-full min-h-0 flex flex-col">
                   <div
                     aria-hidden
                     className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -1039,7 +1063,7 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                     cat.id === 'conversion' && (!query || 'key conversion 1k 2k 3k 4k 5k 6k 7k 8k 9k 10k keys'.includes(query));
                   if (catMods.length === 0 && !showKeySection) return null;
                   return (
-                    <section key={cat.id} aria-label={cat.name} className="relative w-[290px] lg:w-[310px] shrink-0 h-full min-h-0 flex flex-col">
+                    <section key={cat.id} aria-label={cat.name} className="relative w-[320px] lg:w-[340px] shrink-0 h-full min-h-0 flex flex-col">
                       <div
                         aria-hidden
                         className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -1085,7 +1109,7 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                                       disabled={isNative}
                                       onClick={() => !isNative && handleToggleKeyMod(k)}
                                       title={isNative ? `${k}K is already native to this beatmap` : `Convert playfield to ${k}K (0.90x)`}
-                                      className={`rounded-md px-2 py-1.5 text-[12px] font-mono font-bold border transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                                      className={`rounded-lg px-2 py-1.5 text-[12px] font-mono font-bold border transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
                                         isActive ? '' : 'bg-[#42523f]/80 border-white/[0.06] text-white/85 hover:bg-[#4b5f46]'
                                       }`}
                                       style={isActive ? { backgroundColor: cat.color, borderColor: cat.color, color: '#10160f' } : undefined}

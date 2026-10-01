@@ -176,7 +176,6 @@ export interface ManiaHudProps {
   score: number;
   hp: number; // 0..100
   accuracy?: number; // 0..100
-  combo?: number;
   penar?: PenarBreakdown | null;
   showPenar?: boolean;
   keyCount?: number;
@@ -327,8 +326,8 @@ export const ArgonHealthDisplay = React.memo(function ArgonHealthDisplay({
               <path d={railPath} fill="none" stroke="#000000" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
             </mask>
             <mask id="railHaloMask" maskUnits="userSpaceOnUse" x="-20" y="-18" width="400" height="92">
-              <path d={railPath} fill="none" stroke="#ffffff" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" />
-              <path d={railPath} fill="none" stroke="#000000" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round" />
+              <path d={railPath} fill="none" stroke="#ffffff" strokeWidth="28" strokeLinecap="round" strokeLinejoin="round" />
+              <path d={railPath} fill="none" stroke="#000000" strokeWidth="22" strokeLinecap="round" strokeLinejoin="round" />
             </mask>
           </defs>
 
@@ -493,33 +492,6 @@ export const ArgonPenarCounter = React.memo(function ArgonPenarCounter({
       <span className="text-[10px] sm:text-xs md:text-sm font-black tracking-wider text-cyan-400 opacity-90 ml-1 uppercase">
         PENAR
       </span>
-    </div>
-  );
-});
-
-/**
- * ArgonComboCounter component
- * Recreates the large combo counter from osu!(lazer) Argon skin.
- * Positioned bottom-left, scale ~1.3, static size (no pop on combo increase).
- */
-export const ArgonComboCounter = React.memo(function ArgonComboCounter({
-  combo = 0,
-  className = '',
-}: {
-  combo?: number;
-  className?: string;
-}) {
-  if (combo <= 0) return null;
-
-  return (
-    <div
-      id="argon-combo-counter"
-      className={`flex flex-col items-start leading-none font-display select-none pointer-events-none origin-bottom-left scale-125 sm:scale-[1.3] [text-shadow:0_2px_6px_rgba(0,0,0,0.95)] ${className}`}
-      aria-label={`Combo: ${combo}`}
-    >
-      <div className="text-5xl sm:text-6xl font-[900] tracking-tighter text-white">
-        {combo}x
-      </div>
     </div>
   );
 });
@@ -741,16 +713,15 @@ export const ArgonSongProgress = React.memo(function ArgonSongProgress({
  * - Stacked ArgonWedgePiece behind score
  * - ArgonScoreCounter sitting on wedges (origin top-right, no "Score" label)
  * - ArgonAccuracyCounter top-right ~(-20, 20)
- * - ArgonComboCounter bottom-left ~(50, 50), scale ~1.3
  * - ArgonKeyCounter bottom-right above progress bar
- * - ArgonDualHitErrorMeters flanking the playfield stage (left and right mirrored)
+ * - ArgonDualHitErrorMeters docked to the screen left/right edges
  * - ArgonSongProgress centered at bottom
+ * (Combo renders in GameplayCanvas above the judgement popup.)
  */
 export const ManiaHud = React.memo(function ManiaHud({
   score,
   hp,
   accuracy = 100,
-  combo = 0,
   penar,
   showPenar = true,
   keyCount = 4,
@@ -773,7 +744,7 @@ export const ManiaHud = React.memo(function ManiaHud({
       className={`absolute inset-0 pointer-events-none select-none z-30 overflow-hidden ${className}`}
     >
       {/* TOP-LEFT CLUSTER: flush to the screen left edge */}
-      <div className="absolute top-2.5 sm:top-5 left-0 flex flex-col items-start origin-top-left scale-[0.62] sm:scale-[0.88] md:scale-100">
+      <div className="absolute top-4 sm:top-6 left-0 flex flex-col items-start origin-top-left scale-[0.62] sm:scale-[0.88] md:scale-100">
         {/* Health bar: thick glossy chrome rail on the topmost layer */}
         <div className="relative z-50 -mb-6">
           <ArgonHealthDisplay hp={hp} />
@@ -812,17 +783,12 @@ export const ManiaHud = React.memo(function ManiaHud({
         )}
       </div>
 
-      {/* DUAL HIT-ERROR BARS (Flanking the Playfield) */}
+      {/* DUAL HIT-ERROR BARS (Screen left/right edges) */}
       <ArgonDualHitErrorMeters
         playfieldWidthPercent={playfieldWidthPercent}
         leftCanvasRef={leftHitErrorCanvasRef}
         rightCanvasRef={rightHitErrorCanvasRef}
       />
-
-      {/* BOTTOM-LEFT: Combo Counter. Static size, updates every render (fast tier). */}
-      <div className={`absolute left-4 sm:left-[50px] ${isReplayMode || isAutoplay ? 'bottom-24 sm:bottom-28' : 'bottom-6 sm:bottom-8'}`}>
-        <ArgonComboCounter combo={combo} />
-      </div>
 
       {/* BOTTOM-RIGHT: Key Counter */}
       <div className={`absolute right-4 sm:right-[50px] ${isReplayMode || isAutoplay ? 'bottom-24 sm:bottom-28' : 'bottom-8 sm:bottom-12'}`}>

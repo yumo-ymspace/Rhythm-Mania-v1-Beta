@@ -1650,6 +1650,81 @@ html[data-ui="lazer"] {
   line-height: 1.2;
 }
 
+/* Expanded Mods button: when mods are selected the button grows
+   horizontally (width follows the chips, capped so it never crowds
+   Random/Options) and lists the active mod acronyms under the label.
+   Multiplier / UNRANKED pills float above the button, lazer style. */
+.lazer-footer-action-btn.is-mods.has-mods {
+  position: relative;
+  min-width: 200px;
+  max-width: 340px;
+  height: auto;
+  min-height: 52px;
+}
+
+.lazer-footer-action-btn.is-mods.has-mods .lazer-footer-action-slab {
+  height: auto;
+  min-height: 52px;
+}
+
+.lazer-footer-mods-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 240px;
+}
+
+.lazer-footer-mod-chip {
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.lazer-footer-mods-stats {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.lazer-footer-mods-mult {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  background: #2c362c;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 2px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.lazer-footer-mods-unranked {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #141a10;
+  background: #e9d44a;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
 .lazer-parked-cookie-wrapper {
   position: relative;
   display: flex;

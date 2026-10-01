@@ -158,6 +158,13 @@ export const ROWS: RowDef[] = [
     defaultValue: DEFAULT_SETTINGS.disableVideo,
   },
   {
+    id: 'showBarLines', section: 'visual', label: 'Measure guide lines',
+    description: 'Show thin osu!lazer-style measure lines scrolling down the lanes on the beat. Purely visual; they are never hit or judged.',
+    control: { kind: 'toggle' },
+    defaultValue: DEFAULT_SETTINGS.showBarLines,
+    keywords: ['bar', 'measure', 'beat', 'bpm', 'guide', 'lines', 'lazer', 'visual'],
+  },
+  {
     id: 'videoOffset', section: 'visual', label: 'Video offset',
     description: 'Shift the video forward (+) or backward (-) in milliseconds.',
     control: { kind: 'slider', min: -500, max: 500, step: 10, format: ms },
@@ -328,6 +335,13 @@ export const ROWS: RowDef[] = [
     control: { kind: 'slider', min: 20, max: 85, step: 1, suffix: '%' },
     defaultValue: DEFAULT_SETTINGS.judgementPositionY,
     keywords: ['judgement', 'judgment', 'text', 'position', 'vertical', 'height', 'skin'],
+  },
+  {
+    id: 'comboPositionY', section: 'skins', label: 'Combo counter position',
+    description: 'Vertical position of the combo counter as a percentage of the playfield height measured from the top, independent of the judgement text (default 30%, upper lanes).',
+    control: { kind: 'slider', min: 5, max: 85, step: 1, suffix: '%' },
+    defaultValue: DEFAULT_SETTINGS.comboPositionY,
+    keywords: ['combo', 'counter', 'position', 'vertical', 'height', 'skin'],
   },
   {
     id: 'laneSeparatorOpacity', section: 'skins', label: 'Lane separator opacity',

@@ -363,6 +363,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     judgementOpacity: clamp(settings.judgementOpacity, 0, 1, defaultSettings.judgementOpacity || 1.0),
     judgementSize: clamp(settings.judgementSize, 0.1, 1.0, defaultSettings.judgementSize || 0.5),
     judgementPositionY: clamp(settings.judgementPositionY, 20, 85, defaultSettings.judgementPositionY || 50),
+    comboPositionY: clamp(settings.comboPositionY, 5, 85, defaultSettings.comboPositionY || 30),
     laneSeparatorOpacity: clamp(settings.laneSeparatorOpacity, 0, 1, defaultSettings.laneSeparatorOpacity || 0.30),
     noteSizeMultiplier: 1.0,
     receptorSizeMultiplier: 1.0,
@@ -373,6 +374,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     bindSkipIntro: sanitizeString(settings.bindSkipIntro, (defaultSettings as unknown as Record<string, unknown>).bindSkipIntro as string || 'enter', 15),
       compensateOutputLatency: settings.compensateOutputLatency !== undefined ? Boolean(settings.compensateOutputLatency) : (defaultSettings.compensateOutputLatency ?? false),
       enableMapSV: settings.enableMapSV !== undefined ? Boolean(settings.enableMapSV) : true,
+    showBarLines: settings.showBarLines !== undefined ? Boolean(settings.showBarLines) : (defaultSettings.showBarLines ?? true),
     enableSongPreview: settings.enableSongPreview !== undefined ? Boolean(settings.enableSongPreview) : true,
     showFpsCounter: Boolean(settings.showFpsCounter),
     uncappedMenuMotion: Boolean(settings.uncappedMenuMotion),
@@ -488,27 +490,24 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
 
   const replayFrames: ReplayFrame[] = [];
   if (Array.isArray(record.replayFrames)) {
-    if (record.replayFrames.length > MAX_REPLAY_FRAMES) {
-      if (!importMode) return null;
-    }
+    // Never drop a whole play because of frame payload issues: truncate
+    // oversized payloads and skip malformed frames so the score survives.
+    // A record with zero usable frames is still a valid score entry (watch
+    // affordances already gate on `replayFrames.length > 0`).
     const framesByTime = new Map<number, ReplayFrame>();
-    const sourceFrames = importMode
-      ? record.replayFrames.slice(0, MAX_REPLAY_FRAMES)
-      : record.replayFrames;
+    const sourceFrames = record.replayFrames.slice(0, MAX_REPLAY_FRAMES);
     for (const frame of sourceFrames) {
       if (!isRecord(frame) || !Array.isArray(frame.keysPressed)) {
-        if (importMode) continue;
-        return null;
+        continue;
       }
       const rawKeys = frame.keysPressed;
-      if (!importMode && (rawKeys.length !== keyCount || !rawKeys.every((key): key is boolean => typeof key === 'boolean'))) {
-        return null;
+      if (rawKeys.length !== keyCount || !rawKeys.every((key): key is boolean => typeof key === 'boolean')) {
+        continue;
       }
       const keysPressed = Array.from({ length: keyCount }, (_, index) => rawKeys[index] === true);
       const time = Number(frame.time);
       if (!Number.isFinite(time) || time < 0 || time > 10000000) {
-        if (importMode) continue;
-        return null;
+        continue;
       }
       framesByTime.set(time, { time, keysPressed });
     }
@@ -517,8 +516,9 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
       const frame = framesByTime.get(time);
       if (frame) replayFrames.push(frame);
     }
-  } else if (record.replayFrames != null && !importMode) {
-    return null;
+  } else if (record.replayFrames != null) {
+    // Corrupted non-array payload: coerce to unscored-frames rather than
+    // deleting the whole play.
   }
 
   const recordedSettings = record.recordedSettings

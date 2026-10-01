@@ -89,10 +89,11 @@ import { computePenar, computeLivePenar } from '../utils/penar';
 import { calculateManiaDifficultyAttributes, calculateTimedManiaDifficultyAttributes, type TimedManiaDifficultyAttributes } from '../ruleset/mania/difficultyCalculator';
 
 // HIGH PERFORMANCE INTEGRATED RENDERER IMPORTS
-import { IPlayfieldRenderer, ColumnLayout } from '../render/types';
+import { IPlayfieldRenderer, ColumnLayout, BarLineVisual } from '../render/types';
 import { WebGL2PlayfieldRenderer } from '../render/WebGL2PlayfieldRenderer';
 import { getLaneColors } from '../render/skinTheme';
-import { calculateScrollSpeedFactor, computeScrollTravelTimeMs, updateColumnsLayout } from '../render/playfieldLayout';
+import { calculateScrollSpeedFactor, computeScrollTravelTimeMs, getScrollYPosition, updateColumnsLayout } from '../render/playfieldLayout';
+import { generateBarLines, type BarLine } from '../render/barLines';
 import { getColumnStyles } from '../render/laneLayout';
 import { getVisibleNotes } from '../render/noteVisibility';
 import { getEffectiveDpr } from '../render/displayScale';
@@ -417,6 +418,11 @@ export default function GameplayCanvas({
   const densityBins = React.useMemo(() => {
     return computeSongDensityBins(beatmap.notes, (beatmap.duration || 0) * 1000);
   }, [beatmap.id, beatmap.notes, beatmap.duration]);
+
+  // Visual-only osu!lazer-style measure guide lines, generated once per beatmap.
+  const barLineSource: BarLine[] = React.useMemo(() => {
+    return generateBarLines(beatmap.timingPoints, (beatmap.duration || 0) * 1000);
+  }, [beatmap.id, beatmap.timingPoints, beatmap.duration]);
 
   const replayData = React.useMemo(
     () => normalizeReplayFrames(replayRecord?.replayFrames, beatmap.keyCount),
@@ -921,6 +927,7 @@ export default function GameplayCanvas({
   const colsLayoutBufferRef = useRef<ColumnLayout[]>([]);
   // Frame-loop scratch buffers: reused every rAF to avoid per-frame GC churn.
   const visibleNotesBufferRef = useRef<import('../render/types').VisibleNote[]>([]);
+  const visibleBarLinesBufferRef = useRef<BarLineVisual[]>([]);
   const keyLabelsBufferRef = useRef<string[]>([]);
   const autoplayHoldKeysRef = useRef<boolean[]>([]);
   // Per-lane autoplay hold refcounts: incremented on hold-head events,
@@ -3264,6 +3271,20 @@ export default function GameplayCanvas({
           visibleNotesBufferRef.current
         );
 
+        // Project visible measure guide lines (reuse buffer, no per-frame alloc).
+        const visibleBarLines = visibleBarLinesBufferRef.current;
+        visibleBarLines.length = 0;
+        if (renderSettings.showBarLines !== false && barLineSource.length > 0) {
+          const upscroll = !!renderSettings.upsurfaceNoteMode;
+          const scrollModel = scrollModelRef.current;
+          for (let i = 0; i < barLineSource.length; i++) {
+            const bar = barLineSource[i];
+            const y = getScrollYPosition(bar.time, visualTime, receptorY, speedFactor, upscroll, scrollModel);
+            if (y < -20 || y > height + 20) continue;
+            visibleBarLines.push({ y, time: bar.time, major: bar.major });
+          }
+        }
+
         // Decay lane glows
         for (let i = 0; i < keyCount; i++) {
           if (laneGlowRef.current[i] > 0) {
@@ -3304,6 +3325,7 @@ export default function GameplayCanvas({
           receptorY,
           columns: colsLayout,
           notes: visibleNotes,
+          barLines: visibleBarLines,
           settingsSlice: renderSettings,
           showKeyLabels: true,
           keyLabels: keyLabelsMapped,
@@ -4652,7 +4674,6 @@ export default function GameplayCanvas({
             accuracy={uiAccuracy}
             penar={uiPenar}
             showPenar={settings.showPenarDuringPlay !== false}
-            combo={uiCombo}
             keyCount={beatmap.keyCount}
             keyLabels={settings.bindings[beatmap.keyCount] || []}
             playfieldWidthPercent={isArgonSkin(settings) ? getArgonPlayfieldWidthPercent(beatmap.keyCount) : (settings.playfieldWidthPercent ?? 15)}
@@ -4958,7 +4979,35 @@ export default function GameplayCanvas({
                 opacity: settings.judgementOpacity ?? 1.0,
               }}
             >
-              {/* Scale combo & judgement anchored directly at judgementPositionY */}
+              {/* Combo counter on its own layer, anchored at comboPositionY (separate from judgement text).
+                  Ticks up and back down on every combo increase via remount key. */}
+              {uiCombo > 0 && (
+                <div
+                  className="absolute inset-x-0 flex items-center justify-center transition-transform duration-150"
+                  style={{
+                    top: `${settings.comboPositionY ?? 30}%`,
+                    transform: `translateY(-50%) scale(${settings.judgementSize ?? 0.5})`,
+                    transformOrigin: 'center center',
+                  }}
+                >
+                  <div 
+                    key={uiCombo}
+                    className="text-center text-5xl font-[300] tracking-[0.35em] uppercase text-white tabular-nums drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] whitespace-nowrap animate-combo-tick"
+                    style={{ 
+                      textShadow: `0 0 15px rgba(255,255,255,0.6)`,
+                      fontFamily: "'Nunito', system-ui, sans-serif",
+                    }}
+                  >
+                    {/* Fixed-width digit slots so proportional glyphs can't shift the number as it grows */}
+                    {String(uiCombo).split('').map((d, i) => (
+                      <span key={i} className="inline-block w-[1ch] text-center">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Scale judgement anchored directly at judgementPositionY */}
               <div
                 className="absolute inset-x-0 flex flex-col items-center justify-center transition-transform duration-150"
                 style={{

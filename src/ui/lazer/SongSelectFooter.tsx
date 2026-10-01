@@ -16,6 +16,14 @@ import { SlidersHorizontal, Shuffle, Sliders } from 'lucide-react';
 import { FooterBackButton } from './FooterBackButton';
 import { LazerCookie } from './LazerCookie';
 import { Shear } from './Shear';
+import { ALL_MODS } from '../../components/ModSelectOverlay';
+import { computeModMultiplier } from '../../ruleset/mania/scoreProcessor';
+
+/** Display acronym for a selected mod id (K-mods and unknown ids fall back to the id itself). */
+function modAcronym(id: string): string {
+  if (/^K(?:[1-9]|10)$/.test(id)) return id;
+  return ALL_MODS.find(m => m.id === id)?.acronym ?? id;
+}
 
 export type SongSelectFooterProps = {
   onBack: () => void;
@@ -25,6 +33,8 @@ export type SongSelectFooterProps = {
   onStartPlay: () => void;
   canPlay?: boolean;
   selectedModsCount?: number;
+  /** Full selected mod id list; drives the expanded Mods button chips. */
+  selectedMods?: string[];
   previewBpm?: number;
   isOptionsOpen?: boolean;
   optionsContent?: ReactNode;
@@ -38,10 +48,15 @@ export function SongSelectFooter({
   onStartPlay,
   canPlay = true,
   selectedModsCount = 0,
+  selectedMods = [],
   previewBpm = 120,
   isOptionsOpen = false,
   optionsContent,
 }: SongSelectFooterProps) {
+  const activeMods = selectedMods.length > 0 ? selectedMods : [];
+  const modCount = activeMods.length > 0 ? activeMods.length : selectedModsCount;
+  const multiplier = computeModMultiplier(activeMods);
+  const isUnranked = activeMods.includes('AT') || activeMods.includes('CN');
   return (
     <div className="lazer-song-select-footer" id="song-select-lazer-footer">
       {/* Left cluster: long pink Back + bigger coloured Mods / Random / Options
@@ -49,25 +64,37 @@ export function SongSelectFooter({
       <div className="lazer-footer-left lazer-footer-cluster">
         <FooterBackButton onClick={onBack} label="Back" />
 
-        {/* Mods Button */}
+        {/* Mods Button: grows horizontally when mods are selected and shows
+            the active mod acronyms plus multiplier / UNRANKED chips above,
+            lazer style. */}
         <button
           id="bottom-mods-button"
           type="button"
           onClick={onOpenMods}
-          className="lazer-footer-action-btn is-mods"
-          aria-label="Game Modifiers"
+          className={`lazer-footer-action-btn is-mods${modCount > 0 ? ' has-mods' : ''}`}
+          aria-label={modCount > 0 ? `Game Modifiers, ${modCount} selected: ${activeMods.join(', ')}` : 'Game Modifiers'}
         >
+          {modCount > 0 && (
+            <span className="lazer-footer-mods-stats" aria-hidden="true">
+              <span className="lazer-footer-mods-mult">{multiplier.toFixed(2)}x</span>
+              {isUnranked && <span className="lazer-footer-mods-unranked">UNRANKED</span>}
+            </span>
+          )}
           <Shear className="lazer-footer-action-slab">
             <span className="lazer-footer-action-inner">
               <Sliders className="h-6 w-6 lazer-footer-action-icon" />
               <span className="lazer-footer-action-label-row">
                 <span className="lazer-footer-action-label">Mods</span>
-                {selectedModsCount > 0 && (
-                  <span className="lazer-footer-action-badge">
-                    {selectedModsCount}
-                  </span>
-                )}
               </span>
+              {modCount > 0 && (
+                <span className="lazer-footer-mods-chips">
+                  {activeMods.map(id => (
+                    <span key={id} className="lazer-footer-mod-chip">
+                      {modAcronym(id)}
+                    </span>
+                  ))}
+                </span>
+              )}
             </span>
           </Shear>
         </button>

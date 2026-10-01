@@ -23,6 +23,60 @@ export const CURRENT_REPLAY_SCHEMA_VERSION = 3;
 export const RMR_EXTENSION = '.rmr';
 export const RMR_MIME_TYPE = 'application/x-rhythmmania-replay';
 
+export const PLAY_HISTORY_STORAGE_KEY = 'rhythm_mania_v1_play_history';
+
+/**
+ * Quota-safe localStorage persistence for play history.
+ *
+ * History entries carry full replay frames, so a long session can exceed the
+ * ~5 MiB localStorage quota. A naive `setItem` then throws QuotaExceededError,
+ * the in-memory list diverges from what was persisted, and the newest plays
+ * vanish on the next reload (they were never actually saved).
+ *
+ * This helper instead evicts the oldest records (tail of the newest-first
+ * array) until the payload fits, so the newest plays are always preserved and
+ * the in-memory state always matches what is on disk. As a last resort a
+ * single oversized record keeps its score metadata but drops its heavy replay
+ * payload (`replayFrames` / `recordedSettings`) rather than losing the play.
+ *
+ * Returns the array that was actually persisted. Callers must render/keep the
+ * returned value (not the original candidate) to avoid ghost entries.
+ */
+export function persistPlayHistory(candidate: PlayHistoryRecord[]): PlayHistoryRecord[] {
+  if (typeof window === 'undefined' || !window.localStorage) return candidate;
+  let working = candidate;
+  for (;;) {
+    try {
+      window.localStorage.setItem(PLAY_HISTORY_STORAGE_KEY, JSON.stringify(working));
+      return working;
+    } catch (e) {
+      if (working.length === 0) {
+        console.error('Failed to persist cleared play history:', e instanceof Error ? e.message : String(e));
+        return working;
+      }
+      if (working.length === 1) {
+        const only = working[0];
+        const needsStrip = only.replayFrames.length > 0 || only.recordedSettings !== undefined;
+        if (needsStrip) {
+          const stripped: PlayHistoryRecord = { ...only, replayFrames: [], recordedSettings: undefined };
+          try {
+            window.localStorage.setItem(PLAY_HISTORY_STORAGE_KEY, JSON.stringify([stripped]));
+            console.warn('Play history record exceeded storage quota; kept score without replay frames.');
+            return [stripped];
+          } catch (stripError) {
+            console.error('Failed to persist play history record (even stripped):', stripError instanceof Error ? stripError.message : String(stripError));
+            return candidate;
+          }
+        }
+        console.error('Failed to persist play history:', e instanceof Error ? e.message : String(e));
+        return candidate;
+      }
+      // Newest-first order: drop the oldest entry and retry.
+      working = working.slice(0, working.length - 1);
+    }
+  }
+}
+
 function sanitizeIdString(value: unknown, maxLength: number): string {
   if (typeof value !== 'string') return '';
   let cleaned = value.replace(/blob:/gi, '').replace(/javascript:/gi, '');

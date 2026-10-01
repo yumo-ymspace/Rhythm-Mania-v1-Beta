@@ -136,12 +136,19 @@ html[data-skin="argon"] {
   --font-mono: Inter, ui-monospace, SFMono-Regular, monospace;
   --font-display: "Orbitron", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 
-  --animate-judgement-pulse: judgement-pulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  --animate-judgement-pulse: judgement-pulse 0.55s ease-out forwards;
+  --animate-combo-tick: combo-tick 0.12s ease-out;
 
   @keyframes judgement-pulse {
-    0% { transform: scale(0.6); opacity: 0.2; }
-    25% { transform: scale(1.12); opacity: 1; }
-    100% { transform: scale(1.0); opacity: 0.85; }
+    0% { transform: scale(0.7); opacity: 0; letter-spacing: 0.15em; }
+    20% { transform: scale(1.05); opacity: 1; letter-spacing: 0.35em; }
+    100% { transform: scale(1.0); opacity: 0; letter-spacing: 0.9em; }
+  }
+
+  @keyframes combo-tick {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.12); }
+    100% { transform: scale(1); }
   }
 }
 
