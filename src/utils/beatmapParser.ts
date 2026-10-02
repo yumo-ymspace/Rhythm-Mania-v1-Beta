@@ -11,6 +11,7 @@
  */
 
 import { Beatmap, HitObject, HitSample, NoteType, TimingControlPoint } from '../types';
+import { calculateMostCommonBeatLength } from '../render/scrollVelocity';
 import { MAX_BEATMAP_NOTES, MAX_BEATMAP_TIMING_POINTS, MAX_OSU_TEXT_BYTES } from './securityLimits';
 import { parseHoldTailTime } from './holdTiming';
 import { isSupportedKeyCount, MAX_KEY_COUNT, MIN_KEY_COUNT } from './keyCounts';
@@ -254,19 +255,15 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
              }
            if (uninherited && beatLength <= 0) throw new Error('Invalid uninherited timing point.');
 
-          // Inherited points encode scroll velocity as beatLength < 0 → SV = -100/beatLength.
-          // Positive beatLength on an inherited line yields negative SV (reverse/scroll-back).
-          // Uninherited lines always reset scroll speed to 1x (osu!mania EffectControlPoint).
+          // Scroll speed exactly as lazer's legacy decoder produces it for
+          // mania (ruleset 3): red lines reset to 1x; green lines use
+          // 100/-beatLength clamped to the effect-point range [0.01, 10].
+          // A non-negative inherited beatLength is 1x, never reverse scroll.
           let svMultiplier = 1.0;
           if (!uninherited) {
-            if (beatLength !== 0 && Number.isFinite(beatLength)) {
-              svMultiplier = -100 / beatLength;
-            }
-             if (!Number.isFinite(svMultiplier)) {
-              svMultiplier = 1.0;
-            } else if (Math.abs(svMultiplier) > 1000) {
-              svMultiplier = Math.sign(svMultiplier) * 1000;
-            }
+            svMultiplier = beatLength < 0 && Number.isFinite(beatLength)
+              ? Math.min(10, Math.max(0.01, 100 / -beatLength))
+              : 1.0;
           }
 
           parsedTimingPoints.push({
@@ -447,9 +444,11 @@ export function parseBeatmap(content: string, customId: string): Beatmap {
 
   const media = parseMediaPaths(content);
 
-  // Calculate duration-weighted dominant BPM
+  // Calculate duration-weighted dominant BPM (display only)
   const bpm = calculateDominantBpm(tempoTimingPoints, songDurationMs);
-  const baseBeatLength = bpm > 0 ? (60000 / bpm) : (tempoTimingPoints[0]?.beatLength || 500);
+  // Scroll base: lazer's most common beat length (unrounded), tailed at the
+  // last object — never the rounded display BPM.
+  const baseBeatLength = calculateMostCommonBeatLength(parsedTimingPoints, maxTimeMs);
 
   return {
     id: customId,

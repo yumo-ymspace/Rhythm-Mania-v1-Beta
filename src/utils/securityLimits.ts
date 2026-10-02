@@ -277,6 +277,14 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     return cleaned || fallback;
   };
 
+  const sanitizeDisplayName = (val: unknown, fallback: string, maxLength = 50): string => {
+    if (typeof val !== 'string') return fallback;
+    let cleaned = val.replace(/blob:/gi, '').replace(/javascript:/gi, '');
+    cleaned = cleaned.replace(/[^\p{L}\p{N}_\-\s]/gu, '').trim();
+    if (cleaned.length > maxLength) return cleaned.slice(0, maxLength);
+    return cleaned || fallback;
+  };
+
   const bindings: KeyBindings = {};
   const rawBindings = isRecord(settings.bindings) ? settings.bindings : {};
   for (const k of Object.keys(rawBindings)) {
@@ -379,7 +387,7 @@ export function sanitizeSettings(parsed: unknown, defaultSettings: GameSettings)
     showFpsCounter: Boolean(settings.showFpsCounter),
     uncappedMenuMotion: Boolean(settings.uncappedMenuMotion),
     showPenarDuringPlay: settings.showPenarDuringPlay !== undefined ? Boolean(settings.showPenarDuringPlay) : (defaultSettings.showPenarDuringPlay ?? true),
-    localDisplayName: sanitizeString(settings.localDisplayName, '', 32),
+    localDisplayName: sanitizeDisplayName(settings.localDisplayName, '', 32),
     menuCursorEnabled: settings.menuCursorEnabled !== undefined ? Boolean(settings.menuCursorEnabled) : (defaultSettings.menuCursorEnabled ?? true),
     difficultyAdjust: isRecord(settings.difficultyAdjust)
       ? {
@@ -417,38 +425,67 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
     return cleaned;
   };
 
-  const scoreInput = isRecord(record.scoreState) ? record.scoreState : null;
-  if (!scoreInput) return null;
+  const sanitizeDisplayText = (val: unknown, maxLength = 100): string => {
+    if (typeof val !== 'string') return '';
+    let cleaned = val.replace(/blob:/gi, '').replace(/javascript:/gi, '');
+    cleaned = cleaned.replace(/[^\p{L}\p{N}_\-\s.#:()]/gu, '').trim();
+    if (cleaned.length > maxLength) return cleaned.slice(0, maxLength);
+    return cleaned;
+  };
 
-  const scoreState: ScoreState = {
-    score: clamp(scoreInput.score, 0, 1000000000, 0),
-    combo: clamp(scoreInput.combo, 0, 100000, 0),
-    maxCombo: clamp(scoreInput.maxCombo, 0, 100000, 0),
-    hp: clamp(scoreInput.hp, 0, 100, 0),
-    perfectCount: clamp(scoreInput.perfectCount, 0, 100000, 0),
-    marvelousCount: clamp(scoreInput.marvelousCount, 0, 100000, 0),
-    greatCount: clamp(scoreInput.greatCount, 0, 100000, 0),
-    goodCount: clamp(scoreInput.goodCount, 0, 100000, 0),
-    badCount: clamp(scoreInput.badCount, 0, 100000, 0),
-    missCount: clamp(scoreInput.missCount, 0, 100000, 0),
-    accuracy: clamp(scoreInput.accuracy, 0, 100, 0),
-    completed: Boolean(scoreInput.completed),
-    failed: Boolean(scoreInput.failed),
-    recordId: sanitizeString(scoreInput.recordId, 50),
-    unstableRate: null,
-    hitErrorSampleCount: clamp(scoreInput.hitErrorSampleCount, 0, 100000, 0),
+  const scoreInput: UnknownRecord | null = isRecord(record.scoreState) ? record.scoreState : null;
+  const legacyTopLevel = (name: string): unknown => (record as UnknownRecord)[name];
+  // Legacy records predating scoreState must survive load: synthesize a minimal
+  // scoreState from top-level score/accuracy/maxCombo instead of dropping the
+  // whole play (which the App load effect would then persist as a deletion).
+  const effectiveScoreInput: UnknownRecord = scoreInput ?? {
+    score: legacyTopLevel('score'),
+    combo: legacyTopLevel('maxCombo'),
+    maxCombo: legacyTopLevel('maxCombo'),
+    hp: 0,
+    perfectCount: 0,
+    marvelousCount: 0,
+    greatCount: 0,
+    goodCount: 0,
+    badCount: 0,
+    missCount: 0,
+    accuracy: legacyTopLevel('accuracy'),
+    completed: !Boolean((record as UnknownRecord).isFailed),
+    failed: Boolean((record as UnknownRecord).isFailed),
+    recordId: (record as UnknownRecord).id,
+    hitErrorSampleCount: 0,
     columnJudgements: [],
   };
 
-  if (typeof scoreInput.unstableRate === 'number' && Number.isFinite(scoreInput.unstableRate) && scoreInput.unstableRate >= 0) {
-    scoreState.unstableRate = clamp(scoreInput.unstableRate, 0, 10000, 0);
+  const scoreState: ScoreState = {
+    score: clamp(effectiveScoreInput.score, 0, 1000000000, 0),
+    combo: clamp(effectiveScoreInput.combo, 0, 100000, 0),
+    maxCombo: clamp(effectiveScoreInput.maxCombo, 0, 100000, 0),
+    hp: clamp(effectiveScoreInput.hp, 0, 100, 0),
+    perfectCount: clamp(effectiveScoreInput.perfectCount, 0, 100000, 0),
+    marvelousCount: clamp(effectiveScoreInput.marvelousCount, 0, 100000, 0),
+    greatCount: clamp(effectiveScoreInput.greatCount, 0, 100000, 0),
+    goodCount: clamp(effectiveScoreInput.goodCount, 0, 100000, 0),
+    badCount: clamp(effectiveScoreInput.badCount, 0, 100000, 0),
+    missCount: clamp(effectiveScoreInput.missCount, 0, 100000, 0),
+    accuracy: clamp(effectiveScoreInput.accuracy, 0, 100, 0),
+    completed: Boolean(effectiveScoreInput.completed),
+    failed: Boolean(effectiveScoreInput.failed),
+    recordId: sanitizeString(effectiveScoreInput.recordId, 50),
+    unstableRate: null,
+    hitErrorSampleCount: clamp(effectiveScoreInput.hitErrorSampleCount, 0, 100000, 0),
+    columnJudgements: [],
+  };
+
+  if (typeof effectiveScoreInput.unstableRate === 'number' && Number.isFinite(effectiveScoreInput.unstableRate) && effectiveScoreInput.unstableRate >= 0) {
+    scoreState.unstableRate = clamp(effectiveScoreInput.unstableRate, 0, 10000, 0);
   }
 
   const rawKeyCount = Number(record.keyCount);
   const keyCount = isSupportedKeyCount(rawKeyCount) ? rawKeyCount : 4;
   const columnJudgements: ColumnJudgementCounts[] = [];
-  if (Array.isArray(scoreInput.columnJudgements)) {
-    for (const item of scoreInput.columnJudgements) {
+  if (Array.isArray(effectiveScoreInput.columnJudgements)) {
+    for (const item of effectiveScoreInput.columnJudgements) {
       if (isRecord(item)) {
         const colIndex = clamp(item.column, 0, keyCount - 1, -1);
         if (colIndex >= 0) {
@@ -467,12 +504,12 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
   }
   scoreState.columnJudgements = columnJudgements;
 
-  if (scoreInput.isAutoplay !== undefined) {
-    scoreState.isAutoplay = Boolean(scoreInput.isAutoplay);
+  if (effectiveScoreInput.isAutoplay !== undefined) {
+    scoreState.isAutoplay = Boolean(effectiveScoreInput.isAutoplay);
   }
 
-  if (isRecord(scoreInput.penar)) {
-    const rawPenar = scoreInput.penar;
+  if (isRecord(effectiveScoreInput.penar)) {
+    const rawPenar = effectiveScoreInput.penar;
     scoreState.penar = {
       total: typeof rawPenar.total === 'number' && Number.isFinite(rawPenar.total) ? clamp(rawPenar.total, 0, 100000, 0) : null,
       version: sanitizeString(rawPenar.version, 50) || 'penar-stub-0',
@@ -484,7 +521,7 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
         ? rawPenar.mods.filter((m): m is string => typeof m === 'string').map(m => sanitizeString(m, 10)).slice(0, 20)
         : [],
     };
-  } else if (scoreInput.penar === null) {
+  } else if (effectiveScoreInput.penar === null) {
     scoreState.penar = null;
   }
 
@@ -540,8 +577,8 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
     id: sanitizeString(record.id, 50),
     timestamp: clamp(record.timestamp, 0, 2000000000000, Date.now()),
     beatmapId: sanitizeString(record.beatmapId, 100),
-    beatmapTitle: sanitizeString(record.beatmapTitle, 100),
-    beatmapArtist: sanitizeString(record.beatmapArtist, 100),
+    beatmapTitle: sanitizeDisplayText(record.beatmapTitle, 100),
+    beatmapArtist: sanitizeDisplayText(record.beatmapArtist, 100),
     keyCount,
     score: clamp(record.score, 0, 1000000000, 0),
     accuracy: clamp(record.accuracy, 0, 100, 0),
@@ -583,8 +620,8 @@ export function sanitizeHistoryRecord(rawRecord: unknown, defaultSettings: GameS
       : undefined,
     sourceSetId: typeof (record as UnknownRecord).sourceSetId === 'number' && Number.isFinite((record as UnknownRecord).sourceSetId as number) ? (record as UnknownRecord).sourceSetId as number : null,
     sourceChartId: typeof (record as UnknownRecord).sourceChartId === 'number' && Number.isFinite((record as UnknownRecord).sourceChartId as number) ? (record as UnknownRecord).sourceChartId as number : null,
-    beatmapDifficulty: typeof (record as UnknownRecord).beatmapDifficulty === 'string' ? sanitizeString(String((record as UnknownRecord).beatmapDifficulty), 100) || undefined : undefined,
-    playedBy: typeof (record as UnknownRecord).playedBy === 'string' ? sanitizeString(String((record as UnknownRecord).playedBy), 80) || null : null,
+    beatmapDifficulty: typeof (record as UnknownRecord).beatmapDifficulty === 'string' ? sanitizeDisplayText(String((record as UnknownRecord).beatmapDifficulty), 100) || undefined : undefined,
+    playedBy: typeof (record as UnknownRecord).playedBy === 'string' ? sanitizeDisplayText(String((record as UnknownRecord).playedBy), 80) || null : null,
     clientInfo: isRecord((record as UnknownRecord).clientInfo) ? (record as UnknownRecord).clientInfo as unknown as PlayHistoryRecord['clientInfo'] : null,
   };
 

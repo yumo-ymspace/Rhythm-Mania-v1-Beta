@@ -809,6 +809,23 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
+        // Parse retention first so the history load can enforce it immediately.
+        // Otherwise a stored list longer than the limit loads in full and the
+        // next finished play slices to the limit, wiping many old plays at once.
+        let effectiveLimit = 50;
+        const storedLimit = localStorage.getItem('rhythm_mania_v1_history_limit');
+        if (storedLimit) {
+          const parsedLimit = Number(storedLimit);
+           if (parsedLimit === 9999 || parsedLimit === HISTORY_LIMIT_UNLIMITED || storedLimit.toLowerCase() === 'unlimited') {
+              effectiveLimit = HISTORY_LIMIT_UNLIMITED;
+            } else if (!isNaN(parsedLimit) && parsedLimit >= 5 && parsedLimit <= 500) {
+            effectiveLimit = parsedLimit;
+          } else {
+            effectiveLimit = 50;
+          }
+        }
+        setHistoryLimit(effectiveLimit);
+
         const storedHistory = localStorage.getItem(PLAY_HISTORY_STORAGE_KEY);
         if (storedHistory) {
           const parsed = JSON.parse(storedHistory);
@@ -818,25 +835,15 @@ export default function App() {
                 allowFailed: Boolean((item as { replaySource?: string } | null)?.replaySource === 'imported'),
               }))
               .filter((item): item is PlayHistoryRecord => item !== null);
-            // Quota-safe: if sanitization dropped entries (or the payload no
-            // longer fits), persist the pruned list with oldest-first eviction
-            // so disk and memory never diverge into ghost plays.
-            const persisted = sanitized.length !== parsed.length
-              ? persistPlayHistory(sanitized)
-              : sanitized;
+            const limited = effectiveLimit > 0 ? sanitized.slice(0, effectiveLimit) : sanitized;
+            // Quota-safe: if sanitization dropped entries, the limit trimmed
+            // rows, or the payload no longer fits, persist the pruned list
+            // with oldest-first eviction so disk and memory never diverge
+            // into ghost plays.
+            const persisted = (limited.length !== parsed.length || sanitized.length !== parsed.length)
+              ? persistPlayHistory(limited)
+              : limited;
             setPlayHistory(persisted);
-          }
-        }
-        
-        const storedLimit = localStorage.getItem('rhythm_mania_v1_history_limit');
-        if (storedLimit) {
-          const parsedLimit = Number(storedLimit);
-           if (parsedLimit === 9999 || parsedLimit === HISTORY_LIMIT_UNLIMITED || storedLimit.toLowerCase() === 'unlimited') {
-             setHistoryLimit(HISTORY_LIMIT_UNLIMITED);
-           } else if (!isNaN(parsedLimit) && parsedLimit >= 5 && parsedLimit <= 500) {
-            setHistoryLimit(parsedLimit);
-          } else {
-            setHistoryLimit(50);
           }
         }
       } catch (e) {

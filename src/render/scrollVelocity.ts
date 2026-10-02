@@ -16,7 +16,6 @@ export interface MultiplierSegment {
   timeMs: number;
   multiplier: number;
   cumulativeScroll: number; // S(timeMs) in ms-multiplier units
-  isFrozen: boolean;
 }
 
 export interface ScrollModel {
@@ -26,48 +25,95 @@ export interface ScrollModel {
   isEnabled: boolean;
 }
 
-const FROZEN_SV_BEAT_LENGTH = 0.001;
+/**
+ * lazer's TimingControlPoint.DEFAULT_BEAT_LENGTH (60 BPM). The "current" red
+ * beat length starts here until the first uninherited line, exactly like
+ * lazer's merged control points (which seed lastTimingPoint with a default).
+ */
+export const DEFAULT_BEAT_LENGTH = 1000;
 
 /**
- * Calculates dominant uninherited beat length as fallback when not pre-calculated
+ * lazer's EffectControlPoint.ScrollSpeed bindable range. BindableNumber
+ * clamps on set, so decoder-produced scroll speeds always land in [0.01, 10].
  */
-function calculateDominantBeatLength(timingPoints: TimingControlPoint[]): number {
-  const uninherited = timingPoints.filter(
-    tp => tp.uninherited && tp.beatLength > 0 && isFinite(tp.beatLength)
-  );
-  if (uninherited.length === 0) return 500;
-  if (uninherited.length === 1) return uninherited[0].beatLength;
+export const MIN_SCROLL_SPEED = 0.01;
+export const MAX_SCROLL_SPEED = 10;
 
-  const bpmDurations: { beatLength: number; duration: number }[] = [];
-  for (let i = 0; i < uninherited.length; i++) {
-    const current = uninherited[i];
-    const nextTime = (i + 1 < uninherited.length) ? uninherited[i + 1].timeMs : current.timeMs + 10000;
-    const duration = nextTime - current.timeMs;
-    if (duration > 0) {
-      const existing = bpmDurations.find(item => Math.abs(item.beatLength - current.beatLength) < 0.1);
-      if (existing) {
-        existing.duration += duration;
-      } else {
-        bpmDurations.push({ beatLength: current.beatLength, duration });
-      }
+/**
+ * Most common uninherited beat length, mirroring lazer's
+ * Beatmap.GetMostCommonBeatLength (used with RelativeScaleBeatLengths for
+ * mania): duration-weighted with the first point's span starting at 0
+ * (osu-stable compat), the tail running to the last object, beat lengths
+ * rounded to 1e-3ms for grouping, clamped to the raw range, and 1000 when
+ * there is nothing to vote on.
+ */
+export function calculateMostCommonBeatLength(
+  timingPoints: readonly TimingControlPoint[],
+  lastObjectTimeMs?: number,
+): number {
+  const reds = timingPoints
+    .filter(tp => tp.uninherited && Number.isFinite(tp.beatLength) && tp.beatLength > 0)
+    .sort((a, b) => a.timeMs - b.timeMs);
+  if (reds.length === 0) return DEFAULT_BEAT_LENGTH;
+
+  // No objects: lazer falls back to the last timing point's time.
+  const lastTime = Number.isFinite(lastObjectTimeMs) && (lastObjectTimeMs as number) > 0
+    ? (lastObjectTimeMs as number)
+    : reds[reds.length - 1].timeMs;
+
+  let minRaw = Infinity;
+  let maxRaw = -Infinity;
+  const totals = new Map<number, number>();
+  const keyOrder: number[] = [];
+  for (let i = 0; i < reds.length; i++) {
+    const raw = reds[i].beatLength;
+    if (raw < minRaw) minRaw = raw;
+    if (raw > maxRaw) maxRaw = raw;
+    const key = Math.round(raw * 1000) / 1000;
+    if (!totals.has(key)) {
+      totals.set(key, 0);
+      keyOrder.push(key);
+    }
+    if (reds[i].timeMs > lastTime) continue;
+    const start = i === 0 ? 0 : reds[i].timeMs;
+    const end = i === reds.length - 1 ? lastTime : reds[i + 1].timeMs;
+    const duration = end - start;
+    if (duration > 0) totals.set(key, totals.get(key)! + duration);
+  }
+
+  // Stable descending sort: ties keep first-occurrence order, like lazer's
+  // OrderByDescending over insertion-ordered groups.
+  let bestKey = 0;
+  let bestDuration = -Infinity;
+  for (const key of keyOrder) {
+    const duration = totals.get(key)!;
+    if (duration > bestDuration) {
+      bestDuration = duration;
+      bestKey = key;
     }
   }
-  if (bpmDurations.length === 0) return uninherited[0].beatLength;
-  bpmDurations.sort((a, b) => b.duration - a.duration);
-  return bpmDurations[0].beatLength;
+  if (bestKey === 0) return DEFAULT_BEAT_LENGTH;
+  if (bestKey < minRaw) return minRaw;
+  if (bestKey > maxRaw) return maxRaw;
+  return bestKey;
 }
 
 /**
- * Creates a ScrollModel from a beatmap-like object
+ * Creates a ScrollModel from a beatmap-like object, mirroring lazer mania's
+ * sequential scroll (DrawableManiaRuleset forces RelativeScaleBeatLengths,
+ * Velocity = 1, and folds the slider multiplier out of the base beat length).
+ * The base is always the most common beat length recomputed from the map's
+ * own timing points, so stale or rounded stored values can never skew scroll.
  */
-export function createScrollModel(beatmapLike: { timingPoints?: TimingControlPoint[]; sliderMultiplier?: number; baseBeatLength?: number }, isEnabled: boolean = true): ScrollModel {
+export function createScrollModel(
+  beatmapLike: { timingPoints?: TimingControlPoint[]; sliderMultiplier?: number; baseBeatLength?: number },
+  isEnabled: boolean = true,
+  lastObjectTimeMs?: number,
+): ScrollModel {
   const timingPoints: TimingControlPoint[] = beatmapLike.timingPoints || [];
   const sliderMultiplier: number = beatmapLike.sliderMultiplier !== undefined ? beatmapLike.sliderMultiplier : 1.4;
 
-  let baseBeatLength: number = beatmapLike.baseBeatLength || 0;
-  if (baseBeatLength <= 0) {
-    baseBeatLength = calculateDominantBeatLength(timingPoints);
-  }
+  const baseBeatLength = calculateMostCommonBeatLength(timingPoints, lastObjectTimeMs);
 
   // Sort and filter timing points safely
   const sortedPoints = [...timingPoints].sort((a, b) => {
@@ -91,37 +137,35 @@ export function createScrollModel(beatmapLike: { timingPoints?: TimingControlPoi
   const uniqueTimes = Array.from(pointsByTime.keys()).sort((a, b) => a - b);
 
   const segments: MultiplierSegment[] = [];
-  let currentBeatLength = baseBeatLength;
-  let currentSv = 1.0;
+  // lazer seeds the "current" red beat length with the default (1000ms) until
+  // the first uninherited line; green lines never change it.
+  let currentBeatLength = DEFAULT_BEAT_LENGTH;
+  // lazer mania scroll speed, exactly as the legacy decoder produces it for
+  // ruleset 3: red lines reset to 1x, green lines use 100/-beatLength clamped
+  // to the effect-point range. Negative and zero speeds cannot occur.
+  let currentScrollSpeed = 1.0;
 
   const resolvedMultipliers = new Map<number, number>();
 
-  // osu!mania sequential scroll: Multiplier = ScrollSpeed * baseBeatLength / beatLength.
-  // SliderMultiplier cancels out for mania (DrawableManiaRuleset sets Velocity=1 after
-  // folding SM into BaseBeatLength). Uninherited red lines reset ScrollSpeed to 1x.
-  // Negative multipliers reverse scroll; zero freezes notes in place.
+  // MultiplierControlPoint.Multiplier with mania's Velocity = 1:
+  // ScrollSpeed * baseBeatLength / beatLength.
   for (const t of uniqueTimes) {
     const points = pointsByTime.get(t)!;
     for (const tp of points) {
       if (tp.uninherited) {
-        if (tp.beatLength !== 0 && isFinite(tp.beatLength)) {
+        if (Number.isFinite(tp.beatLength) && tp.beatLength > 0) {
           currentBeatLength = tp.beatLength;
         }
-        currentSv = 1.0;
+        currentScrollSpeed = 1.0;
       } else {
-        // Near-zero inherited values are an explicit freeze marker. Do not
-        // let a finite-value clamp turn them into normal scroll.
-        currentSv = Math.abs(tp.beatLength) < FROZEN_SV_BEAT_LENGTH ? 0 : tp.svMultiplier;
+        currentScrollSpeed = tp.beatLength < 0 && Number.isFinite(tp.beatLength)
+          ? Math.min(MAX_SCROLL_SPEED, Math.max(MIN_SCROLL_SPEED, 100 / -tp.beatLength))
+          : 1.0;
       }
     }
-    const safeBeatLength = (currentBeatLength !== 0 && isFinite(currentBeatLength))
-      ? currentBeatLength
-      : baseBeatLength;
-    let mult = currentSv * (baseBeatLength / safeBeatLength);
-    if (isNaN(mult) || !isFinite(mult)) {
+    let mult = currentScrollSpeed * (baseBeatLength / currentBeatLength);
+    if (!Number.isFinite(mult)) {
       mult = 1.0;
-    } else {
-      mult = Math.max(-1000, Math.min(1000, mult));
     }
     resolvedMultipliers.set(t, mult);
   }
@@ -133,7 +177,6 @@ export function createScrollModel(beatmapLike: { timingPoints?: TimingControlPoi
       timeMs: t0,
       multiplier: mult0,
       cumulativeScroll: 0,
-      isFrozen: mult0 === 0
     });
 
     for (let i = 1; i < uniqueTimes.length; i++) {
@@ -147,7 +190,6 @@ export function createScrollModel(beatmapLike: { timingPoints?: TimingControlPoi
         timeMs: tCurrent,
         multiplier: multCurrent,
         cumulativeScroll: nextAccum,
-        isFrozen: multCurrent === 0
       });
     }
   }

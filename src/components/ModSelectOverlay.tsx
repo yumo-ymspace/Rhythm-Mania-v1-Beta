@@ -478,14 +478,11 @@ interface LazerModCardProps {
 const HEX_CLIP = 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)';
 
 /**
- * osu!lazer-style mod row: hex icon on the left, bold name plus
+ * osu!lazer-style mod row: sheared parallelogram at the column's 10.1deg
+ * (ROW_CLIP) with a rounded-square icon badge on the left, bold name plus
  * single-line description on the right. Selected rows fill with the
  * category colour; incompatible rows dim until hovered; coming-soon
- * rows render greyed and never toggle. Row corner standard is R8
- * (rounded-lg, a true circular arc on these straight rectangles) across
- * every row variant: active, inactive, coming-soon, disabled, preset
- * cards, and key-conversion buttons — one step tighter than the R10
- * slanted column shells they sit in.
+ * rows render greyed and never toggle.
  */
 export const LazerModCard: React.FC<LazerModCardProps> = ({
   mod,
@@ -505,17 +502,17 @@ export const LazerModCard: React.FC<LazerModCardProps> = ({
 
   if (isComingSoon) {
     return (
-      <div className="group relative">
+      <div className="group relative w-full max-w-[175px]">
         <div
           title={tooltipText}
           aria-label={tooltipText}
           aria-disabled="true"
-          className="w-full flex items-center gap-3 rounded-lg pl-2 pr-3 py-[7px] text-left border opacity-45 saturate-50 cursor-not-allowed select-none"
-          style={{ backgroundColor: 'rgba(52, 64, 51, 0.75)', borderColor: 'rgba(255,255,255,0.06)', color: '#cfd6cd' }}
+          className="w-full flex items-center gap-3 pl-3 pr-3 py-[7px] text-left border opacity-45 saturate-50 cursor-not-allowed select-none"
+          style={{ clipPath: ROW_CLIP, backgroundColor: 'rgba(52, 64, 51, 0.75)', borderColor: 'rgba(255,255,255,0.06)', color: '#cfd6cd' }}
         >
           <span
-            className="w-9 h-9 shrink-0 grid place-items-center"
-            style={{ clipPath: HEX_CLIP, backgroundColor: '#1c231c' }}
+            className="w-9 h-9 shrink-0 grid place-items-center rounded-[10px]"
+            style={{ backgroundColor: '#1c231c' }}
           >
             <Icon className="w-4 h-4 opacity-70" />
           </span>
@@ -536,26 +533,25 @@ export const LazerModCard: React.FC<LazerModCardProps> = ({
   }
 
   return (
-    <div className="group relative">
+    <div className="group relative w-full max-w-[175px]">
       <button
         type="button"
         onClick={onClick}
         title={tooltipText}
         aria-label={tooltipText}
         aria-pressed={isActive}
-        className={`w-full flex items-center gap-3 rounded-lg pl-2 pr-3 py-[7px] text-left border transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
+        className={`w-full flex items-center gap-3 pl-3 pr-3 py-[7px] text-left border transition-all duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
           isActive ? 'shadow-[0_4px_18px_rgba(0,0,0,0.45)]' : ''
         } ${isConflicting ? 'opacity-40 hover:opacity-90' : 'hover:brightness-110 active:scale-[0.98]'}`}
         style={
           isActive
-            ? { backgroundColor: categoryColor, borderColor: categoryColor, color: '#10160f' }
-            : { backgroundColor: 'rgba(66, 82, 63, 0.85)', borderColor: 'rgba(255,255,255,0.07)', color: '#f2f5ef' }
+            ? { clipPath: ROW_CLIP, backgroundColor: categoryColor, borderColor: categoryColor, color: '#10160f' }
+            : { clipPath: ROW_CLIP, backgroundColor: 'rgba(66, 82, 63, 0.85)', borderColor: 'rgba(255,255,255,0.07)', color: '#f2f5ef' }
         }
       >
         <span
-          className="w-9 h-9 shrink-0 grid place-items-center"
+          className="w-9 h-9 shrink-0 grid place-items-center rounded-[10px]"
           style={{
-            clipPath: HEX_CLIP,
             backgroundColor: isActive ? 'rgba(0,0,0,0.32)' : '#222b22',
           }}
         >
@@ -572,19 +568,35 @@ export const LazerModCard: React.FC<LazerModCardProps> = ({
         </span>
       </button>
 
-      {/* Hover tooltip, lazer style: dark card with description + incompat pills */}
+      {/* Hover tooltip, lazer style: dark card with description + incompat icon chips */}
       <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-30 hidden group-hover:block w-[248px] rounded-lg bg-black/95 border border-white/15 px-3 py-2 shadow-2xl">
         <span className="block text-[12px] font-bold text-white leading-snug">{mod.name}</span>
         <span className="block text-[11px] text-white/70 leading-snug mt-0.5">{mod.description}</span>
         {isConflicting ? (
           <span className="block mt-1.5">
             <span className="block text-[10px] uppercase tracking-wider text-white/50 font-bold">Incompatible with:</span>
-            <span className="flex flex-wrap gap-1 mt-1">
-              {conflictingMods.map(c => (
-                <span key={c} className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-500/80 text-white">
-                  {c}
-                </span>
-              ))}
+            <span className="flex flex-wrap gap-1.5 mt-1.5">
+              {conflictingMods.map(c => {
+                const found = ALL_MODS.find(m => m.id === c);
+                const CIcon = found?.icon;
+                const chipColor = found
+                  ? MOD_CATEGORIES.find(cat => cat.id === found.category)?.color ?? '#888'
+                  : '#555';
+                return (
+                  <span
+                    key={c}
+                    title={found?.title ?? c}
+                    className="w-7 h-7 grid place-items-center rounded-md text-white"
+                    style={{ backgroundColor: chipColor }}
+                  >
+                    {CIcon ? (
+                      <CIcon className="w-3.5 h-3.5" />
+                    ) : (
+                      <span className="text-[9px] font-mono font-bold">{c}</span>
+                    )}
+                  </span>
+                );
+              })}
             </span>
           </span>
         ) : (
@@ -644,10 +656,10 @@ export const HexModButton: React.FC<HexModButtonProps> = ({
         disabled
         title={disabledReason}
         aria-label={disabledReason}
-        className="w-full flex items-center gap-3 rounded-lg pl-2 pr-3 py-[7px] text-left border opacity-30 cursor-not-allowed"
-        style={{ backgroundColor: 'rgba(66, 82, 63, 0.85)', borderColor: 'rgba(255,255,255,0.07)', color: '#f2f5ef' }}
+        className="w-full flex items-center gap-3 pl-3 pr-3 py-[7px] text-left border opacity-30 cursor-not-allowed"
+        style={{ clipPath: ROW_CLIP, backgroundColor: 'rgba(66, 82, 63, 0.85)', borderColor: 'rgba(255,255,255,0.07)', color: '#f2f5ef' }}
       >
-        <span className="w-9 h-9 shrink-0 grid place-items-center" style={{ clipPath: HEX_CLIP, backgroundColor: '#222b22' }}>
+        <span className="w-9 h-9 shrink-0 grid place-items-center rounded-[10px]" style={{ backgroundColor: '#222b22' }}>
           {React.createElement(icon, { className: 'w-4 h-4' })}
         </span>
         <span className="min-w-0 flex-1">
@@ -687,25 +699,55 @@ interface ModPreset {
 }
 
 const PRESETS_KEY = 'rhythm_mania_v1_mod_presets';
-/* Mod column shell: parallelogram (26px slant run both edges) with TRUE
-   CIRCULAR R10 fillets baked into every corner (Slant Fillet method — a
-   border-radius cannot round a clip-path cut). Reference H = 630px at
-   1600x900 (column stretch = viewport minus banner/toolbar/footer);
-   theta = atan(26/630) = 2.36deg. TL/BR are obtuse 92.36deg joints
-   (T = 10/tan(46.18deg) = 9.6px), TR/BL acute 87.64deg joints
-   (T = 10/tan(43.82deg) = 10.4px), arcs sampled every ~20deg so segment
-   angles flow 0 -> 9 -> 27 -> 46 -> 64 -> 83 -> 92 (right slant) -> ...
-   -> 180 (bottom) -> ... -> 272 (left slant) -> ... -> 351 -> 0 with no
-   flat or kink (verified monotonic). Every fillet point is a FIXED offset
-   from its own corner, so top corners use absolute px while bottom
-   corners anchor with calc(100% - Ypx) — the polygon stays exact at ANY
-   column height and any column width. The 40px category colour band is
+/* Mod column shell: parallelogram at the lazer-reference 5.71deg lean with
+   TRUE CIRCULAR R10 fillets baked into every corner (Slant Fillet
+   method — a border-radius cannot round a clip-path cut). Slant run
+   S = 63px, measured straight off the lazer ref (mod menu.png @1366x768:
+   columns shift ~45px over ~450px height) and scaled as
+   straight_width = 630 x tan(5.71deg) onto the reference H = 630px column
+   stretch at 1600x900 (viewport minus banner/toolbar/footer), so
+   theta = atan(63/630) = 5.71deg. TL/BR are obtuse 95.71deg joints
+   (T = 10/tan(47.86deg) = 9.1px), TR/BL acute 84.29deg joints
+   (T = 10/tan(42.14deg) = 11.0px), arcs sampled every ~20deg so segment
+   angles flow 0 -> 11 -> 29 -> 46 -> 67 -> 87 -> 96 -> 104 (right slant)
+   -> ... -> 180 (bottom) -> ... -> 276 (left slant) -> ... -> 352 -> 0
+   with no flat or kink (verified monotonic). Every fillet point is a
+   FIXED offset from its own corner, so top corners use absolute px while
+   bottom corners anchor with calc(100% - Ypx) — the polygon stays exact at
+   ANY column height and any column width. The 40px category colour band is
    full-bleed paint inside the clipped layer, so its top corners inherit
-   the fillets. Content overlays keep px-[30px] inset, which clears the
-   26px slant everywhere (fillets only pull paint inward). R10 reads one
-   step rounder than the R8 mod rows inside. */
+   the fillets. Columns tile with -63px overlap (= the slant run), so each
+   column's left paint edge lands exactly on the previous column's right
+   paint edge and the colour bands read as one continuous strip. Rows are
+   sheared parallelograms at the same 5.71deg (see ROW_CLIP) hugging the
+   top-left; content inset pl-[64px] clears the top-left edge
+   (63 x (1 - 20/630) = 61px at header mid-height) for header text and
+   rows, and the scroll column reserves mr-[56px] so its straight
+   scrollbar (x ~240-248 at lg) never crosses the receding right edge
+   (min 257px at the very bottom). Rows cap at max-w-[175px] so their
+   sheared right ends stay inside the shell at every scroll position. */
 const COLUMN_CLIP =
-  'polygon(35.6px 0.0px, calc(100% - 10.4px) 0.0px, calc(100% - 7.3px) 0.5px, calc(100% - 4.4px) 2.0px, calc(100% - 2.2px) 4.3px, calc(100% - 0.8px) 7.2px, calc(100% - 0.4px) 10.4px, calc(100% - 25.6px) calc(100% - 9.6px), calc(100% - 26.2px) calc(100% - 6.6px), calc(100% - 27.7px) calc(100% - 3.9px), calc(100% - 29.9px) calc(100% - 1.8px), calc(100% - 32.6px) calc(100% - 0.5px), calc(100% - 35.6px) 100%, 10.4px 100%, 7.3px calc(100% - 0.5px), 4.4px calc(100% - 2.0px), 2.2px calc(100% - 4.3px), 0.8px calc(100% - 7.2px), 0.4px calc(100% - 10.4px), 25.6px 9.6px, 26.2px 6.6px, 27.7px 3.9px, 29.9px 1.8px, 32.6px 0.5px, 35.6px 0.0px)';
+  'polygon(72.0px 0.0px, calc(100% - 11.0px) 0.0px, calc(100% - 7.8px) 0.6px, calc(100% - 4.9px) 2.2px, calc(100% - 2.6px) 4.6px, calc(100% - 1.3px) 7.7px, calc(100% - 1.1px) 11.0px, calc(100% - 62.1px) calc(100% - 9.0px), calc(100% - 62.8px) calc(100% - 6.2px), calc(100% - 64.3px) calc(100% - 3.6px), calc(100% - 66.5px) calc(100% - 1.7px), calc(100% - 69.1px) calc(100% - 0.4px), calc(100% - 72.0px) 100%, 11.0px 100%, 7.8px calc(100% - 0.6px), 4.9px calc(100% - 2.2px), 2.6px calc(100% - 4.6px), 1.3px calc(100% - 7.7px), 1.1px calc(100% - 11.0px), 62.1px 9.0px, 62.8px 6.2px, 64.3px 3.6px, 66.5px 1.7px, 69.1px 0.4px, 72.0px 0.0px)';
+/* Mod row: sheared parallelogram at the same 5.71deg as its column, so
+   each row's own left edge leans further left going down and the stack
+   reads as leaning with the shell (lazer style). S = 5px sized as
+   50 x tan(5.71deg) on the reference H = 50px row (py-[7px] + 36px icon
+   zone), theta = 5.71deg. Obtuse joints T = 4/tan(47.86deg) = 3.6px,
+   acute joints T = 4/tan(42.14deg) = 4.4px, R4 fillets sampled every
+   ~20deg, travel verified monotonic. Bottom anchors use calc(100% - Ypx)
+   so rows of any rendered height keep exact corners. CRUCIAL: the clip
+   lives on the BUTTON only — each row is wrapped in an unclipped
+   .group div so the hover tooltip (positioned above the row, outside the
+   clip box) is never cut. Icon badge is a plain rounded square (lazer),
+   not a hexagon. */
+const ROW_CLIP =
+  'polygon(8.6px 0.0px, calc(100% - 4.4px) 0.0px, calc(100% - 3.1px) 0.2px, calc(100% - 1.9px) 0.9px, calc(100% - 1.0px) 1.8px, calc(100% - 0.5px) 3.1px, calc(100% - 0.4px) 4.4px, calc(100% - 4.6px) calc(100% - 3.6px), calc(100% - 4.9px) calc(100% - 2.5px), calc(100% - 5.5px) calc(100% - 1.5px), calc(100% - 6.4px) calc(100% - 0.7px), calc(100% - 7.5px) calc(100% - 0.2px), calc(100% - 8.6px) 100%, 4.4px 100%, 3.1px calc(100% - 0.2px), 1.9px calc(100% - 0.9px), 1.0px calc(100% - 1.8px), 0.5px calc(100% - 3.1px), 0.4px calc(100% - 4.4px), 4.6px 3.6px, 4.9px 2.5px, 5.5px 1.5px, 6.4px 0.7px, 7.5px 0.2px, 8.6px 0.0px)';
+/* Key-conversion grid button: same 5.71deg shear, proportionally sized
+   (S = 3px on H = 30px, R3, T 2.7/3.3px) so the small buttons lean with
+   the full-size rows instead of cutting a steeper angle. Monotonic
+   travel verified. */
+const ROW_CLIP_SM =
+  'polygon(5.7px 0.0px, calc(100% - 3.3px) 0.0px, calc(100% - 2.3px) 0.2px, calc(100% - 1.5px) 0.6px, calc(100% - 0.8px) 1.4px, calc(100% - 0.4px) 2.3px, calc(100% - 0.3px) 3.3px, calc(100% - 2.7px) calc(100% - 2.7px), calc(100% - 2.9px) calc(100% - 1.8px), calc(100% - 3.4px) calc(100% - 1.1px), calc(100% - 4.0px) calc(100% - 0.5px), calc(100% - 4.8px) calc(100% - 0.1px), calc(100% - 5.7px) 100%, 3.3px 100%, 2.3px calc(100% - 0.2px), 1.5px calc(100% - 0.6px), 0.8px calc(100% - 1.4px), 0.4px calc(100% - 2.3px), 0.3px calc(100% - 3.3px), 2.7px 2.7px, 2.9px 1.8px, 3.4px 1.1px, 4.0px 0.5px, 4.8px 0.1px, 5.7px 0.0px)';
 
 function loadPresets(): ModPreset[] {
   try {
@@ -995,9 +1037,13 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                 h-full (not min-h-full) so tall columns scroll instead of growing
                 and getting clipped by the outer overflow-y-hidden. */}
             <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden lazer-columns-scroll">
-              <div className="flex gap-2 lg:gap-3 px-2 sm:px-6 lg:px-10 py-4 items-stretch h-full w-max min-w-full">
+              {/* Columns tile with -63px overlap (= the 63px slant run): each
+                  column's left paint edge lands exactly on the previous
+                  column's right paint edge, so the colour bands read as one
+                  continuous strip (see COLUMN_CLIP). */}
+              <div className="flex gap-0 px-2 sm:px-6 lg:px-10 py-4 items-stretch h-full w-max min-w-full">
                 {/* Personal Presets column */}
-                <section aria-label="Personal Presets" className="relative w-[300px] lg:w-[320px] shrink-0 h-full min-h-0 flex flex-col">
+                <section aria-label="Personal Presets" className="relative w-[260px] lg:w-[280px] shrink-0 h-full min-h-0 flex flex-col">
                   <div
                     aria-hidden
                     className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -1005,7 +1051,7 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                   >
                     <div className="h-[40px] w-full" style={{ backgroundColor: PRESET_COLUMN_COLOR }} />
                   </div>
-                  <div className="relative flex-1 min-h-0 h-full flex flex-col px-[30px]">
+                  <div className="relative flex-1 min-h-0 h-full flex flex-col pl-[64px] pr-[16px]">
                     <header className="flex-none h-[40px] flex items-center text-[13px] font-bold truncate" style={{ color: '#141a10' }}>
                       Personal Presets
                     </header>
@@ -1013,14 +1059,15 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                       role="region"
                       aria-label="Personal presets list"
                       tabIndex={0}
-                      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 pr-1 flex flex-col gap-2 lazer-column-scroll outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded"
+                      className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 mr-[56px] flex flex-col gap-2 lazer-column-scroll outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded"
                     >
                       <button
                         type="button"
                         onClick={handleSavePreset}
                         disabled={selectedMods.length === 0}
                         title={selectedMods.length === 0 ? 'Select mods first, then save them as a preset' : 'Save current mods as a preset'}
-                        className="w-full rounded-lg bg-black/25 border border-white/10 hover:border-white/25 hover:bg-black/35 transition py-4 grid place-items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full max-w-[175px] bg-black/25 border border-white/10 hover:border-white/25 hover:bg-black/35 transition py-4 grid place-items-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ clipPath: ROW_CLIP }}
                       >
                         <Plus className="w-5 h-5 text-white/80" />
                       </button>
@@ -1030,12 +1077,13 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                         </p>
                       )}
                       {presets.map((preset, idx) => (
-                        <div key={`${preset.name}-${idx}`} className="group/preset relative">
+                        <div key={`${preset.name}-${idx}`} className="group/preset relative w-full max-w-[175px]">
                           <button
                             type="button"
                             onClick={() => onUpdateMods(sanitizeGameplayMods(preset.mods))}
                             title={`Apply ${preset.name}: ${preset.mods.join(', ') || 'no mods'}`}
-                            className="w-full rounded-lg bg-[#42523f]/80 hover:bg-[#4b5f46] border border-white/[0.06] pl-2 pr-8 py-2 text-left transition cursor-pointer"
+                            className="w-full bg-[#42523f]/80 hover:bg-[#4b5f46] border border-white/[0.06] pl-2 pr-8 py-2 text-left transition cursor-pointer"
+                            style={{ clipPath: ROW_CLIP }}
                           >
                             <span className="block text-[13px] font-bold text-white truncate">{preset.name}</span>
                             <span className="block text-[11px] text-white/55 truncate font-mono">
@@ -1063,7 +1111,7 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                     cat.id === 'conversion' && (!query || 'key conversion 1k 2k 3k 4k 5k 6k 7k 8k 9k 10k keys'.includes(query));
                   if (catMods.length === 0 && !showKeySection) return null;
                   return (
-                    <section key={cat.id} aria-label={cat.name} className="relative w-[320px] lg:w-[340px] shrink-0 h-full min-h-0 flex flex-col">
+                    <section key={cat.id} aria-label={cat.name} className="relative w-[300px] lg:w-[320px] -ml-[63px] shrink-0 h-full min-h-0 flex flex-col">
                       <div
                         aria-hidden
                         className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -1071,7 +1119,7 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                       >
                         <div className="h-[40px] w-full" style={{ backgroundColor: cat.color }} />
                       </div>
-                      <div className="relative flex-1 min-h-0 h-full flex flex-col px-[30px]">
+                      <div className="relative flex-1 min-h-0 h-full flex flex-col pl-[64px] pr-[16px]">
                         <header className="flex-none h-[40px] flex items-center text-[13px] font-bold truncate" style={{ color: '#141a10' }}>
                           {cat.name}
                         </header>
@@ -1079,7 +1127,7 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                           role="region"
                           aria-label={`${cat.name} mods list`}
                           tabIndex={0}
-                          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 pr-1 flex flex-col gap-2 lazer-column-scroll outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded"
+                          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 mr-[56px] flex flex-col gap-2 lazer-column-scroll outline-none focus-visible:ring-1 focus-visible:ring-white/30 rounded"
                         >
                           {catMods.map(mod => (
                             <LazerModCard
@@ -1109,10 +1157,12 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
                                       disabled={isNative}
                                       onClick={() => !isNative && handleToggleKeyMod(k)}
                                       title={isNative ? `${k}K is already native to this beatmap` : `Convert playfield to ${k}K (0.90x)`}
-                                      className={`rounded-lg px-2 py-1.5 text-[12px] font-mono font-bold border transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                                      className={`px-2 py-1.5 text-[12px] font-mono font-bold border transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
                                         isActive ? '' : 'bg-[#42523f]/80 border-white/[0.06] text-white/85 hover:bg-[#4b5f46]'
                                       }`}
-                                      style={isActive ? { backgroundColor: cat.color, borderColor: cat.color, color: '#10160f' } : undefined}
+                                      style={isActive
+                                        ? { clipPath: ROW_CLIP_SM, backgroundColor: cat.color, borderColor: cat.color, color: '#10160f' }
+                                        : { clipPath: ROW_CLIP_SM }}
                                     >
                                       {k}K
                                     </button>
@@ -1241,7 +1291,9 @@ export const ModSelectOverlay: React.FC<ModSelectOverlayProps> = ({
               scrollbar-color: rgba(255,255,255,0.7) transparent;
               scrollbar-gutter: stable;
               overscroll-behavior-y: contain;
-              overscroll-behavior-x: none;
+              /* Let horizontal wheel/trackpad gestures chain out to the
+                 outer horizontal scroller even when hovering a column. */
+              overscroll-behavior-x: auto;
             }
             .lazer-column-scroll::-webkit-scrollbar { width: 8px; }
             .lazer-column-scroll::-webkit-scrollbar-track { background: transparent; }

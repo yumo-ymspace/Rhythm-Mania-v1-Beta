@@ -397,7 +397,20 @@ export default function GameplayCanvas({
   const scrollModelRef = useRef<ScrollModel | null>(null);
   useEffect(() => {
     const enableMapSV = settings.enableMapSV !== false && !isConstantSpeedMod(settings.selectedMods);
-    scrollModelRef.current = createScrollModel(beatmap, enableMapSV);
+    // lazer's most-common beat length tails at the last object (end time for
+    // holds), so the scroll model needs it too.
+    let lastObjectTimeMs: number | undefined;
+    const notes = beatmap.notes;
+    if (notes && notes.length > 0) {
+      let max = 0;
+      for (let i = 0; i < notes.length; i++) {
+        const n = notes[i];
+        const t = n.endTime !== undefined && n.endTime > n.time ? n.endTime : n.time;
+        if (t > max) max = t;
+      }
+      lastObjectTimeMs = max;
+    }
+    scrollModelRef.current = createScrollModel(beatmap, enableMapSV, lastObjectTimeMs);
   }, [beatmap, settings.enableMapSV, settings.selectedMods]);
 
   // Find earliest note time in the beatmap
@@ -4690,23 +4703,26 @@ export default function GameplayCanvas({
 
         {!isReplayMode && !isAutoplay && unpauseCountdown > 0 && (
           <div className="absolute inset-0 z-45 flex items-center justify-center bg-black/45 select-none pointer-events-none animate-fade-in">
-            <div className="relative flex items-center justify-center">
+            <div className="relative flex items-center justify-center rounded-full bg-[#0a0a10]/85 shadow-[0_0_60px_rgba(0,0,0,0.8)]">
               <svg className="w-40 h-40 transform -rotate-90">
-                <circle cx="80" cy="80" r="64" className="stroke-slate-800" strokeWidth="5" fill="transparent" />
+                <circle cx="80" cy="80" r="64" fill="transparent" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
                 <circle
                   cx="80"
                   cy="80"
                   r="64"
-                  stroke="#f59e0b"
-                  className="stroke-amber-500 unpause-circle-animation"
-                  strokeWidth="7"
+                  stroke="#ffffff"
+                  className="unpause-circle-animation"
+                  strokeWidth="3"
                   fill="transparent"
                   strokeDasharray="402.12"
                   strokeLinecap="round"
-                  style={{ filter: 'drop-shadow(0 0 10px rgba(245, 158, 11, 0.65))' }}
+                  style={{ filter: 'drop-shadow(0 0 6px rgba(255, 255, 255, 0.5))' }}
                 />
               </svg>
-              <div className="absolute font-sans font-[900] text-5xl text-white tracking-widest drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)]">
+              <div
+                className="absolute font-[300] text-5xl text-white"
+                style={{ fontFamily: "'Nunito', system-ui, sans-serif" }}
+              >
                 {unpauseCountdown}
               </div>
             </div>

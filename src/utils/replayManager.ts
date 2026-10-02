@@ -44,6 +44,17 @@ export const PLAY_HISTORY_STORAGE_KEY = 'rhythm_mania_v1_play_history';
  */
 export function persistPlayHistory(candidate: PlayHistoryRecord[]): PlayHistoryRecord[] {
   if (typeof window === 'undefined' || !window.localStorage) return candidate;
+  const readStoredHistory = (): PlayHistoryRecord[] | null => {
+    try {
+      const raw = window.localStorage.getItem(PLAY_HISTORY_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as PlayHistoryRecord[];
+      return [];
+    } catch {
+      return null;
+    }
+  };
   let working = candidate;
   for (;;) {
     try {
@@ -52,7 +63,9 @@ export function persistPlayHistory(candidate: PlayHistoryRecord[]): PlayHistoryR
     } catch (e) {
       if (working.length === 0) {
         console.error('Failed to persist cleared play history:', e instanceof Error ? e.message : String(e));
-        return working;
+        // Disk still holds the previous value (clear never landed), so return
+        // what is actually on disk instead of a memory-only empty list.
+        return readStoredHistory() ?? working;
       }
       if (working.length === 1) {
         const only = working[0];
@@ -65,11 +78,14 @@ export function persistPlayHistory(candidate: PlayHistoryRecord[]): PlayHistoryR
             return [stripped];
           } catch (stripError) {
             console.error('Failed to persist play history record (even stripped):', stripError instanceof Error ? stripError.message : String(stripError));
-            return candidate;
+            // Stripped record never reached disk: fall back to what is actually
+            // stored (previous history) so the new play is dropped instead of
+            // becoming a ghost that vanishes on reload.
+            return readStoredHistory() ?? [];
           }
         }
         console.error('Failed to persist play history:', e instanceof Error ? e.message : String(e));
-        return candidate;
+        return readStoredHistory() ?? [];
       }
       // Newest-first order: drop the oldest entry and retry.
       working = working.slice(0, working.length - 1);
@@ -81,6 +97,21 @@ function sanitizeIdString(value: unknown, maxLength: number): string {
   if (typeof value !== 'string') return '';
   let cleaned = value.replace(/blob:/gi, '').replace(/javascript:/gi, '');
   cleaned = cleaned.replace(/[^a-zA-Z0-9_\-\s.#:()]/g, '').trim();
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
+}
+
+/**
+ * Display-text sanitizer for song metadata (titles, artists, difficulty,
+ * player names). The strict ASCII whitelist in sanitizeIdString wipes CJK /
+ * accented titles to "" (breaking replay→beatmap matching and rendering
+ * empty rows). Titles are rendered as React text (escaped), never as URLs,
+ * so unicode letters/numbers are safe: keep the old ASCII punctuation set
+ * but allow any unicode letter/number. Still strips <>/slashes for safety.
+ */
+function sanitizeDisplayText(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string') return '';
+  let cleaned = value.replace(/blob:/gi, '').replace(/javascript:/gi, '');
+  cleaned = cleaned.replace(/[^\p{L}\p{N}_\-\s.#:()]/gu, '').trim();
   return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned;
 }
 
@@ -193,6 +224,24 @@ export function determineCatalogIdentity(beatmap: Beatmap | null, beatmapId: str
 }
 
 /**
+ * Compact snapshot stored per play. Full GameSettings carries large key
+ * bindings + per-key palettes (~KBs per record) that are never needed for
+ * replay playback (frames are already recorded; volumes resolve from live
+ * settings). Storing them bloats every record and pushes history into quota
+ * eviction much earlier, deleting older plays. Keep only replay-relevant
+ * fields so more plays fit before oldest-first eviction kicks in.
+ */
+function compactRecordedSettings(settings: GameSettings): Partial<GameSettings> {
+  const { bindings: _bindings, receptorColorsByKeyCount: _palettes, ...rest } = settings as GameSettings & {
+    bindings?: unknown;
+    receptorColorsByKeyCount?: unknown;
+  };
+  void _bindings;
+  void _palettes;
+  return { ...rest };
+}
+
+/**
  * Factory helper to create a fresh, schema-v2 PlayHistoryRecord.
  * Replays stay local-only; there is no ranked upload path.
  */
@@ -231,7 +280,7 @@ export function createPlayHistoryRecord(params: {
     isFailed: Boolean(scoreState.failed),
     scoreState: { ...scoreState, recordId: id },
     replayFrames,
-    recordedSettings,
+    recordedSettings: recordedSettings ? compactRecordedSettings(recordedSettings) : undefined,
     mods: mods ? [...mods] : [],
 
     schemaVersion: CURRENT_REPLAY_SCHEMA_VERSION,
@@ -322,8 +371,8 @@ export function migrateHistoryRecord(rawRecord: unknown, availableBeatmaps: Beat
     id: recordId,
     timestamp: typeof rawRecord.timestamp === 'number' && Number.isFinite(rawRecord.timestamp) ? rawRecord.timestamp : Date.now(),
     beatmapId: sanitizeIdString(beatmapId, 100),
-    beatmapTitle: typeof rawRecord.beatmapTitle === 'string' ? sanitizeIdString(rawRecord.beatmapTitle, 100) : '',
-    beatmapArtist: typeof rawRecord.beatmapArtist === 'string' ? sanitizeIdString(rawRecord.beatmapArtist, 100) : '',
+    beatmapTitle: typeof rawRecord.beatmapTitle === 'string' ? sanitizeDisplayText(rawRecord.beatmapTitle, 100) : '',
+    beatmapArtist: typeof rawRecord.beatmapArtist === 'string' ? sanitizeDisplayText(rawRecord.beatmapArtist, 100) : '',
     keyCount: rawKeyCount,
     score: typeof rawRecord.score === 'number' ? rawRecord.score : 0,
     accuracy: typeof rawRecord.accuracy === 'number' ? rawRecord.accuracy : 0,
@@ -348,8 +397,8 @@ export function migrateHistoryRecord(rawRecord: unknown, availableBeatmaps: Beat
     ...getHoldRulesInfo(rawRecord),
     sourceSetId: srcSet ?? (catalogInfo.catalogSetId ? Number(String(catalogInfo.catalogSetId).replace(/^osuapi_/, '')) || null : null),
     sourceChartId: srcChart,
-    beatmapDifficulty: typeof rawRecord.beatmapDifficulty === 'string' ? sanitizeIdString(rawRecord.beatmapDifficulty, 100) || undefined : undefined,
-    playedBy: typeof rawRecord.playedBy === 'string' ? sanitizeIdString(rawRecord.playedBy, 80) || null : null,
+    beatmapDifficulty: typeof rawRecord.beatmapDifficulty === 'string' ? sanitizeDisplayText(rawRecord.beatmapDifficulty, 100) || undefined : undefined,
+    playedBy: typeof rawRecord.playedBy === 'string' ? sanitizeDisplayText(rawRecord.playedBy, 80) || null : null,
     clientInfo: isRecord(rawRecord.clientInfo) ? rawRecord.clientInfo as unknown as PlayHistoryRecord['clientInfo'] : null,
   };
 }

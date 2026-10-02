@@ -36,8 +36,10 @@ import { mergeVisibleTailSegments } from './tailSegments';
  * Design for low latency / high throughput:
  * - One shader program, one VAO/VBO, ~1 draw call per frame.
  * - Preallocated Float32Array ring (zero per-frame allocation in steady state).
- * - Opaque low-latency context (alpha:false, desynchronized, no AA, no
- *   preserveDrawingBuffer).
+ * - Transparent-capable context (alpha:true, desynchronized, no AA, no
+ *   preserveDrawingBuffer). Argon clears transparent so the dimmed
+ *   background / video shows through behind the translucent lane bars
+ *   like lazer; bar skins still clear opaque black.
  * - No text, no textures, no readback.
  * - Argon note glyphs (rice chevron, hold-head bar) are procedural SDFs in
  *   the fragment shader, keyed by a per-vertex glyph id. Zero extra quads,
@@ -194,7 +196,7 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
   async init(canvas: HTMLCanvasElement, opts: InitOpts): Promise<void> {
     this.destroy();
     const gl = canvas.getContext('webgl2', {
-      alpha: false,
+      alpha: true,
       desynchronized: true,
       preserveDrawingBuffer: false,
       antialias: false,
@@ -446,7 +448,10 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       this.quadRgb(0, 0, 1, height, separatorRgb, borderA, 0);
       this.quadRgb(width - 1, 0, 1, height, separatorRgb, borderA, 0);
     } else {
-      // Lanes (argon inset columns, darkened base + pressed overlay).
+      // Argon lanes: translucent lane-colour bars over the background
+      // (lazer parity) — no opaque black stage behind them, so the dimmed
+      // beatmap background / video shows through the gaps and tints the
+      // bars. The transient pressed-lane glow draws on top.
       for (let i = 0; i < keyCount; i++) {
         const col = columns[i];
         if (!col) continue;
@@ -952,7 +957,9 @@ export class WebGL2PlayfieldRenderer implements IPlayfieldRenderer {
       gl.uniform1f(this.uVigRadius, this.vigRadiusCss * this.dpr);
     }
     gl.viewport(0, 0, this.canvas!.width, this.canvas!.height);
-    gl.clearColor(0, 0, 0, 1);
+    // Argon clears transparent (dimmed background / video shows through,
+    // lazer parity); bar skins keep the opaque black stage.
+    gl.clearColor(0, 0, 0, isBarStyle ? 1 : 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES, 0, this.quadCount * VERTS_PER_QUAD);
     gl.bindVertexArray(null);

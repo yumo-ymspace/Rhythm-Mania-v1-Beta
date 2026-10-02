@@ -437,7 +437,8 @@ export const ArgonScoreCounter = React.memo(function ArgonScoreCounter({
 
 /**
  * ArgonAccuracyCounter component
- * Recreates the Argon accuracy counter from osu!(lazer) Argon skin.
+ * Same font family as the score counter (font-display/Orbitron), small
+ * "ACCURACY" label stacked on top of the big number.
  * Positioned top-right ~(-20, 20), tabular digits, two decimal places with %.
  */
 export const ArgonAccuracyCounter = React.memo(function ArgonAccuracyCounter({
@@ -453,21 +454,26 @@ export const ArgonAccuracyCounter = React.memo(function ArgonAccuracyCounter({
   return (
     <div
       id="argon-accuracy-counter"
-      className={`font-display font-black select-none pointer-events-none [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white ${className}`}
+      className={`font-display select-none pointer-events-none flex flex-col items-end leading-none ${className}`}
       aria-label={`Accuracy: ${accStr}%`}
     >
-      <span className="text-2xl sm:text-3xl md:text-4xl tracking-tight tabular-nums font-black">
-        {accStr}
+      <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-300/70 select-none">
+        Accuracy
       </span>
-      <span className="text-base sm:text-xl md:text-2xl font-bold opacity-90 ml-0.5">%</span>
+      <span className="mt-1 flex items-baseline text-white [text-shadow:0_0_7px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.9)]">
+        <span className="text-2xl sm:text-3xl md:text-4xl tabular-nums font-medium tracking-wide">
+          {accStr}
+        </span>
+        <span className="text-base sm:text-xl md:text-2xl font-medium opacity-90 ml-0.5">%</span>
+      </span>
     </div>
   );
 });
 
 /**
  * ArgonPenarCounter component
- * Recreates the Argon PP / PENAR counter slot under the accuracy display.
- * Positioned directly under accuracy, scale ~0.8 relative to accuracy.
+ * Same font family as the score counter (font-display/Orbitron), small
+ * "PENAR" label stacked on top of the big number, directly under accuracy.
  * Never labelled "pp"; explicitly labelled "PENAR" with tooltip.
  */
 export const ArgonPenarCounter = React.memo(function ArgonPenarCounter({
@@ -483,14 +489,14 @@ export const ArgonPenarCounter = React.memo(function ArgonPenarCounter({
     <div
       id="argon-penar-counter"
       title="Performance Evaluation & Numerical Achievement Rating"
-      className={`font-display font-black select-none pointer-events-none [text-shadow:0_1px_3px_rgba(0,0,0,0.9)] flex items-baseline leading-none text-white/90 ${className}`}
+      className={`font-display select-none pointer-events-none flex flex-col items-end leading-none ${className}`}
       aria-label={`PENAR: ${valueStr}`}
     >
-      <span className="text-xl sm:text-2xl md:text-3xl tracking-tight tabular-nums font-black">
-        {valueStr}
+      <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-200/70 select-none">
+        Penar
       </span>
-      <span className="text-[10px] sm:text-xs md:text-sm font-black tracking-wider text-cyan-400 opacity-90 ml-1 uppercase">
-        PENAR
+      <span className="mt-1 text-xl sm:text-2xl md:text-3xl tabular-nums font-medium tracking-wide text-white/90 [text-shadow:0_0_7px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.9)]">
+        {valueStr}
       </span>
     </div>
   );
